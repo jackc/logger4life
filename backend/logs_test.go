@@ -81,6 +81,104 @@ func TestCreateLog_DuplicateName(t *testing.T) {
 	assert.Contains(t, body["error"], "already exists")
 }
 
+func TestCreateLog_WithFields(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+			{"name": "notes", "type": "text", "required": false},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, "Pushups", body["name"])
+
+	fields := body["fields"].([]any)
+	assert.Len(t, fields, 2)
+
+	f0 := fields[0].(map[string]any)
+	assert.Equal(t, "count", f0["name"])
+	assert.Equal(t, "number", f0["type"])
+	assert.Equal(t, true, f0["required"])
+
+	f1 := fields[1].(map[string]any)
+	assert.Equal(t, "notes", f1["name"])
+	assert.Equal(t, "text", f1["type"])
+	assert.Equal(t, false, f1["required"])
+}
+
+func TestCreateLog_NoFieldsReturnsEmptyArray(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Vitamins",
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	fields := body["fields"].([]any)
+	assert.Len(t, fields, 0)
+}
+
+func TestCreateLog_InvalidFieldType(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Test",
+		"fields": []map[string]any{
+			{"name": "flag", "type": "boolean"},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "type")
+}
+
+func TestCreateLog_DuplicateFieldNames(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Test",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number"},
+			{"name": "count", "type": "text"},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "duplicate")
+}
+
+func TestCreateLog_EmptyFieldName(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Test",
+		"fields": []map[string]any{
+			{"name": "", "type": "number"},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "field name")
+}
+
 func TestCreateLog_Unauthenticated(t *testing.T) {
 	srv := setupTestRouter(t)
 	defer srv.Close()
@@ -182,6 +280,31 @@ func TestGetLog_OtherUsersLog(t *testing.T) {
 	assert.Equal(t, "log not found", body["error"])
 }
 
+func TestGetLog_ReturnsFields(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := getJSON(srv.URL+"/api/logs/"+logID, cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	fields := body["fields"].([]any)
+	assert.Len(t, fields, 1)
+	f0 := fields[0].(map[string]any)
+	assert.Equal(t, "count", f0["name"])
+	assert.Equal(t, "number", f0["type"])
+	assert.Equal(t, true, f0["required"])
+}
+
 // --- Create Log Entry ---
 
 func TestCreateLogEntry_Success(t *testing.T) {
@@ -227,6 +350,132 @@ func TestCreateLogEntry_OtherUsersLog(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestCreateLogEntry_WithFields(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+			{"name": "notes", "type": "text", "required": false},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"count": "25",
+			"notes": "morning set",
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.NotEmpty(t, body["id"])
+	assert.Equal(t, logID, body["log_id"])
+
+	fields := body["fields"].(map[string]any)
+	assert.Equal(t, "25", fields["count"])
+	assert.Equal(t, "morning set", fields["notes"])
+}
+
+func TestCreateLogEntry_WrongFieldType(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"count": "not a number",
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "number")
+}
+
+func TestCreateLogEntry_UnknownField(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number"},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"unknown": "5",
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "unknown")
+}
+
+func TestCreateLogEntry_MissingRequiredField(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "required")
+}
+
+func TestCreateLogEntry_OptionalFieldOmitted(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+			{"name": "notes", "type": "text", "required": false},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"count": "10",
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.NotEmpty(t, body["id"])
 }
 
 // --- List Log Entries ---
@@ -277,4 +526,38 @@ func TestListLogEntries_OtherUsersLog(t *testing.T) {
 	resp, _ := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", bobCookies)
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestListLogEntries_ReturnsFields(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{"count": "25"},
+	}, cookies)
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{"count": "30"},
+	}, cookies)
+
+	resp, body := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, body, 2)
+
+	// Entries are ordered newest first
+	fields0 := body[0]["fields"].(map[string]any)
+	assert.Equal(t, "30", fields0["count"])
+
+	fields1 := body[1]["fields"].(map[string]any)
+	assert.Equal(t, "25", fields1["count"])
 }

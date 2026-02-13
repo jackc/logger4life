@@ -82,3 +82,89 @@ test('log detail page requires authentication', async ({ page }) => {
 	await page.goto('/logs/00000000-0000-0000-0000-000000000000');
 	await page.waitForURL('/login');
 });
+
+test('create a log with custom fields', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Pushups');
+	await page.click('button:has-text("Add Field")');
+	await page.fill('input[placeholder="Field name"]', 'count');
+	// Type defaults to "Number", check required
+	await page.check('input[type="checkbox"]');
+
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Pushups' })).toBeVisible();
+});
+
+test('create entry with field values', async ({ page }) => {
+	await registerAndLogin(page);
+
+	// Create log with a required number field
+	await page.fill('input[name="log-name"]', 'Pushups');
+	await page.click('button:has-text("Add Field")');
+	await page.fill('input[placeholder="Field name"]', 'count');
+	await page.check('input[type="checkbox"]');
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Pushups")');
+
+	await expect(page.locator('h1:has-text("Pushups")')).toBeVisible();
+
+	// Fill in the count field and log it
+	await page.fill('input[name="field-count"]', '25');
+	await page.click('button:has-text("Log It")');
+
+	// Verify the entry shows with the field value
+	const entry = page.locator('[data-testid="log-entry"]').first();
+	await expect(entry).toBeVisible();
+	await expect(entry).toContainText('count');
+	await expect(entry).toContainText('25');
+});
+
+test('log without fields works with simple button', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Water');
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Water")');
+
+	// No field inputs should be shown, just the button
+	await expect(page.locator('input[name^="field-"]')).toHaveCount(0);
+
+	await page.click('button:has-text("Log It")');
+	await expect(page.locator('[data-testid="log-entry"]').first()).toBeVisible();
+});
+
+test('create log with multiple fields', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Exercise');
+
+	// Add first field: reps (number, required)
+	await page.click('button:has-text("Add Field")');
+	await page.locator('input[placeholder="Field name"]').first().fill('reps');
+	await page.locator('input[type="checkbox"]').first().check();
+
+	// Add second field: notes (text, optional)
+	await page.click('button:has-text("Add Field")');
+	await page.locator('input[placeholder="Field name"]').nth(1).fill('notes');
+	await page.locator('select').nth(1).selectOption('text');
+
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Exercise")');
+
+	// Both field inputs should appear
+	await expect(page.locator('input[name="field-reps"]')).toBeVisible();
+	await expect(page.locator('input[name="field-notes"]')).toBeVisible();
+
+	// Required field shows asterisk
+	await expect(page.getByText('reps*')).toBeVisible();
+
+	// Fill in values and log
+	await page.fill('input[name="field-reps"]', '15');
+	await page.fill('input[name="field-notes"]', 'morning set');
+	await page.click('button:has-text("Log It")');
+
+	const entry = page.locator('[data-testid="log-entry"]').first();
+	await expect(entry).toContainText('15');
+	await expect(entry).toContainText('morning set');
+});

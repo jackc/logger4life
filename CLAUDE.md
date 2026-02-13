@@ -143,3 +143,4 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 - **mise** (`.mise.toml`) manages Go, Node.js, and Ruby versions
 - **Bundler** (`Gemfile`) for Ruby/Rake dependencies
 - Dev container setup in `.devcontainer/` (Ubuntu 24.04, PostgreSQL 18, auto-installs tern + watchexec)
+- **fd** and **rg** (ripgrep) are available in the dev container — use them instead of `find` and `grep`

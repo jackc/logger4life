@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+# rg version
+RG_VERSION="15.1.0"
+
+# Detect architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+  ARCH_SUFFIX="aarch64"
+elif [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then
+  ARCH_SUFFIX="x86_64"
+else
+  echo "Unsupported architecture: $ARCH"
+  exit 1
+fi
+
+DOWNLOAD_URL="https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep-${RG_VERSION}-${ARCH_SUFFIX}-unknown-linux-gnu.tar.gz"
+
+# Download and install rg
+echo "Downloading rg from $DOWNLOAD_URL"
+
+# Download and extract to /tmp, then move binary to /usr/local/bin
+TMP_DIR="/tmp/rg_install"
+mkdir -p "$TMP_DIR"
+curl -L "$DOWNLOAD_URL" | tar -xz -C "$TMP_DIR"
+sudo mv "$TMP_DIR/ripgrep-${RG_VERSION}-${ARCH_SUFFIX}-unknown-linux-gnu/rg" /usr/local/bin/rg
+sudo chmod +x /usr/local/bin/rg
+rm -rf "$TMP_DIR"
+
+echo "rg v${RG_VERSION} installed successfully"

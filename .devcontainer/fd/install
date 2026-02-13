@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+# fd version
+FD_VERSION="10.3.0"
+
+# Detect architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+  ARCH_SUFFIX="aarch64"
+elif [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then
+  ARCH_SUFFIX="x86_64"
+else
+  echo "Unsupported architecture: $ARCH"
+  exit 1
+fi
+
+DOWNLOAD_URL="https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/fd-v${FD_VERSION}-${ARCH_SUFFIX}-unknown-linux-gnu.tar.gz"
+
+# Download and install fd
+echo "Downloading fd from $DOWNLOAD_URL"
+
+# Download and extract to /tmp, then move binary to /usr/local/bin
+TMP_DIR="/tmp/fd_install"
+mkdir -p "$TMP_DIR"
+curl -L "$DOWNLOAD_URL" | tar -xz -C "$TMP_DIR"
+sudo mv "$TMP_DIR/fd-v${FD_VERSION}-${ARCH_SUFFIX}-unknown-linux-gnu/fd" /usr/local/bin/fd
+sudo chmod +x /usr/local/bin/fd
+rm -rf "$TMP_DIR"
+
+echo "fd v${FD_VERSION} installed successfully"

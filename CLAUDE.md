@@ -28,6 +28,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 - Migrations managed by **tern** (config: `postgresql/tern.conf`, migrations: `postgresql/migrations/`)
 - Dev database: `logger4life_dev`, test database: `logger4life_test` (both on local PostgreSQL)
 - DB role: `logger4life_app`
+- When creating tables, sequences, or other database objects in migrations, grant appropriate permissions to the `logger4life_app` role (e.g., `GRANT ALL ON TABLE ... TO logger4life_app`)
 
 ## Architecture
 

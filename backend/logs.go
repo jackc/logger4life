@@ -64,8 +64,8 @@ func validateFieldDefinitions(fields []fieldDefinition) error {
 			return fmt.Errorf("duplicate field name: %s", f.Name)
 		}
 		seen[lower] = true
-		if f.Type != "text" && f.Type != "number" {
-			return fmt.Errorf("field type must be 'text' or 'number'")
+		if f.Type != "text" && f.Type != "number" && f.Type != "boolean" {
+			return fmt.Errorf("field type must be 'text', 'number', or 'boolean'")
 		}
 	}
 	return nil
@@ -116,6 +116,10 @@ func validateFieldValues(definitions []fieldDefinition, values map[string]any) e
 			}
 			if def.Required && strings.TrimSpace(s) == "" {
 				return fmt.Errorf("field %q is required", def.Name)
+			}
+		case "boolean":
+			if _, ok := v.(bool); !ok {
+				return fmt.Errorf("field %q must be true or false", def.Name)
 			}
 		}
 	}

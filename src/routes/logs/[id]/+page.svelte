@@ -20,7 +20,7 @@
 		if (log?.fields?.length > 0) {
 			const initial = {};
 			for (const f of log.fields) {
-				initial[f.name] = '';
+				initial[f.name] = f.type === 'boolean' ? false : '';
 			}
 			fieldValues = initial;
 		} else {
@@ -55,7 +55,9 @@
 			if (hasFields) {
 				for (const f of log.fields) {
 					const val = fieldValues[f.name];
-					if (val !== '' && val !== undefined && val !== null) {
+					if (f.type === 'boolean') {
+						payload[f.name] = !!val;
+					} else if (val !== '' && val !== undefined && val !== null) {
 						payload[f.name] = String(val);
 					}
 				}
@@ -115,6 +117,13 @@
 									required={field.required}
 									class="w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
 								/>
+							{:else if field.type === 'boolean'}
+								<input
+									type="checkbox"
+									name="field-{field.name}"
+									bind:checked={fieldValues[field.name]}
+									class="rounded"
+								/>
 							{:else}
 								<input
 									type="text"
@@ -159,7 +168,8 @@
 							{#if entry.fields && Object.keys(entry.fields).length > 0}
 								<div class="text-sm text-gray-500 mt-1">
 									{#each Object.entries(entry.fields) as [name, value]}
-										<span class="mr-3">{name}: <span class="font-medium text-gray-700">{value}</span></span>
+										{@const def = log.fields.find(f => f.name === name)}
+										<span class="mr-3">{name}: <span class="font-medium text-gray-700">{def?.type === 'boolean' ? (value ? 'Yes' : 'No') : value}</span></span>
 									{/each}
 								</div>
 							{/if}

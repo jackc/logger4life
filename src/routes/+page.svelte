@@ -12,7 +12,7 @@
 		const values = {};
 		if (log.fields?.length > 0) {
 			for (const f of log.fields) {
-				values[f.name] = '';
+				values[f.name] = f.type === 'boolean' ? false : '';
 			}
 		}
 		return values;
@@ -55,7 +55,9 @@
 			if (log.fields?.length > 0) {
 				for (const f of log.fields) {
 					const val = state.fieldValues[f.name];
-					if (val !== '' && val !== undefined && val !== null) {
+					if (f.type === 'boolean') {
+						payload[f.name] = !!val;
+					} else if (val !== '' && val !== undefined && val !== null) {
 						payload[f.name] = String(val);
 					}
 				}
@@ -141,6 +143,13 @@
 														placeholder={field.name}
 														required={field.required}
 														class="w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+													/>
+												{:else if field.type === 'boolean'}
+													<input
+														type="checkbox"
+														name="field-{log.id}-{field.name}"
+														bind:checked={state.fieldValues[field.name]}
+														class="rounded"
 													/>
 												{:else}
 													<input

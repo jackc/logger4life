@@ -168,3 +168,29 @@ test('create log with multiple fields', async ({ page }) => {
 	await expect(entry).toContainText('15');
 	await expect(entry).toContainText('morning set');
 });
+
+test('create log with boolean field and log entry', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Supplements');
+
+	// Add boolean field: fasted
+	await page.click('button:has-text("Add Field")');
+	await page.locator('input[placeholder="Field name"]').first().fill('fasted');
+	await page.locator('select').first().selectOption('boolean');
+
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Supplements")');
+
+	// Checkbox should appear
+	await expect(page.locator('input[name="field-fasted"]')).toBeVisible();
+	await expect(page.locator('input[name="field-fasted"]')).toHaveAttribute('type', 'checkbox');
+
+	// Check the checkbox and log
+	await page.check('input[name="field-fasted"]');
+	await page.click('button:has-text("Log It")');
+
+	const entry = page.locator('[data-testid="log-entry"]').first();
+	await expect(entry).toContainText('fasted');
+	await expect(entry).toContainText('Yes');
+});

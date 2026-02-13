@@ -109,6 +109,7 @@
 						>
 							<option value="number">Number</option>
 							<option value="text">Text</option>
+							<option value="boolean">Boolean</option>
 						</select>
 						<label class="flex items-center gap-1 text-sm text-gray-600 whitespace-nowrap">
 							<input type="checkbox" bind:checked={field.required} class="rounded" />

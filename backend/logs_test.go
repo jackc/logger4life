@@ -136,12 +136,34 @@ func TestCreateLog_InvalidFieldType(t *testing.T) {
 	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
 		"name": "Test",
 		"fields": []map[string]any{
-			{"name": "flag", "type": "boolean"},
+			{"name": "flag", "type": "date"},
 		},
 	}, cookies)
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	assert.Contains(t, body["error"], "type")
+}
+
+func TestCreateLog_WithBooleanField(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Supplements",
+		"fields": []map[string]any{
+			{"name": "fasted", "type": "boolean", "required": false},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	fields := body["fields"].([]any)
+	assert.Len(t, fields, 1)
+	f0 := fields[0].(map[string]any)
+	assert.Equal(t, "fasted", f0["name"])
+	assert.Equal(t, "boolean", f0["type"])
+	assert.Equal(t, false, f0["required"])
 }
 
 func TestCreateLog_DuplicateFieldNames(t *testing.T) {
@@ -451,6 +473,66 @@ func TestCreateLogEntry_MissingRequiredField(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	assert.Contains(t, body["error"], "required")
+}
+
+func TestCreateLogEntry_WithBooleanField(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Supplements",
+		"fields": []map[string]any{
+			{"name": "fasted", "type": "boolean", "required": false},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"fasted": true,
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	fields := body["fields"].(map[string]any)
+	assert.Equal(t, true, fields["fasted"])
+
+	// Also test with false
+	resp2, body2 := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"fasted": false,
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
+	fields2 := body2["fields"].(map[string]any)
+	assert.Equal(t, false, fields2["fasted"])
+}
+
+func TestCreateLogEntry_InvalidBooleanValue(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Supplements",
+		"fields": []map[string]any{
+			{"name": "fasted", "type": "boolean", "required": false},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"fasted": "true",
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "true or false")
 }
 
 func TestCreateLogEntry_OptionalFieldOmitted(t *testing.T) {

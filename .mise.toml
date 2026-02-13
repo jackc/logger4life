@@ -1,0 +1,14 @@
+[env]
+_.path = ["{{config_root}}/bin"]
+
+# Database configuration
+PGDATABASE = "logger4life_dev"
+
+# Tern migration configuration
+TERN_CONFIG = "postgresql/tern.conf"
+TERN_MIGRATIONS = "postgresql/migrations"
+
+[tools]
+go = '1.26.0'
+nodejs = '24.13.0'
+ruby = '4.0.1'

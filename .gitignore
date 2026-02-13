@@ -1,0 +1,19 @@
+/.sass-cache
+/build
+/config.test.yml
+/config.yml
+/config/secrets.rb
+/frontend/.cache
+/node_modules
+/.svelte-kit
+/postgresql/tern.conf
+/public
+/tmp
+/logger4life_*
+/logger4life.conf
+/logger4life.test.conf
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

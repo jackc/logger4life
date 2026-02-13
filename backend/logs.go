@@ -367,6 +367,49 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
+func handleDeleteLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		logID := chi.URLParam(r, "logID")
+		entryID := chi.URLParam(r, "entryID")
+
+		var ownerID string
+		err := pool.QueryRow(r.Context(),
+			`SELECT user_id FROM logs WHERE id = $1`,
+			logID,
+		).Scan(&ownerID)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		if ownerID != user.ID {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+			return
+		}
+
+		tag, err := pool.Exec(r.Context(),
+			`DELETE FROM log_entries WHERE id = $1 AND log_id = $2`,
+			entryID, logID,
+		)
+
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		if tag.RowsAffected() == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "entry not found"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())

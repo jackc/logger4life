@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { getAuth } from '$lib/auth.svelte.js';
 	import { goto } from '$app/navigation';
-	import { apiGet, apiPost, apiPut } from '$lib/api.js';
+	import { apiGet, apiPost, apiPut, apiDelete } from '$lib/api.js';
 
 	const auth = getAuth();
 
@@ -110,6 +110,16 @@
 	function cancelEditing() {
 		editingEntryId = null;
 		editError = '';
+	}
+
+	async function deleteEntry(entry) {
+		if (!confirm('Delete this entry?')) return;
+		try {
+			await apiDelete(`/api/logs/${logID}/entries/${entry.id}`);
+			entries = entries.filter(e => e.id !== entry.id);
+		} catch (err) {
+			error = err.message;
+		}
 	}
 
 	async function saveEntry(e) {
@@ -306,13 +316,22 @@
 											</div>
 										{/if}
 									</div>
-									<button
-										onclick={() => startEditing(entry)}
-										class="text-gray-400 hover:text-blue-600 text-sm ml-2 shrink-0"
-										data-testid="edit-entry"
-									>
-										Edit
-									</button>
+									<div class="flex gap-2 ml-2 shrink-0">
+										<button
+											onclick={() => startEditing(entry)}
+											class="text-gray-400 hover:text-blue-600 text-sm"
+											data-testid="edit-entry"
+										>
+											Edit
+										</button>
+										<button
+											onclick={() => deleteEntry(entry)}
+											class="text-gray-400 hover:text-red-600 text-sm"
+											data-testid="delete-entry"
+										>
+											Delete
+										</button>
+									</div>
 								</div>
 							{/if}
 						</div>

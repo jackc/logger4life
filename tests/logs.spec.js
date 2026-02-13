@@ -194,3 +194,22 @@ test('create log with boolean field and log entry', async ({ page }) => {
 	await expect(entry).toContainText('fasted');
 	await expect(entry).toContainText('Yes');
 });
+
+test('delete a log entry', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Water');
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Water")');
+
+	await page.click('button:has-text("Log It")');
+	await expect(page.locator('[data-testid="log-entry"]')).toHaveCount(1);
+
+	// Auto-accept the confirm dialog
+	page.on('dialog', dialog => dialog.accept());
+
+	await page.click('[data-testid="delete-entry"]');
+
+	await expect(page.locator('[data-testid="log-entry"]')).toHaveCount(0);
+	await expect(page.getByText('No entries yet')).toBeVisible();
+});

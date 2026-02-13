@@ -42,6 +42,7 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))
 		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
 		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool))
+		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(pool))
 	})
 
 	return httptest.NewServer(r)
@@ -68,6 +69,21 @@ func putJSON(url string, body any, cookies []*http.Cookie) (*http.Response, map[
 	b, _ := json.Marshal(body)
 	req, _ := http.NewRequest("PUT", url, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, _ := client.Do(req)
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	resp.Body.Close()
+	return resp, result
+}
+
+func deleteJSON(url string, cookies []*http.Cookie) (*http.Response, map[string]any) {
+	req, _ := http.NewRequest("DELETE", url, nil)
 	for _, c := range cookies {
 		req.AddCookie(c)
 	}

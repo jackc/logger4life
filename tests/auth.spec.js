@@ -105,8 +105,8 @@ test('logout clears session', async ({ page }) => {
 test('nav shows login/register links when unauthenticated', async ({ page }) => {
 	await page.goto('/');
 
-	await expect(page.locator('a[href="/login"]')).toBeVisible();
-	await expect(page.locator('a[href="/register"]')).toBeVisible();
+	await expect(page.locator('nav a[href="/login"]')).toBeVisible();
+	await expect(page.locator('nav a[href="/register"]')).toBeVisible();
 });
 
 test('nav shows username and logout when authenticated', async ({ page }) => {

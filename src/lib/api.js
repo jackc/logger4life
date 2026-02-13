@@ -11,6 +11,19 @@ export async function apiPost(url, body) {
 	return data;
 }
 
+export async function apiPut(url, body) {
+	const res = await fetch(url, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body),
+	});
+	const data = await res.json();
+	if (!res.ok) {
+		throw new Error(data.error || 'Request failed');
+	}
+	return data;
+}
+
 export async function apiGet(url) {
 	const res = await fetch(url);
 	if (!res.ok) {

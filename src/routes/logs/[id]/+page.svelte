@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { getAuth } from '$lib/auth.svelte.js';
 	import { goto } from '$app/navigation';
-	import { apiGet, apiPost } from '$lib/api.js';
+	import { apiGet, apiPost, apiPut } from '$lib/api.js';
 
 	const auth = getAuth();
 
@@ -12,6 +12,12 @@
 	let logging = $state(false);
 	let error = $state('');
 	let fieldValues = $state({});
+
+	let editingEntryId = $state(null);
+	let editFields = $state({});
+	let editOccurredAt = $state('');
+	let editError = $state('');
+	let saving = $state(false);
 
 	const logID = $derived(page.params.id);
 	const hasFields = $derived(log?.fields?.length > 0);
@@ -74,6 +80,66 @@
 
 	function formatTimestamp(iso) {
 		return new Date(iso).toLocaleString();
+	}
+
+	function toLocalDatetimeString(date) {
+		const pad = (n) => String(n).padStart(2, '0');
+		return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+	}
+
+	function startEditing(entry) {
+		editingEntryId = entry.id;
+		editError = '';
+		if (log?.fields?.length > 0) {
+			const initial = {};
+			for (const f of log.fields) {
+				const val = entry.fields?.[f.name];
+				if (f.type === 'boolean') {
+					initial[f.name] = val ?? false;
+				} else {
+					initial[f.name] = val != null ? String(val) : '';
+				}
+			}
+			editFields = initial;
+		} else {
+			editFields = {};
+		}
+		editOccurredAt = toLocalDatetimeString(new Date(entry.occurred_at));
+	}
+
+	function cancelEditing() {
+		editingEntryId = null;
+		editError = '';
+	}
+
+	async function saveEntry(e) {
+		if (e) e.preventDefault();
+		saving = true;
+		editError = '';
+		try {
+			const payload = {};
+			if (hasFields) {
+				for (const f of log.fields) {
+					const val = editFields[f.name];
+					if (f.type === 'boolean') {
+						payload[f.name] = !!val;
+					} else if (val !== '' && val !== undefined && val !== null) {
+						payload[f.name] = String(val);
+					}
+				}
+			}
+			const occurredAt = new Date(editOccurredAt).toISOString();
+			const updated = await apiPut(
+				`/api/logs/${logID}/entries/${editingEntryId}`,
+				{ fields: payload, occurred_at: occurredAt }
+			);
+			entries = entries.map(en => en.id === updated.id ? updated : en);
+			editingEntryId = null;
+		} catch (err) {
+			editError = err.message;
+		} finally {
+			saving = false;
+		}
 	}
 
 	$effect(() => {
@@ -164,13 +230,89 @@
 				<div class="bg-white rounded-lg shadow divide-y">
 					{#each entries as entry}
 						<div class="px-4 py-3 text-gray-700" data-testid="log-entry">
-							<div>{formatTimestamp(entry.created_at)}</div>
-							{#if entry.fields && Object.keys(entry.fields).length > 0}
-								<div class="text-sm text-gray-500 mt-1">
-									{#each Object.entries(entry.fields) as [name, value]}
-										{@const def = log.fields.find(f => f.name === name)}
-										<span class="mr-3">{name}: <span class="font-medium text-gray-700">{def?.type === 'boolean' ? (value ? 'Yes' : 'No') : value}</span></span>
-									{/each}
+							{#if editingEntryId === entry.id}
+								<form onsubmit={saveEntry} class="space-y-3">
+									<div>
+										<label class="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
+										<input
+											type="datetime-local"
+											bind:value={editOccurredAt}
+											required
+											class="w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+										/>
+									</div>
+									{#if hasFields}
+										{#each log.fields as field}
+											<div>
+												<label class="block text-sm font-medium text-gray-700 mb-1">
+													{field.name}{#if field.required}<span class="text-red-500 ml-0.5">*</span>{/if}
+												</label>
+												{#if field.type === 'number'}
+													<input
+														type="number"
+														step="any"
+														bind:value={editFields[field.name]}
+														required={field.required}
+														class="w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+													/>
+												{:else if field.type === 'boolean'}
+													<input
+														type="checkbox"
+														bind:checked={editFields[field.name]}
+														class="rounded"
+													/>
+												{:else}
+													<input
+														type="text"
+														bind:value={editFields[field.name]}
+														required={field.required}
+														class="w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+													/>
+												{/if}
+											</div>
+										{/each}
+									{/if}
+									{#if editError}
+										<p class="text-red-600 text-sm">{editError}</p>
+									{/if}
+									<div class="flex gap-2">
+										<button
+											type="submit"
+											disabled={saving}
+											class="bg-blue-600 text-white py-2 px-4 rounded text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+										>
+											{saving ? 'Saving...' : 'Save'}
+										</button>
+										<button
+											type="button"
+											onclick={cancelEditing}
+											disabled={saving}
+											class="bg-gray-200 text-gray-700 py-2 px-4 rounded text-sm font-semibold hover:bg-gray-300 disabled:opacity-50"
+										>
+											Cancel
+										</button>
+									</div>
+								</form>
+							{:else}
+								<div class="flex items-start justify-between">
+									<div>
+										<div>{formatTimestamp(entry.occurred_at)}</div>
+										{#if entry.fields && Object.keys(entry.fields).length > 0}
+											<div class="text-sm text-gray-500 mt-1">
+												{#each Object.entries(entry.fields) as [name, value]}
+													{@const def = log.fields.find(f => f.name === name)}
+													<span class="mr-3">{name}: <span class="font-medium text-gray-700">{def?.type === 'boolean' ? (value ? 'Yes' : 'No') : value}</span></span>
+												{/each}
+											</div>
+										{/if}
+									</div>
+									<button
+										onclick={() => startEditing(entry)}
+										class="text-gray-400 hover:text-blue-600 text-sm ml-2 shrink-0"
+										data-testid="edit-entry"
+									>
+										Edit
+									</button>
 								</div>
 							{/if}
 						</div>

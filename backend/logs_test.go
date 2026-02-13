@@ -343,7 +343,9 @@ func TestCreateLogEntry_Success(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.NotEmpty(t, body["id"])
 	assert.Equal(t, logID, body["log_id"])
+	assert.NotEmpty(t, body["occurred_at"])
 	assert.NotEmpty(t, body["created_at"])
+	assert.NotEmpty(t, body["updated_at"])
 }
 
 func TestCreateLogEntry_NonexistentLog(t *testing.T) {
@@ -642,4 +644,215 @@ func TestListLogEntries_ReturnsFields(t *testing.T) {
 
 	fields1 := body[1]["fields"].(map[string]any)
 	assert.Equal(t, "25", fields1["count"])
+}
+
+// --- Update Log Entry ---
+
+func TestUpdateLogEntry_Success(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	_, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, cookies)
+	entryID := entry["id"].(string)
+
+	newTime := "2025-06-15T10:30:00Z"
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": newTime,
+	}, cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, entryID, body["id"])
+	assert.Equal(t, logID, body["log_id"])
+	assert.Contains(t, body["occurred_at"], "2025-06-15T10:30:00")
+	assert.NotEmpty(t, body["created_at"])
+	assert.NotEmpty(t, body["updated_at"])
+}
+
+func TestUpdateLogEntry_WithFields(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+			{"name": "notes", "type": "text", "required": false},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	_, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{
+			"count": "25",
+			"notes": "morning set",
+		},
+	}, cookies)
+	entryID := entry["id"].(string)
+
+	newTime := "2025-06-15T10:30:00Z"
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields": map[string]any{
+			"count": "30",
+			"notes": "evening set",
+		},
+		"occurred_at": newTime,
+	}, cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	fields := body["fields"].(map[string]any)
+	assert.Equal(t, "30", fields["count"])
+	assert.Equal(t, "evening set", fields["notes"])
+}
+
+func TestUpdateLogEntry_NonexistentEntry(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/00000000-0000-0000-0000-000000000000", map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": "2025-06-15T10:30:00Z",
+	}, cookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "entry not found", body["error"])
+}
+
+func TestUpdateLogEntry_NonexistentLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := putJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000/entries/00000000-0000-0000-0000-000000000000", map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": "2025-06-15T10:30:00Z",
+	}, cookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestUpdateLogEntry_OtherUsersLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	_, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, aliceCookies)
+	entryID := entry["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": "2025-06-15T10:30:00Z",
+	}, bobCookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestUpdateLogEntry_InvalidFieldValues(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	_, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{"count": "25"},
+	}, cookies)
+	entryID := entry["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields": map[string]any{
+			"count": "not a number",
+		},
+		"occurred_at": "2025-06-15T10:30:00Z",
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "number")
+}
+
+func TestUpdateLogEntry_MissingRequiredField(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	_, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{"count": "25"},
+	}, cookies)
+	entryID := entry["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": "2025-06-15T10:30:00Z",
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "required")
+}
+
+func TestUpdateLogEntry_MissingOccurredAt(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	_, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, cookies)
+	entryID := entry["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields": map[string]any{},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "occurred_at is required", body["error"])
+}
+
+func TestUpdateLogEntry_Unauthenticated(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	resp, _ := putJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000/entries/00000000-0000-0000-0000-000000000000", map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": "2025-06-15T10:30:00Z",
+	}, nil)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }

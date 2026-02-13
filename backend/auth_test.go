@@ -41,6 +41,7 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 		r.Get("/api/logs/{logID}", handleGetLog(pool))
 		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))
 		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
+		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool))
 	})
 
 	return httptest.NewServer(r)
@@ -49,6 +50,23 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 func postJSON(url string, body any, cookies []*http.Cookie) (*http.Response, map[string]any) {
 	b, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", url, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, _ := client.Do(req)
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	resp.Body.Close()
+	return resp, result
+}
+
+func putJSON(url string, body any, cookies []*http.Cookie) (*http.Response, map[string]any) {
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequest("PUT", url, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	for _, c := range cookies {
 		req.AddCookie(c)

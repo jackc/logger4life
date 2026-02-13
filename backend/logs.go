@@ -38,11 +38,18 @@ type createLogEntryRequest struct {
 	Fields map[string]any `json:"fields"`
 }
 
+type updateLogEntryRequest struct {
+	Fields     map[string]any `json:"fields"`
+	OccurredAt time.Time      `json:"occurred_at"`
+}
+
 type logEntryResponse struct {
-	ID        string         `json:"id"`
-	LogID     string         `json:"log_id"`
-	Fields    map[string]any `json:"fields"`
-	CreatedAt time.Time      `json:"created_at"`
+	ID         string         `json:"id"`
+	LogID      string         `json:"log_id"`
+	Fields     map[string]any `json:"fields"`
+	OccurredAt time.Time      `json:"occurred_at"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
 func validateFieldDefinitions(fields []fieldDefinition) error {
@@ -276,9 +283,9 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 		var entry logEntryResponse
 		err = pool.QueryRow(r.Context(),
 			`INSERT INTO log_entries (log_id, fields) VALUES ($1, $2)
-			 RETURNING id, log_id, fields, created_at`,
+			 RETURNING id, log_id, fields, occurred_at, created_at, updated_at`,
 			logID, req.Fields,
-		).Scan(&entry.ID, &entry.LogID, &entry.Fields, &entry.CreatedAt)
+		).Scan(&entry.ID, &entry.LogID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
 
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -289,6 +296,74 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 			entry.Fields = map[string]any{}
 		}
 		writeJSON(w, http.StatusCreated, entry)
+	}
+}
+
+func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		logID := chi.URLParam(r, "logID")
+		entryID := chi.URLParam(r, "entryID")
+
+		var req updateLogEntryRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if req.Fields == nil {
+			req.Fields = map[string]any{}
+		}
+		if req.OccurredAt.IsZero() {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "occurred_at is required"})
+			return
+		}
+
+		var ownerID string
+		var logFields []fieldDefinition
+		err := pool.QueryRow(r.Context(),
+			`SELECT user_id, fields FROM logs WHERE id = $1`,
+			logID,
+		).Scan(&ownerID, &logFields)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		if ownerID != user.ID {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+			return
+		}
+
+		if err := validateFieldValues(logFields, req.Fields); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+
+		var entry logEntryResponse
+		err = pool.QueryRow(r.Context(),
+			`UPDATE log_entries SET fields = $1, occurred_at = $2, updated_at = now()
+			 WHERE id = $3 AND log_id = $4
+			 RETURNING id, log_id, fields, occurred_at, created_at, updated_at`,
+			req.Fields, req.OccurredAt, entryID, logID,
+		).Scan(&entry.ID, &entry.LogID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "entry not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		if entry.Fields == nil {
+			entry.Fields = map[string]any{}
+		}
+		writeJSON(w, http.StatusOK, entry)
 	}
 }
 
@@ -317,8 +392,8 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		rows, err := pool.Query(r.Context(),
-			`SELECT id, log_id, fields, created_at FROM log_entries
-			 WHERE log_id = $1 ORDER BY created_at DESC`,
+			`SELECT id, log_id, fields, occurred_at, created_at, updated_at FROM log_entries
+			 WHERE log_id = $1 ORDER BY occurred_at DESC`,
 			logID,
 		)
 		if err != nil {
@@ -330,7 +405,7 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 		entries := []logEntryResponse{}
 		for rows.Next() {
 			var e logEntryResponse
-			if err := rows.Scan(&e.ID, &e.LogID, &e.Fields, &e.CreatedAt); err != nil {
+			if err := rows.Scan(&e.ID, &e.LogID, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 				return
 			}

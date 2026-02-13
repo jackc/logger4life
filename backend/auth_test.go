@@ -15,6 +15,10 @@ import (
 )
 
 func setupTestRouter(t *testing.T) *httptest.Server {
+	return setupTestRouterWithConfig(t, true)
+}
+
+func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.Server {
 	t.Helper()
 
 	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
@@ -31,7 +35,8 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 
 	r := chi.NewRouter()
 	r.Use(loadSession(pool))
-	r.Post("/api/register", handleRegister(pool))
+	r.Get("/api/settings", handleSettings(Config{AllowRegistration: allowRegistration}))
+	r.Post("/api/register", handleRegister(pool, allowRegistration))
 	r.Post("/api/login", handleLogin(pool))
 	r.Group(func(r chi.Router) {
 		r.Use(requireAuth)
@@ -325,4 +330,37 @@ func TestLogout(t *testing.T) {
 	resp, body := getJSON(srv.URL+"/api/me", []*http.Cookie{cookie})
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Equal(t, "authentication required", body["error"])
+}
+
+func TestRegister_Disabled(t *testing.T) {
+	srv := setupTestRouterWithConfig(t, false)
+	defer srv.Close()
+
+	resp, body := postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "alice",
+		"password": "password123",
+	}, nil)
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	assert.Equal(t, "registration is currently disabled", body["error"])
+}
+
+func TestSettings_RegistrationEnabled(t *testing.T) {
+	srv := setupTestRouterWithConfig(t, true)
+	defer srv.Close()
+
+	resp, body := getJSON(srv.URL+"/api/settings", nil)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, true, body["allow_registration"])
+}
+
+func TestSettings_RegistrationDisabled(t *testing.T) {
+	srv := setupTestRouterWithConfig(t, false)
+	defer srv.Close()
+
+	resp, body := getJSON(srv.URL+"/api/settings", nil)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, false, body["allow_registration"])
 }

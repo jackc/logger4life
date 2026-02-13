@@ -20,17 +20,34 @@ var serverCmd = &cobra.Command{
 
 var configFile string
 var staticURL string
+var allowRegistration bool
 
 func init() {
 	rootCmd.AddCommand(serverCmd)
 	serverCmd.Flags().StringVar(&configFile, "config", "", "path to configuration file")
 	serverCmd.Flags().StringVar(&staticURL, "static-url", "", "URL for static assets (SvelteKit dev server)")
+	serverCmd.Flags().BoolVar(&allowRegistration, "allow-registration", false, "allow new user registration")
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	pool, err := pgxpool.New(ctx, "postgres://postgres:postgres@localhost:5432/logger4life_dev")
+	var cfg Config
+	if configFile != "" {
+		var err error
+		cfg, err = LoadConfigFile(configFile)
+		if err != nil {
+			return fmt.Errorf("unable to load config: %w", err)
+		}
+	} else {
+		cfg = DefaultConfig()
+	}
+
+	if cmd.Flags().Changed("allow-registration") {
+		cfg.AllowRegistration = allowRegistration
+	}
+
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}
@@ -49,7 +66,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	// Public routes
 	r.Get("/api/hello", handleHello(pool))
-	r.Post("/api/register", handleRegister(pool))
+	r.Get("/api/settings", handleSettings(cfg))
+	r.Post("/api/register", handleRegister(pool, cfg.AllowRegistration))
 	r.Post("/api/login", handleLogin(pool))
 
 	// Protected routes
@@ -79,6 +97,14 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Post("/api/join/{token}", handleJoinLog(pool))
 	})
 
-	log.Printf("Starting server on :4000 (static-url: %s)", staticURL)
-	return http.ListenAndServe(":4000", r)
+	log.Printf("Starting server on %s (static-url: %s, registration: %v)", cfg.ListenAddress, staticURL, cfg.AllowRegistration)
+	return http.ListenAndServe(cfg.ListenAddress, r)
+}
+
+func handleSettings(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"allow_registration": cfg.AllowRegistration,
+		})
+	}
 }

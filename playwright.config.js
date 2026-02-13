@@ -24,7 +24,7 @@ export default defineConfig({
 			reuseExistingServer: !process.env.CI,
 		},
 		{
-			command: 'go run . server',
+			command: 'go run . server --allow-registration',
 			url: 'http://localhost:4000/api/hello',
 			reuseExistingServer: !process.env.CI,
 		},

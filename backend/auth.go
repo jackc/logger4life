@@ -48,8 +48,13 @@ func handleHello(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleRegister(pool *pgxpool.Pool) http.HandlerFunc {
+func handleRegister(pool *pgxpool.Pool, allowRegistration bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !allowRegistration {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "registration is currently disabled"})
+			return
+		}
+
 		var req registerRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})

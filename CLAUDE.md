@@ -36,13 +36,15 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 - **CLI**: Cobra-based with subcommands (e.g., `server`). Entry point: `main.go` → `backend.Execute()` → `backend/root.go`
 - **HTTP**: Chi v5 router on port 4000 with `middleware.Logger`. API routes under `/api/`.
 - **Database**: pgx v5 with connection pooling (`pgxpool`). Connects to PostgreSQL.
-- **Config**: `logger4life.conf` with `database_url` and `listen_address` settings.
+- **Config**: `logger4life.conf` with `database_url`, `listen_address`, and `allow_registration` settings. Config file is parsed when `--config` flag is provided. CLI flags override config file values.
+- **Registration**: Disabled by default. Enable via `allow_registration=true` in config file or `--allow-registration` CLI flag (flag overrides config).
 - UUIDs for primary keys (v7 preferred; v4 for users to hide creation time).
 
 #### Backend Source Files
 | File | Purpose |
 |------|---------|
-| `server.go` | HTTP server setup, Chi router, route registration |
+| `server.go` | HTTP server setup, Chi router, route registration, settings endpoint |
+| `config.go` | Config struct, default config, config file parser |
 | `auth.go` | Register, login, logout handlers; session/cookie management |
 | `logs.go` | Log and log entry CRUD; field definition/value validation |
 | `sharing.go` | Share token generation, join flow, share management, access control |
@@ -60,7 +62,8 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 #### API Routes
 
 **Public (no auth):**
-- `POST /api/register` — Create account (sets session cookie)
+- `GET /api/settings` — Public app settings (`allow_registration`)
+- `POST /api/register` — Create account (sets session cookie); returns 403 when registration is disabled
 - `POST /api/login` — Authenticate (sets session cookie)
 
 **Protected (auth required):**
@@ -96,6 +99,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 - **Styling**: Tailwind CSS 4 via `@tailwindcss/vite` plugin
 - **API client**: `src/lib/api.js` — thin wrappers (`apiGet`, `apiPost`, `apiPut`, `apiDelete`) around fetch
 - **Auth state**: `src/lib/auth.svelte.js` — singleton reactive module using `$state` with exported `getAuth()`, `checkAuth()`, `login()`, `register()`, `logout()`
+- **App settings**: `src/lib/settings.svelte.js` — singleton reactive module for server settings (`allowRegistration`); loaded in layout
 - Vite dev server proxies `/api` requests to `http://localhost:4000`
 
 #### Routes
@@ -103,7 +107,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 |-------|------|---------|
 | `/` | `+page.svelte` | Landing page (logged out) or quick-log dashboard (logged in) |
 | `/login` | `login/+page.svelte` | Login form |
-| `/register` | `register/+page.svelte` | Registration form |
+| `/register` | `register/+page.svelte` | Registration form (shows disabled message when registration is off) |
 | `/logs` | `logs/+page.svelte` | Log management: create logs with custom fields, list/delete logs |
 | `/logs/{id}` | `logs/[id]/+page.svelte` | Log detail: create/edit/delete entries, share panel (owner) |
 | `/join/{token}` | `join/[token]/+page.svelte` | Accept shared log invitations |

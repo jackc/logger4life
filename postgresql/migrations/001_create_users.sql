@@ -1,14 +1,17 @@
-create table users(
-  id serial primary key,
-  name varchar(30) not null check(name ~ '\A[a-zA-Z0-9]+\Z'),
-  password_digest bytea not null,
-  password_salt bytea not null
+CREATE TABLE users (
+    id uuid PRIMARY KEY DEFAULT uuidv4(),
+    username varchar(30) NOT NULL CHECK (username ~ '\A[a-zA-Z0-9_]+\Z'),
+    email varchar(254),
+    password_hash varchar(255) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-create unique index users_name_unq on users (lower(name));
+CREATE UNIQUE INDEX users_username_unq ON users (lower(username));
+CREATE UNIQUE INDEX users_email_unq ON users (lower(email)) WHERE email IS NOT NULL;
 
-grant select, insert, update, delete on users to {{.app_user}};
+GRANT SELECT, INSERT, UPDATE, DELETE ON users TO {{.app_user}};
 
 ---- create above / drop below ----
 
-drop table users;
+DROP TABLE users;

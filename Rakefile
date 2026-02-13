@@ -54,6 +54,7 @@ end
 
 file "tmp/test/.databases-prepared" => FileList["postgresql/**/*.sql", "test/testdata/*.sql"] do
   sh "psql -f test/setup_test_databases.sql > /dev/null"
+  sh "PGDATABASE=logger4life_test tern migrate -m postgresql/migrations -c postgresql/tern.conf"
   sh "touch tmp/test/.databases-prepared"
 end
 

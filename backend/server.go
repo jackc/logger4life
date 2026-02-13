@@ -2,7 +2,6 @@ package backend
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -46,16 +45,18 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(loadSession(pool))
 
-	r.Get("/api/hello", func(w http.ResponseWriter, r *http.Request) {
-		var msg string
-		err := pool.QueryRow(r.Context(), "select 'Hello, World!'").Scan(&msg)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"message": msg})
+	// Public routes
+	r.Get("/api/hello", handleHello(pool))
+	r.Post("/api/register", handleRegister(pool))
+	r.Post("/api/login", handleLogin(pool))
+
+	// Protected routes
+	r.Group(func(r chi.Router) {
+		r.Use(requireAuth)
+		r.Post("/api/logout", handleLogout(pool))
+		r.Get("/api/me", handleMe)
 	})
 
 	log.Printf("Starting server on :4000 (static-url: %s)", staticURL)

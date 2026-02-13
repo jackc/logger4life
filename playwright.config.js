@@ -17,9 +17,16 @@ export default defineConfig({
 			use: { ...devices['Desktop Chrome'] },
 		},
 	],
-	webServer: {
-		command: 'npm run dev',
-		url: 'http://localhost:5173',
-		reuseExistingServer: !process.env.CI,
-	},
+	webServer: [
+		{
+			command: 'npm run dev',
+			url: 'http://localhost:5173',
+			reuseExistingServer: !process.env.CI,
+		},
+		{
+			command: 'go run . server',
+			url: 'http://localhost:4000/api/hello',
+			reuseExistingServer: !process.env.CI,
+		},
+	],
 });

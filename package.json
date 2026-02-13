@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "playwright test",
+    "test:report": "playwright show-report --port 9323 --host 0.0.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@sveltejs/adapter-static": "^3.0.0",
     "@sveltejs/kit": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

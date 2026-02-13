@@ -65,4 +65,9 @@ task test: ["test:prepare"] do
   sh "go test ./..."
 end
 
+desc "Run Playwright browser tests"
+task "test:browser" do
+  sh "npm test"
+end
+
 task :default => :test

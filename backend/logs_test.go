@@ -1,0 +1,280 @@
+package backend
+
+import (
+	"encoding/json"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func getJSONArray(url string, cookies []*http.Cookie) (*http.Response, []map[string]any) {
+	req, _ := http.NewRequest("GET", url, nil)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	var result []map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	resp.Body.Close()
+	return resp, result
+}
+
+func registerUser(t *testing.T, srvURL, username string) []*http.Cookie {
+	t.Helper()
+	resp, _ := postJSON(srvURL+"/api/register", map[string]any{
+		"username": username,
+		"password": "password123",
+	}, nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	cookie := findSessionCookie(resp)
+	require.NotNil(t, cookie)
+	return []*http.Cookie{cookie}
+}
+
+// --- Create Log ---
+
+func TestCreateLog_Success(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Vitamins",
+	}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, "Vitamins", body["name"])
+	assert.NotEmpty(t, body["id"])
+	assert.NotEmpty(t, body["created_at"])
+	assert.NotEmpty(t, body["updated_at"])
+}
+
+func TestCreateLog_EmptyName(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "",
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "name")
+}
+
+func TestCreateLog_DuplicateName(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+
+	resp, body := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+
+	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+	assert.Contains(t, body["error"], "already exists")
+}
+
+func TestCreateLog_Unauthenticated(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	resp, _ := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, nil)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+// --- List Logs ---
+
+func TestListLogs_Empty(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := getJSONArray(srv.URL+"/api/logs", cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, body, 0)
+}
+
+func TestListLogs_ReturnUserLogs(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	postJSON(srv.URL+"/api/logs", map[string]any{"name": "Pushups"}, cookies)
+	postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+
+	resp, body := getJSONArray(srv.URL+"/api/logs", cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, body, 2)
+	assert.Equal(t, "Pushups", body[0]["name"])
+	assert.Equal(t, "Vitamins", body[1]["name"])
+}
+
+func TestListLogs_DoesNotReturnOtherUsersLogs(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+
+	resp, body := getJSONArray(srv.URL+"/api/logs", bobCookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, body, 0)
+}
+
+// --- Get Log ---
+
+func TestGetLog_Success(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := getJSON(srv.URL+"/api/logs/"+logID, cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "Vitamins", body["name"])
+	assert.Equal(t, logID, body["id"])
+}
+
+func TestGetLog_NotFound(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := getJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000", cookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestGetLog_OtherUsersLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	resp, body := getJSON(srv.URL+"/api/logs/"+logID, bobCookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+// --- Create Log Entry ---
+
+func TestCreateLogEntry_Success(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, cookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.NotEmpty(t, body["id"])
+	assert.Equal(t, logID, body["log_id"])
+	assert.NotEmpty(t, body["created_at"])
+}
+
+func TestCreateLogEntry_NonexistentLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := postJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000/entries", map[string]any{}, cookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestCreateLogEntry_OtherUsersLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, bobCookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+// --- List Log Entries ---
+
+func TestListLogEntries_Empty(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, body, 0)
+}
+
+func TestListLogEntries_ReturnsEntries(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, cookies)
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, cookies)
+
+	resp, body := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, body, 2)
+}
+
+func TestListLogEntries_OtherUsersLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	resp, _ := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", bobCookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}

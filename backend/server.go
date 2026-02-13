@@ -57,6 +57,15 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Use(requireAuth)
 		r.Post("/api/logout", handleLogout(pool))
 		r.Get("/api/me", handleMe)
+
+		// Logs
+		r.Post("/api/logs", handleCreateLog(pool))
+		r.Get("/api/logs", handleListLogs(pool))
+		r.Get("/api/logs/{logID}", handleGetLog(pool))
+
+		// Log entries
+		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))
+		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
 	})
 
 	log.Printf("Starting server on :4000 (static-url: %s)", staticURL)

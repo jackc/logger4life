@@ -21,6 +21,8 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM log_entries")
+		pool.Exec(context.Background(), "DELETE FROM logs")
 		pool.Exec(context.Background(), "DELETE FROM sessions")
 		pool.Exec(context.Background(), "DELETE FROM users")
 		pool.Close()
@@ -34,6 +36,11 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 		r.Use(requireAuth)
 		r.Post("/api/logout", handleLogout(pool))
 		r.Get("/api/me", handleMe)
+		r.Post("/api/logs", handleCreateLog(pool))
+		r.Get("/api/logs", handleListLogs(pool))
+		r.Get("/api/logs/{logID}", handleGetLog(pool))
+		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))
+		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
 	})
 
 	return httptest.NewServer(r)

@@ -15,7 +15,7 @@
 		submitting = true;
 		try {
 			await login(username, password);
-			goto('/me');
+			goto('/logs');
 		} catch (err) {
 			error = err.message;
 		} finally {
@@ -25,7 +25,7 @@
 
 	$effect(() => {
 		if (!auth.loading && auth.isLoggedIn) {
-			goto('/me');
+			goto('/logs');
 		}
 	});
 </script>

@@ -24,7 +24,7 @@ test('login page shows form', async ({ page }) => {
 	await expect(page.locator('button[type="submit"]')).toBeVisible();
 });
 
-test('register a new user and land on account page', async ({ page }) => {
+test('register a new user and land on logs page', async ({ page }) => {
 	const username = uniqueUsername();
 
 	await page.goto('/register');
@@ -33,10 +33,8 @@ test('register a new user and land on account page', async ({ page }) => {
 	await page.fill('input[name="password"]', testPassword);
 	await page.click('button[type="submit"]');
 
-	await page.waitForURL('/me');
-	await expect(page.locator('text=My Account')).toBeVisible();
-	await expect(page.getByRole('main').getByText(username, { exact: true })).toBeVisible();
-	await expect(page.getByText(`${username}@example.com`)).toBeVisible();
+	await page.waitForURL('/logs');
+	await expect(page.getByRole('heading', { name: 'My Logs' })).toBeVisible();
 });
 
 test('register with duplicate username shows error', async ({ page, request }) => {
@@ -67,8 +65,8 @@ test('login with valid credentials', async ({ page, request }) => {
 	await page.fill('input[name="password"]', testPassword);
 	await page.click('button[type="submit"]');
 
-	await page.waitForURL('/me');
-	await expect(page.getByRole('main').getByText(username)).toBeVisible();
+	await page.waitForURL('/logs');
+	await expect(page.getByRole('heading', { name: 'My Logs' })).toBeVisible();
 });
 
 test('login with wrong password shows error', async ({ page, request }) => {
@@ -94,7 +92,7 @@ test('logout clears session', async ({ page }) => {
 	await page.fill('input[name="username"]', username);
 	await page.fill('input[name="password"]', testPassword);
 	await page.click('button[type="submit"]');
-	await page.waitForURL('/me');
+	await page.waitForURL('/logs');
 
 	// Logout
 	await page.click('button:has-text("Logout")');
@@ -118,7 +116,7 @@ test('nav shows username and logout when authenticated', async ({ page }) => {
 	await page.fill('input[name="username"]', username);
 	await page.fill('input[name="password"]', testPassword);
 	await page.click('button[type="submit"]');
-	await page.waitForURL('/me');
+	await page.waitForURL('/logs');
 
 	await page.goto('/');
 

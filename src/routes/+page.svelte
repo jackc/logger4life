@@ -123,7 +123,12 @@
 						{#if state}
 							<div class="bg-white rounded-lg shadow p-4" data-testid="log-card">
 								<div class="flex items-center justify-between mb-3">
-									<h2 class="text-lg font-semibold text-gray-800">{log.name}</h2>
+									<div>
+										<h2 class="text-lg font-semibold text-gray-800 inline">{log.name}</h2>
+										{#if !log.is_owner}
+											<span class="text-xs text-gray-400 ml-1">(shared)</span>
+										{/if}
+									</div>
 									<a href="/logs/{log.id}" class="text-blue-600 hover:underline text-sm">View entries</a>
 								</div>
 

@@ -21,6 +21,7 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM log_shares")
 		pool.Exec(context.Background(), "DELETE FROM log_entries")
 		pool.Exec(context.Background(), "DELETE FROM logs")
 		pool.Exec(context.Background(), "DELETE FROM sessions")
@@ -44,6 +45,12 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
 		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool))
 		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(pool))
+		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(pool))
+		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(pool))
+		r.Get("/api/logs/{logID}/shares", handleListShares(pool))
+		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(pool))
+		r.Get("/api/join/{token}", handleGetShareInfo(pool))
+		r.Post("/api/join/{token}", handleJoinLog(pool))
 	})
 
 	return httptest.NewServer(r)

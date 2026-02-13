@@ -19,6 +19,13 @@
 	let editError = $state('');
 	let saving = $state(false);
 
+	let isOwner = $state(true);
+	let shareToken = $state(null);
+	let sharedUsers = $state([]);
+	let showSharePanel = $state(false);
+	let shareLoading = $state(false);
+	let copied = $state(false);
+
 	const logID = $derived(page.params.id);
 	const hasFields = $derived(log?.fields?.length > 0);
 
@@ -43,12 +50,26 @@
 			]);
 			log = logData;
 			entries = entriesData;
+			isOwner = logData.is_owner;
+			shareToken = logData.share_token || null;
 			resetFieldValues();
+
+			if (logData.is_owner) {
+				fetchSharedUsers();
+			}
 		} catch {
 			log = null;
 			entries = [];
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function fetchSharedUsers() {
+		try {
+			sharedUsers = await apiGet(`/api/logs/${logID}/shares`);
+		} catch {
+			sharedUsers = [];
 		}
 	}
 
@@ -162,6 +183,45 @@
 		}
 	}
 
+	async function generateShareToken() {
+		shareLoading = true;
+		try {
+			const result = await apiPost(`/api/logs/${logID}/share-token`, {});
+			shareToken = result.share_token;
+		} catch (err) {
+			error = err.message;
+		} finally {
+			shareLoading = false;
+		}
+	}
+
+	async function revokeShareToken() {
+		if (!confirm('Revoke the share link? New users will no longer be able to join.')) return;
+		try {
+			await apiDelete(`/api/logs/${logID}/share-token`);
+			shareToken = null;
+		} catch (err) {
+			error = err.message;
+		}
+	}
+
+	async function removeSharedUser(share) {
+		if (!confirm(`Remove ${share.username}'s access?`)) return;
+		try {
+			await apiDelete(`/api/logs/${logID}/shares/${share.id}`);
+			sharedUsers = sharedUsers.filter(s => s.id !== share.id);
+		} catch (err) {
+			error = err.message;
+		}
+	}
+
+	function copyShareLink() {
+		const url = `${window.location.origin}/join/${shareToken}`;
+		navigator.clipboard.writeText(url);
+		copied = true;
+		setTimeout(() => { copied = false; }, 1500);
+	}
+
 	$effect(() => {
 		if (!auth.loading && !auth.isLoggedIn) {
 			goto('/login');
@@ -186,14 +246,84 @@
 
 			<div class="flex items-center justify-between mt-2 mb-6">
 				<h1 class="text-2xl font-bold text-gray-800">{log.name}</h1>
-				<button
-					onclick={deleteLog}
-					class="text-gray-400 hover:text-red-600 text-sm"
-					data-testid="delete-log"
-				>
-					Delete Log
-				</button>
+				{#if isOwner}
+					<div class="flex gap-3">
+						<button
+							onclick={() => showSharePanel = !showSharePanel}
+							class="text-gray-400 hover:text-blue-600 text-sm"
+						>
+							Share
+						</button>
+						<button
+							onclick={deleteLog}
+							class="text-gray-400 hover:text-red-600 text-sm"
+							data-testid="delete-log"
+						>
+							Delete Log
+						</button>
+					</div>
+				{/if}
 			</div>
+
+			{#if showSharePanel && isOwner}
+				<div class="bg-white rounded-lg shadow p-4 mb-6 space-y-4">
+					<h2 class="text-sm font-semibold text-gray-700">Sharing</h2>
+
+					{#if shareToken}
+						<div class="space-y-2">
+							<div class="flex gap-2">
+								<input
+									type="text"
+									readonly
+									value="{window.location.origin}/join/{shareToken}"
+									class="flex-1 rounded border-gray-300 shadow-sm px-3 py-2 border text-sm bg-gray-50"
+								/>
+								<button
+									onclick={copyShareLink}
+									class="bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 whitespace-nowrap"
+								>
+									{copied ? 'Copied!' : 'Copy'}
+								</button>
+							</div>
+							<button
+								onclick={revokeShareToken}
+								class="text-red-600 hover:text-red-800 text-sm"
+							>
+								Revoke link
+							</button>
+						</div>
+					{:else}
+						<button
+							onclick={generateShareToken}
+							disabled={shareLoading}
+							class="bg-blue-600 text-white py-2 px-4 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+						>
+							{shareLoading ? 'Generating...' : 'Generate Share Link'}
+						</button>
+					{/if}
+
+					{#if sharedUsers.length > 0}
+						<div>
+							<h3 class="text-xs font-medium text-gray-500 uppercase mb-2">Shared with</h3>
+							<div class="space-y-2">
+								{#each sharedUsers as share}
+									<div class="flex items-center justify-between">
+										<span class="text-sm text-gray-700">{share.username}</span>
+										<button
+											onclick={() => removeSharedUser(share)}
+											class="text-gray-400 hover:text-red-600 text-sm"
+										>
+											Remove
+										</button>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{:else}
+						<p class="text-sm text-gray-500">No one has joined yet.</p>
+					{/if}
+				</div>
+			{/if}
 
 			{#if hasFields}
 				<form onsubmit={logEntry} class="bg-white rounded-lg shadow p-4 mb-6 space-y-3">

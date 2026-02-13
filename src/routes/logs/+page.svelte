@@ -156,19 +156,26 @@
 				<div class="space-y-2">
 					{#each logs as log}
 						<div class="bg-white rounded-lg shadow p-4 flex items-center justify-between">
-							<a
-								href="/logs/{log.id}"
-								class="text-gray-800 font-medium hover:text-blue-600 transition-colors"
-							>
-								{log.name}
-							</a>
-							<button
-								onclick={() => deleteLog(log)}
-								class="text-gray-400 hover:text-red-600 text-sm"
-								data-testid="delete-log"
-							>
-								Delete
-							</button>
+							<div>
+								<a
+									href="/logs/{log.id}"
+									class="text-gray-800 font-medium hover:text-blue-600 transition-colors"
+								>
+									{log.name}
+								</a>
+								{#if !log.is_owner}
+									<span class="text-xs text-gray-400 ml-2">(shared)</span>
+								{/if}
+							</div>
+							{#if log.is_owner}
+								<button
+									onclick={() => deleteLog(log)}
+									class="text-gray-400 hover:text-red-600 text-sm"
+									data-testid="delete-log"
+								>
+									Delete
+								</button>
+							{/if}
 						</div>
 					{/each}
 				</div>

@@ -69,6 +69,14 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
 		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool))
 		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(pool))
+
+		// Sharing
+		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(pool))
+		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(pool))
+		r.Get("/api/logs/{logID}/shares", handleListShares(pool))
+		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(pool))
+		r.Get("/api/join/{token}", handleGetShareInfo(pool))
+		r.Post("/api/join/{token}", handleJoinLog(pool))
 	})
 
 	log.Printf("Starting server on :4000 (static-url: %s)", staticURL)

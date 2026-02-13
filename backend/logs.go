@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,11 +28,13 @@ type createLogRequest struct {
 }
 
 type logResponse struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	Fields    []fieldDefinition `json:"fields"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Fields     []fieldDefinition `json:"fields"`
+	IsOwner    bool              `json:"is_owner"`
+	ShareToken *string           `json:"share_token,omitempty"`
+	CreatedAt  time.Time         `json:"created_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
 }
 
 type createLogEntryRequest struct {
@@ -174,6 +177,7 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		l.IsOwner = true
 		if l.Fields == nil {
 			l.Fields = []fieldDefinition{}
 		}
@@ -186,8 +190,13 @@ func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
 		user := userFromContext(r.Context())
 
 		rows, err := pool.Query(r.Context(),
-			`SELECT id, name, fields, created_at, updated_at FROM logs
-			 WHERE user_id = $1 ORDER BY lower(name)`,
+			`SELECT id, name, fields, created_at, updated_at, is_owner FROM (
+				SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, true AS is_owner
+				FROM logs l WHERE l.user_id = $1
+				UNION ALL
+				SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, false AS is_owner
+				FROM logs l JOIN log_shares ls ON l.id = ls.log_id WHERE ls.user_id = $1
+			) combined ORDER BY lower(name)`,
 			user.ID,
 		)
 		if err != nil {
@@ -199,7 +208,7 @@ func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
 		logs := []logResponse{}
 		for rows.Next() {
 			var l logResponse
-			if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt); err != nil {
+			if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner); err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 				return
 			}
@@ -218,13 +227,7 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
 
-		var l logResponse
-		err := pool.QueryRow(r.Context(),
-			`SELECT id, name, fields, created_at, updated_at FROM logs
-			 WHERE id = $1 AND user_id = $2`,
-			logID, user.ID,
-		).Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt)
-
+		access, err := checkLogAccess(r.Context(), pool, logID, user.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
@@ -232,6 +235,23 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 			}
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
+		}
+
+		var l logResponse
+		var shareToken []byte
+		err = pool.QueryRow(r.Context(),
+			`SELECT id, name, fields, share_token, created_at, updated_at FROM logs WHERE id = $1`,
+			logID,
+		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		l.IsOwner = access.IsOwner
+		if access.IsOwner && shareToken != nil {
+			tokenHex := hex.EncodeToString(shareToken)
+			l.ShareToken = &tokenHex
 		}
 
 		if l.Fields == nil {
@@ -278,13 +298,7 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 			req.Fields = map[string]any{}
 		}
 
-		var ownerID string
-		var logFields []fieldDefinition
-		err := pool.QueryRow(r.Context(),
-			`SELECT user_id, fields FROM logs WHERE id = $1`,
-			logID,
-		).Scan(&ownerID, &logFields)
-
+		access, err := checkLogAccess(r.Context(), pool, logID, user.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
@@ -293,12 +307,8 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
-		if ownerID != user.ID {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-			return
-		}
 
-		if err := validateFieldValues(logFields, req.Fields); err != nil {
+		if err := validateFieldValues(access.Fields, req.Fields); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
@@ -341,13 +351,7 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		var ownerID string
-		var logFields []fieldDefinition
-		err := pool.QueryRow(r.Context(),
-			`SELECT user_id, fields FROM logs WHERE id = $1`,
-			logID,
-		).Scan(&ownerID, &logFields)
-
+		access, err := checkLogAccess(r.Context(), pool, logID, user.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
@@ -356,12 +360,8 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
-		if ownerID != user.ID {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-			return
-		}
 
-		if err := validateFieldValues(logFields, req.Fields); err != nil {
+		if err := validateFieldValues(access.Fields, req.Fields); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
@@ -396,22 +396,13 @@ func handleDeleteLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 		logID := chi.URLParam(r, "logID")
 		entryID := chi.URLParam(r, "entryID")
 
-		var ownerID string
-		err := pool.QueryRow(r.Context(),
-			`SELECT user_id FROM logs WHERE id = $1`,
-			logID,
-		).Scan(&ownerID)
-
+		_, err := checkLogAccess(r.Context(), pool, logID, user.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
-			return
-		}
-		if ownerID != user.ID {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 			return
 		}
 
@@ -438,22 +429,13 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
 
-		var ownerID string
-		err := pool.QueryRow(r.Context(),
-			`SELECT user_id FROM logs WHERE id = $1`,
-			logID,
-		).Scan(&ownerID)
-
+		_, err := checkLogAccess(r.Context(), pool, logID, user.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
-			return
-		}
-		if ownerID != user.ID {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 			return
 		}
 

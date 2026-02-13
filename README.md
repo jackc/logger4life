@@ -93,3 +93,7 @@ The app will be available at `http://localhost:5173` with API requests proxied t
 | `rake build` | Build everything (frontend assets + Go binary) |
 | `rake test` | Run Go backend tests |
 | `rake test:browser` | Run Playwright browser tests |
+
+## Deployment
+
+The `config` directory contains sample config files for nginx and systemd.

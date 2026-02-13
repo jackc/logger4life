@@ -1,0 +1,18 @@
+[Unit]
+Description=Logger4Life
+ConditionPathExists=/apps/logger4life/current
+After=network.target
+
+[Service]
+Type=simple
+User=logger4life
+Group=logger4life
+
+Restart=on-failure
+RestartSec=30
+
+WorkingDirectory=/apps/logger4life/current
+ExecStart=/apps/logger4life/current/bin/logger4life server --config /apps/logger4life/shared/logger4life.conf
+
+[Install]
+WantedBy=multi-user.target

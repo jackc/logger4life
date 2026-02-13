@@ -44,7 +44,7 @@ task build: ["build:assets", "build:binary", "build/logger4life-linux"]
 desc "Run logger4life"
 task run: "build:binary" do
   puts "Remember to start vite dev server"
-  exec "build/logger4life server --config logger4life.conf --static-url http://localhost:5173"
+  exec "build/logger4life server --config logger4life.conf"
 end
 
 desc "Watch for source changes and rebuild and rerun"

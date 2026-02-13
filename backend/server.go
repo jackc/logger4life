@@ -19,13 +19,11 @@ var serverCmd = &cobra.Command{
 }
 
 var configFile string
-var staticURL string
 var allowRegistration bool
 
 func init() {
 	rootCmd.AddCommand(serverCmd)
 	serverCmd.Flags().StringVar(&configFile, "config", "", "path to configuration file")
-	serverCmd.Flags().StringVar(&staticURL, "static-url", "", "URL for static assets (SvelteKit dev server)")
 	serverCmd.Flags().BoolVar(&allowRegistration, "allow-registration", false, "allow new user registration")
 }
 
@@ -97,7 +95,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Post("/api/join/{token}", handleJoinLog(pool))
 	})
 
-	log.Printf("Starting server on %s (static-url: %s, registration: %v)", cfg.ListenAddress, staticURL, cfg.AllowRegistration)
+	log.Printf("Starting server on %s (registration: %v)", cfg.ListenAddress, cfg.AllowRegistration)
 	return http.ListenAndServe(cfg.ListenAddress, r)
 }
 

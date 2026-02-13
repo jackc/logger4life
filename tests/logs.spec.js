@@ -213,3 +213,18 @@ test('delete a log entry', async ({ page }) => {
 	await expect(page.locator('[data-testid="log-entry"]')).toHaveCount(0);
 	await expect(page.getByText('No entries yet')).toBeVisible();
 });
+
+test('delete a log', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'ToDelete');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'ToDelete' })).toBeVisible();
+
+	page.on('dialog', dialog => dialog.accept());
+
+	await page.click('[data-testid="delete-log"]');
+
+	await expect(page.getByRole('link', { name: 'ToDelete' })).not.toBeVisible();
+	await expect(page.getByText('No logs yet')).toBeVisible();
+});

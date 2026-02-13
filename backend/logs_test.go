@@ -935,3 +935,89 @@ func TestDeleteLogEntry_Unauthenticated(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
+
+// --- Delete Log ---
+
+func TestDeleteLog_Success(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, _ := deleteJSON(srv.URL+"/api/logs/"+logID, cookies)
+
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	// Verify log is gone
+	listResp, logs := getJSONArray(srv.URL+"/api/logs", cookies)
+	assert.Equal(t, http.StatusOK, listResp.StatusCode)
+	assert.Len(t, logs, 0)
+}
+
+func TestDeleteLog_AlsoDeletesEntries(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	// Create some entries
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, cookies)
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, cookies)
+
+	// Delete the log
+	resp, _ := deleteJSON(srv.URL+"/api/logs/"+logID, cookies)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	// Verify log is gone from list
+	listResp, logs := getJSONArray(srv.URL+"/api/logs", cookies)
+	assert.Equal(t, http.StatusOK, listResp.StatusCode)
+	assert.Len(t, logs, 0)
+}
+
+func TestDeleteLog_NotFound(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := deleteJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000", cookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestDeleteLog_OtherUsersLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	resp, body := deleteJSON(srv.URL+"/api/logs/"+logID, bobCookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+
+	// Verify Alice's log still exists
+	listResp, logs := getJSONArray(srv.URL+"/api/logs", aliceCookies)
+	assert.Equal(t, http.StatusOK, listResp.StatusCode)
+	assert.Len(t, logs, 1)
+}
+
+func TestDeleteLog_Unauthenticated(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	resp, _ := deleteJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000", nil)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}

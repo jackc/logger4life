@@ -241,6 +241,29 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
+func handleDeleteLog(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		logID := chi.URLParam(r, "logID")
+
+		tag, err := pool.Exec(r.Context(),
+			`DELETE FROM logs WHERE id = $1 AND user_id = $2`,
+			logID, user.ID,
+		)
+
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		if tag.RowsAffected() == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())

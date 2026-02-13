@@ -1,7 +1,7 @@
 <script>
 	import { getAuth } from '$lib/auth.svelte.js';
 	import { goto } from '$app/navigation';
-	import { apiGet, apiPost } from '$lib/api.js';
+	import { apiGet, apiPost, apiDelete } from '$lib/api.js';
 
 	const auth = getAuth();
 
@@ -49,6 +49,16 @@
 			error = err.message;
 		} finally {
 			creating = false;
+		}
+	}
+
+	async function deleteLog(log) {
+		if (!confirm('Delete this log and all its entries?')) return;
+		try {
+			await apiDelete(`/api/logs/${log.id}`);
+			logs = logs.filter(l => l.id !== log.id);
+		} catch (err) {
+			error = err.message;
 		}
 	}
 
@@ -145,12 +155,21 @@
 			{:else}
 				<div class="space-y-2">
 					{#each logs as log}
-						<a
-							href="/logs/{log.id}"
-							class="block bg-white rounded-lg shadow p-4 hover:bg-gray-50 transition-colors"
-						>
-							<span class="text-gray-800 font-medium">{log.name}</span>
-						</a>
+						<div class="bg-white rounded-lg shadow p-4 flex items-center justify-between">
+							<a
+								href="/logs/{log.id}"
+								class="text-gray-800 font-medium hover:text-blue-600 transition-colors"
+							>
+								{log.name}
+							</a>
+							<button
+								onclick={() => deleteLog(log)}
+								class="text-gray-400 hover:text-red-600 text-sm"
+								data-testid="delete-log"
+							>
+								Delete
+							</button>
+						</div>
 					{/each}
 				</div>
 			{/if}

@@ -112,6 +112,16 @@
 		editError = '';
 	}
 
+	async function deleteLog() {
+		if (!confirm('Delete this log and all its entries?')) return;
+		try {
+			await apiDelete(`/api/logs/${logID}`);
+			goto('/logs');
+		} catch (err) {
+			error = err.message;
+		}
+	}
+
 	async function deleteEntry(entry) {
 		if (!confirm('Delete this entry?')) return;
 		try {
@@ -174,7 +184,16 @@
 		<div class="max-w-lg mx-auto">
 			<a href="/logs" class="text-blue-600 hover:underline text-sm">&larr; Back to logs</a>
 
-			<h1 class="text-2xl font-bold text-gray-800 mt-2 mb-6">{log.name}</h1>
+			<div class="flex items-center justify-between mt-2 mb-6">
+				<h1 class="text-2xl font-bold text-gray-800">{log.name}</h1>
+				<button
+					onclick={deleteLog}
+					class="text-gray-400 hover:text-red-600 text-sm"
+					data-testid="delete-log"
+				>
+					Delete Log
+				</button>
+			</div>
 
 			{#if hasFields}
 				<form onsubmit={logEntry} class="bg-white rounded-lg shadow p-4 mb-6 space-y-3">

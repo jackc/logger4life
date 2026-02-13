@@ -39,6 +39,7 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 		r.Post("/api/logs", handleCreateLog(pool))
 		r.Get("/api/logs", handleListLogs(pool))
 		r.Get("/api/logs/{logID}", handleGetLog(pool))
+		r.Delete("/api/logs/{logID}", handleDeleteLog(pool))
 		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))
 		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
 		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool))

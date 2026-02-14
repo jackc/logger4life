@@ -214,6 +214,104 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
+type changeEmailRequest struct {
+	Email *string `json:"email"`
+}
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+func handleChangeEmail(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req changeEmailRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+
+		if req.Email != nil {
+			trimmed := strings.TrimSpace(*req.Email)
+			if trimmed == "" {
+				req.Email = nil
+			} else {
+				req.Email = &trimmed
+			}
+		}
+
+		user := userFromContext(r.Context())
+
+		var resp userResponse
+		err := pool.QueryRow(r.Context(),
+			`UPDATE users SET email = $1, updated_at = now() WHERE id = $2
+			 RETURNING id, username, email`,
+			req.Email, user.ID,
+		).Scan(&resp.ID, &resp.Username, &resp.Email)
+
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "email already in use"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func handleChangePassword(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req changePasswordRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+
+		if len(req.NewPassword) < 8 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "new password must be at least 8 characters"})
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		var passwordHash string
+		err := pool.QueryRow(r.Context(),
+			`SELECT password_hash FROM users WHERE id = $1`,
+			user.ID,
+		).Scan(&passwordHash)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.CurrentPassword)); err != nil {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "current password is incorrect"})
+			return
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		_, err = pool.Exec(r.Context(),
+			`UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2`,
+			string(hash), user.ID,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

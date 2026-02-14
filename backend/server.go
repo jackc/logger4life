@@ -73,6 +73,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Use(requireAuth)
 		r.Post("/api/logout", handleLogout(pool))
 		r.Get("/api/me", handleMe)
+		r.Put("/api/me/email", handleChangeEmail(pool))
+		r.Put("/api/me/password", handleChangePassword(pool))
 
 		// Logs
 		r.Post("/api/logs", handleCreateLog(pool))

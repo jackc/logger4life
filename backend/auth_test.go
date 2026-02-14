@@ -42,6 +42,8 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		r.Use(requireAuth)
 		r.Post("/api/logout", handleLogout(pool))
 		r.Get("/api/me", handleMe)
+		r.Put("/api/me/email", handleChangeEmail(pool))
+		r.Put("/api/me/password", handleChangePassword(pool))
 		r.Post("/api/logs", handleCreateLog(pool))
 		r.Get("/api/logs", handleListLogs(pool))
 		r.Get("/api/logs/{logID}", handleGetLog(pool))
@@ -363,4 +365,177 @@ func TestSettings_RegistrationDisabled(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, false, body["allow_registration"])
+}
+
+func TestChangeEmail_Success(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	regResp, _ := postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "alice",
+		"email":    "alice@example.com",
+		"password": "password123",
+	}, nil)
+	cookie := findSessionCookie(regResp)
+	require.NotNil(t, cookie)
+
+	resp, body := putJSON(srv.URL+"/api/me/email", map[string]any{
+		"email": "newalice@example.com",
+	}, []*http.Cookie{cookie})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "newalice@example.com", body["email"])
+
+	// Verify persisted
+	_, meBody := getJSON(srv.URL+"/api/me", []*http.Cookie{cookie})
+	assert.Equal(t, "newalice@example.com", meBody["email"])
+}
+
+func TestChangeEmail_ClearEmail(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	regResp, _ := postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "alice",
+		"email":    "alice@example.com",
+		"password": "password123",
+	}, nil)
+	cookie := findSessionCookie(regResp)
+	require.NotNil(t, cookie)
+
+	resp, body := putJSON(srv.URL+"/api/me/email", map[string]any{
+		"email": "",
+	}, []*http.Cookie{cookie})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Nil(t, body["email"])
+
+	// Verify persisted
+	_, meBody := getJSON(srv.URL+"/api/me", []*http.Cookie{cookie})
+	assert.Nil(t, meBody["email"])
+}
+
+func TestChangeEmail_DuplicateEmail(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "alice",
+		"email":    "alice@example.com",
+		"password": "password123",
+	}, nil)
+
+	bobResp, _ := postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "bob",
+		"email":    "bob@example.com",
+		"password": "password123",
+	}, nil)
+	bobCookie := findSessionCookie(bobResp)
+	require.NotNil(t, bobCookie)
+
+	resp, body := putJSON(srv.URL+"/api/me/email", map[string]any{
+		"email": "alice@example.com",
+	}, []*http.Cookie{bobCookie})
+
+	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+	assert.Equal(t, "email already in use", body["error"])
+}
+
+func TestChangeEmail_Unauthenticated(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	resp, body := putJSON(srv.URL+"/api/me/email", map[string]any{
+		"email": "test@example.com",
+	}, nil)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	assert.Equal(t, "authentication required", body["error"])
+}
+
+func TestChangePassword_Success(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	regResp, _ := postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "alice",
+		"password": "password123",
+	}, nil)
+	cookie := findSessionCookie(regResp)
+	require.NotNil(t, cookie)
+
+	resp, body := putJSON(srv.URL+"/api/me/password", map[string]any{
+		"current_password": "password123",
+		"new_password":     "newpassword456",
+	}, []*http.Cookie{cookie})
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "password updated", body["message"])
+
+	// Login with new password succeeds
+	loginResp, _ := postJSON(srv.URL+"/api/login", map[string]any{
+		"username": "alice",
+		"password": "newpassword456",
+	}, nil)
+	assert.Equal(t, http.StatusOK, loginResp.StatusCode)
+
+	// Login with old password fails
+	oldResp, _ := postJSON(srv.URL+"/api/login", map[string]any{
+		"username": "alice",
+		"password": "password123",
+	}, nil)
+	assert.Equal(t, http.StatusUnauthorized, oldResp.StatusCode)
+}
+
+func TestChangePassword_WrongCurrentPassword(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	regResp, _ := postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "alice",
+		"password": "password123",
+	}, nil)
+	cookie := findSessionCookie(regResp)
+	require.NotNil(t, cookie)
+
+	resp, body := putJSON(srv.URL+"/api/me/password", map[string]any{
+		"current_password": "wrongpassword",
+		"new_password":     "newpassword456",
+	}, []*http.Cookie{cookie})
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	assert.Equal(t, "current password is incorrect", body["error"])
+}
+
+func TestChangePassword_ShortNewPassword(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	regResp, _ := postJSON(srv.URL+"/api/register", map[string]any{
+		"username": "alice",
+		"password": "password123",
+	}, nil)
+	cookie := findSessionCookie(regResp)
+	require.NotNil(t, cookie)
+
+	resp, body := putJSON(srv.URL+"/api/me/password", map[string]any{
+		"current_password": "password123",
+		"new_password":     "short",
+	}, []*http.Cookie{cookie})
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "password")
+}
+
+func TestChangePassword_Unauthenticated(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	resp, body := putJSON(srv.URL+"/api/me/password", map[string]any{
+		"current_password": "password123",
+		"new_password":     "newpassword456",
+	}, nil)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	assert.Equal(t, "authentication required", body["error"])
 }

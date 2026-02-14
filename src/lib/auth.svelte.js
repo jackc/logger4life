@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './api.js';
+import { apiGet, apiPost, apiPut } from './api.js';
 
 let user = $state(null);
 let loading = $state(true);
@@ -33,4 +33,15 @@ export async function register(username, email, password) {
 export async function logout() {
 	await apiPost('/api/logout', {});
 	user = null;
+}
+
+export async function changeEmail(email) {
+	user = await apiPut('/api/me/email', { email: email || null });
+}
+
+export async function changePassword(currentPassword, newPassword) {
+	await apiPut('/api/me/password', {
+		current_password: currentPassword,
+		new_password: newPassword,
+	});
 }

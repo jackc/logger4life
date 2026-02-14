@@ -261,6 +261,66 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
+func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		logID := chi.URLParam(r, "logID")
+
+		var req createLogRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+
+		req.Name = strings.TrimSpace(req.Name)
+		if len(req.Name) == 0 || len(req.Name) > 100 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be 1-100 characters"})
+			return
+		}
+
+		if req.Fields == nil {
+			req.Fields = []fieldDefinition{}
+		}
+		if err := validateFieldDefinitions(req.Fields); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+
+		var l logResponse
+		var shareToken []byte
+		err := pool.QueryRow(r.Context(),
+			`UPDATE logs SET name = $1, fields = $2, updated_at = now()
+			 WHERE id = $3 AND user_id = $4
+			 RETURNING id, name, fields, share_token, created_at, updated_at`,
+			req.Name, req.Fields, logID, user.ID,
+		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "a log with that name already exists"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		l.IsOwner = true
+		if shareToken != nil {
+			tokenHex := hex.EncodeToString(shareToken)
+			l.ShareToken = &tokenHex
+		}
+		if l.Fields == nil {
+			l.Fields = []fieldDefinition{}
+		}
+		writeJSON(w, http.StatusOK, l)
+	}
+}
+
 func handleDeleteLog(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())

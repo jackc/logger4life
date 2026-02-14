@@ -47,6 +47,7 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		r.Post("/api/logs", handleCreateLog(pool))
 		r.Get("/api/logs", handleListLogs(pool))
 		r.Get("/api/logs/{logID}", handleGetLog(pool))
+		r.Put("/api/logs/{logID}", handleUpdateLog(pool))
 		r.Delete("/api/logs/{logID}", handleDeleteLog(pool))
 		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))
 		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))

@@ -19,6 +19,12 @@
 	let editError = $state('');
 	let saving = $state(false);
 
+	let editing = $state(false);
+	let editName = $state('');
+	let editLogFields = $state([]);
+	let editLogError = $state('');
+	let editLogSaving = $state(false);
+
 	let isOwner = $state(true);
 	let shareToken = $state(null);
 	let sharedUsers = $state([]);
@@ -215,6 +221,47 @@
 		}
 	}
 
+	function startEditingLog() {
+		editName = log.name;
+		editLogFields = log.fields.map(f => ({ name: f.name, type: f.type, required: f.required }));
+		editLogError = '';
+		editing = true;
+	}
+
+	function cancelEditingLog() {
+		editing = false;
+		editLogError = '';
+	}
+
+	function addEditField() {
+		editLogFields = [...editLogFields, { name: '', type: 'number', required: false }];
+	}
+
+	function removeEditField(index) {
+		editLogFields = editLogFields.filter((_, i) => i !== index);
+	}
+
+	async function saveLog(e) {
+		if (e) e.preventDefault();
+		editLogSaving = true;
+		editLogError = '';
+		try {
+			const fields = editLogFields
+				.filter((f) => f.name.trim() !== '')
+				.map((f) => ({ name: f.name.trim(), type: f.type, required: f.required }));
+			const updated = await apiPut(`/api/logs/${logID}`, { name: editName.trim(), fields });
+			log = updated;
+			isOwner = updated.is_owner;
+			shareToken = updated.share_token || null;
+			resetFieldValues();
+			editing = false;
+		} catch (err) {
+			editLogError = err.message;
+		} finally {
+			editLogSaving = false;
+		}
+	}
+
 	function copyShareLink() {
 		const url = `${window.location.origin}/join/${shareToken}`;
 		navigator.clipboard.writeText(url);
@@ -244,26 +291,111 @@
 		<div class="max-w-lg mx-auto">
 			<a href="/logs" class="text-blue-600 hover:underline text-sm">&larr; Back to logs</a>
 
-			<div class="flex items-center justify-between mt-2 mb-6">
-				<h1 class="text-2xl font-bold text-gray-800">{log.name}</h1>
-				{#if isOwner}
-					<div class="flex gap-3">
+			{#if editing}
+				<form onsubmit={saveLog} class="bg-white rounded-lg shadow p-4 mt-2 mb-6 space-y-3">
+					<div>
+						<label class="block text-sm font-medium text-gray-700 mb-1">Log Name</label>
+						<input
+							type="text"
+							bind:value={editName}
+							required
+							maxlength="100"
+							class="w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border"
+							data-testid="edit-log-name"
+						/>
+					</div>
+
+					{#each editLogFields as field, i}
+						<div class="flex gap-2 items-center">
+							<input
+								type="text"
+								bind:value={field.name}
+								placeholder="Field name"
+								maxlength="100"
+								class="flex-1 rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border text-sm"
+							/>
+							<select
+								bind:value={field.type}
+								class="rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2 border text-sm"
+							>
+								<option value="number">Number</option>
+								<option value="text">Text</option>
+								<option value="boolean">Boolean</option>
+							</select>
+							<label class="flex items-center gap-1 text-sm text-gray-600 whitespace-nowrap">
+								<input type="checkbox" bind:checked={field.required} class="rounded" />
+								Required
+							</label>
+							<button
+								type="button"
+								onclick={() => removeEditField(i)}
+								class="text-red-500 hover:text-red-700 px-2 py-2 text-lg leading-none"
+							>
+								&times;
+							</button>
+						</div>
+					{/each}
+
+					<button
+						type="button"
+						onclick={addEditField}
+						class="text-blue-600 hover:text-blue-800 text-sm"
+					>
+						+ Add Field
+					</button>
+
+					{#if editLogError}
+						<p class="text-red-600 text-sm">{editLogError}</p>
+					{/if}
+
+					<div class="flex gap-2">
 						<button
-							onclick={() => showSharePanel = !showSharePanel}
-							class="text-gray-400 hover:text-blue-600 text-sm"
+							type="submit"
+							disabled={editLogSaving}
+							class="bg-blue-600 text-white py-2 px-4 rounded text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+							data-testid="save-log"
 						>
-							Share
+							{editLogSaving ? 'Saving...' : 'Save'}
 						</button>
 						<button
-							onclick={deleteLog}
-							class="text-gray-400 hover:text-red-600 text-sm"
-							data-testid="delete-log"
+							type="button"
+							onclick={cancelEditingLog}
+							disabled={editLogSaving}
+							class="bg-gray-200 text-gray-700 py-2 px-4 rounded text-sm font-semibold hover:bg-gray-300 disabled:opacity-50"
 						>
-							Delete Log
+							Cancel
 						</button>
 					</div>
-				{/if}
-			</div>
+				</form>
+			{:else}
+				<div class="flex items-center justify-between mt-2 mb-6">
+					<h1 class="text-2xl font-bold text-gray-800">{log.name}</h1>
+					{#if isOwner}
+						<div class="flex gap-3">
+							<button
+								onclick={startEditingLog}
+								class="text-gray-400 hover:text-blue-600 text-sm"
+								data-testid="edit-log"
+							>
+								Edit
+							</button>
+							<button
+								onclick={() => showSharePanel = !showSharePanel}
+								class="text-gray-400 hover:text-blue-600 text-sm"
+							>
+								Share
+							</button>
+							<button
+								onclick={deleteLog}
+								class="text-gray-400 hover:text-red-600 text-sm"
+								data-testid="delete-log"
+							>
+								Delete Log
+							</button>
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			{#if showSharePanel && isOwner}
 				<div class="bg-white rounded-lg shadow p-4 mb-6 space-y-4">

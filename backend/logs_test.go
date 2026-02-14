@@ -327,6 +327,271 @@ func TestGetLog_ReturnsFields(t *testing.T) {
 	assert.Equal(t, true, f0["required"])
 }
 
+// --- Update Log ---
+
+func TestUpdateLog_RenameSucess(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Supplements",
+	}, cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "Supplements", body["name"])
+	assert.Equal(t, logID, body["id"])
+	assert.Equal(t, true, body["is_owner"])
+	assert.NotEmpty(t, body["updated_at"])
+}
+
+func TestUpdateLog_UpdateFields(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Pushups",
+		"fields": []map[string]any{
+			{"name": "reps", "type": "number", "required": true},
+			{"name": "notes", "type": "text", "required": false},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	fields := body["fields"].([]any)
+	assert.Len(t, fields, 2)
+	f0 := fields[0].(map[string]any)
+	assert.Equal(t, "reps", f0["name"])
+	assert.Equal(t, "number", f0["type"])
+	assert.Equal(t, true, f0["required"])
+	f1 := fields[1].(map[string]any)
+	assert.Equal(t, "notes", f1["name"])
+	assert.Equal(t, "text", f1["type"])
+	assert.Equal(t, false, f1["required"])
+}
+
+func TestUpdateLog_SameNameAllowed(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Vitamins",
+	}, cookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "Vitamins", body["name"])
+}
+
+func TestUpdateLog_EmptyName(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "",
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "name")
+}
+
+func TestUpdateLog_DuplicateName(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Pushups"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Vitamins",
+	}, cookies)
+
+	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+	assert.Contains(t, body["error"], "already exists")
+}
+
+func TestUpdateLog_InvalidFieldType(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Test"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Test",
+		"fields": []map[string]any{
+			{"name": "flag", "type": "date"},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "type")
+}
+
+func TestUpdateLog_DuplicateFieldNames(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Test"}, cookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Test",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number"},
+			{"name": "count", "type": "text"},
+		},
+	}, cookies)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "duplicate")
+}
+
+func TestUpdateLog_NotFound(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := putJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000", map[string]any{
+		"name": "Test",
+	}, cookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestUpdateLog_OtherUsersLog(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Stolen Log",
+	}, bobCookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestUpdateLog_SharedUserCannotEdit(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Alice Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	// Generate share token and have Bob join
+	_, tokenBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := tokenBody["share_token"].(string)
+	postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+
+	// Bob tries to update the log
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Bobs Log Now",
+	}, bobCookies)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "log not found", body["error"])
+}
+
+func TestUpdateLog_Unauthenticated(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	resp, _ := putJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000", map[string]any{
+		"name": "Test",
+	}, nil)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestUpdateLog_ExistingEntriesUntouched(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	// Create log with "count" field
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{
+		"name": "Exercise",
+		"fields": []map[string]any{
+			{"name": "count", "type": "number", "required": true},
+		},
+	}, cookies)
+	logID := created["id"].(string)
+
+	// Create an entry with the old field
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{"count": "25"},
+	}, cookies)
+
+	// Update log to use different fields
+	putJSON(srv.URL+"/api/logs/"+logID, map[string]any{
+		"name": "Exercise",
+		"fields": []map[string]any{
+			{"name": "reps", "type": "number", "required": true},
+		},
+	}, cookies)
+
+	// Old entry still has its original data
+	_, entries := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", cookies)
+	assert.Len(t, entries, 1)
+	fields := entries[0]["fields"].(map[string]any)
+	assert.Equal(t, "25", fields["count"])
+
+	// New entries must use the new field definitions
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{"count": "30"},
+	}, cookies)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "unknown")
+
+	// New entry with correct field works
+	resp2, _ := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{
+		"fields": map[string]any{"reps": "30"},
+	}, cookies)
+	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
+}
+
 // --- Create Log Entry ---
 
 func TestCreateLogEntry_Success(t *testing.T) {

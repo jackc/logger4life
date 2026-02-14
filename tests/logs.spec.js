@@ -214,6 +214,96 @@ test('delete a log entry', async ({ page }) => {
 	await expect(page.getByText('No entries yet')).toBeVisible();
 });
 
+test('edit a log name', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Vitamins');
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Vitamins")');
+	await expect(page.locator('h1:has-text("Vitamins")')).toBeVisible();
+
+	await page.click('[data-testid="edit-log"]');
+	await expect(page.locator('[data-testid="edit-log-name"]')).toBeVisible();
+
+	await page.fill('[data-testid="edit-log-name"]', 'Supplements');
+	await page.click('[data-testid="save-log"]');
+
+	await expect(page.locator('h1:has-text("Supplements")')).toBeVisible();
+	await expect(page.locator('h1:has-text("Vitamins")')).not.toBeVisible();
+});
+
+test('edit log fields', async ({ page }) => {
+	await registerAndLogin(page);
+
+	// Create log with a "count" number field
+	await page.fill('input[name="log-name"]', 'Pushups');
+	await page.click('button:has-text("Add Field")');
+	await page.fill('input[placeholder="Field name"]', 'count');
+	await page.check('input[type="checkbox"]');
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Pushups")');
+
+	await expect(page.locator('input[name="field-count"]')).toBeVisible();
+
+	// Edit: remove "count" and add "reps"
+	await page.click('[data-testid="edit-log"]');
+	// Remove existing field
+	await page.locator('form button:has-text("×")').first().click();
+	// Add new field
+	await page.click('button:has-text("Add Field")');
+	await page.fill('input[placeholder="Field name"]', 'reps');
+	await page.click('[data-testid="save-log"]');
+
+	// Verify the entry form now shows "reps" instead of "count"
+	await expect(page.locator('input[name="field-reps"]')).toBeVisible();
+	await expect(page.locator('input[name="field-count"]')).not.toBeVisible();
+});
+
+test('edit log shows error on duplicate name', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Vitamins');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Vitamins' })).toBeVisible();
+
+	await page.fill('input[name="log-name"]', 'Pushups');
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Pushups")');
+
+	await page.click('[data-testid="edit-log"]');
+	await page.fill('[data-testid="edit-log-name"]', 'Vitamins');
+	await page.click('[data-testid="save-log"]');
+
+	await expect(page.getByText('already exists')).toBeVisible();
+});
+
+test('entries with old fields still display after editing log fields', async ({ page }) => {
+	await registerAndLogin(page);
+
+	// Create log with "count" field and add an entry
+	await page.fill('input[name="log-name"]', 'Exercise');
+	await page.click('button:has-text("Add Field")');
+	await page.fill('input[placeholder="Field name"]', 'count');
+	await page.click('button:has-text("Create Log")');
+	await page.click('a:has-text("Exercise")');
+
+	await page.fill('input[name="field-count"]', '25');
+	await page.click('button:has-text("Log It")');
+	await expect(page.locator('[data-testid="log-entry"]').first()).toContainText('25');
+
+	// Edit fields: change "count" to "reps"
+	await page.click('[data-testid="edit-log"]');
+	await page.locator('form button:has-text("×")').first().click();
+	await page.click('button:has-text("Add Field")');
+	await page.fill('input[placeholder="Field name"]', 'reps');
+	await page.click('[data-testid="save-log"]');
+
+	// Old entry still displays its "count: 25" value
+	const entry = page.locator('[data-testid="log-entry"]').first();
+	await expect(entry).toContainText('count');
+	await expect(entry).toContainText('25');
+});
+
 test('delete a log', async ({ page }) => {
 	await registerAndLogin(page);
 

@@ -49,6 +49,8 @@ type updateLogEntryRequest struct {
 type logEntryResponse struct {
 	ID         string         `json:"id"`
 	LogID      string         `json:"log_id"`
+	UserID     string         `json:"user_id"`
+	Username   string         `json:"username"`
 	Fields     map[string]any `json:"fields"`
 	OccurredAt time.Time      `json:"occurred_at"`
 	CreatedAt  time.Time      `json:"created_at"`
@@ -375,16 +377,17 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 
 		var entry logEntryResponse
 		err = pool.QueryRow(r.Context(),
-			`INSERT INTO log_entries (log_id, fields) VALUES ($1, $2)
-			 RETURNING id, log_id, fields, occurred_at, created_at, updated_at`,
-			logID, req.Fields,
-		).Scan(&entry.ID, &entry.LogID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
+			`INSERT INTO log_entries (log_id, user_id, fields) VALUES ($1, $2, $3)
+			 RETURNING id, log_id, user_id, fields, occurred_at, created_at, updated_at`,
+			logID, user.ID, req.Fields,
+		).Scan(&entry.ID, &entry.LogID, &entry.UserID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
 
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
 
+		entry.Username = user.Username
 		if entry.Fields == nil {
 			entry.Fields = map[string]any{}
 		}
@@ -430,15 +433,23 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 		err = pool.QueryRow(r.Context(),
 			`UPDATE log_entries SET fields = $1, occurred_at = $2, updated_at = now()
 			 WHERE id = $3 AND log_id = $4
-			 RETURNING id, log_id, fields, occurred_at, created_at, updated_at`,
+			 RETURNING id, log_id, user_id, fields, occurred_at, created_at, updated_at`,
 			req.Fields, req.OccurredAt, entryID, logID,
-		).Scan(&entry.ID, &entry.LogID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
+		).Scan(&entry.ID, &entry.LogID, &entry.UserID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
 
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "entry not found"})
 				return
 			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+
+		err = pool.QueryRow(r.Context(),
+			`SELECT username FROM users WHERE id = $1`, entry.UserID,
+		).Scan(&entry.Username)
+		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
@@ -500,8 +511,11 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		rows, err := pool.Query(r.Context(),
-			`SELECT id, log_id, fields, occurred_at, created_at, updated_at FROM log_entries
-			 WHERE log_id = $1 ORDER BY occurred_at DESC`,
+			`SELECT le.id, le.log_id, le.user_id, u.username, le.fields, le.occurred_at, le.created_at, le.updated_at
+			 FROM log_entries le
+			 JOIN users u ON le.user_id = u.id
+			 WHERE le.log_id = $1
+			 ORDER BY le.occurred_at DESC`,
 			logID,
 		)
 		if err != nil {
@@ -513,7 +527,7 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 		entries := []logEntryResponse{}
 		for rows.Next() {
 			var e logEntryResponse
-			if err := rows.Scan(&e.ID, &e.LogID, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			if err := rows.Scan(&e.ID, &e.LogID, &e.UserID, &e.Username, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 				return
 			}

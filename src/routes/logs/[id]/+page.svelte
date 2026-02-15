@@ -34,6 +34,7 @@
 
 	const logID = $derived(page.params.id);
 	const hasFields = $derived(log?.fields?.length > 0);
+	const isShared = $derived(!isOwner || sharedUsers.length > 0);
 
 	function resetFieldValues() {
 		if (log?.fields?.length > 0) {
@@ -587,7 +588,12 @@
 							{:else}
 								<div class="flex items-start justify-between">
 									<div>
-										<div>{formatTimestamp(entry.occurred_at)}</div>
+										<div>
+									{formatTimestamp(entry.occurred_at)}
+									{#if isShared}
+										<span class="text-xs text-gray-400 ml-1">by {entry.username}</span>
+									{/if}
+								</div>
 										{#if entry.fields && Object.keys(entry.fields).length > 0}
 											<div class="text-sm text-gray-500 mt-1">
 												{#each Object.entries(entry.fields) as [name, value]}

@@ -608,6 +608,8 @@ func TestCreateLogEntry_Success(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.NotEmpty(t, body["id"])
 	assert.Equal(t, logID, body["log_id"])
+	assert.NotEmpty(t, body["user_id"])
+	assert.Equal(t, "alice", body["username"])
 	assert.NotEmpty(t, body["occurred_at"])
 	assert.NotEmpty(t, body["created_at"])
 	assert.NotEmpty(t, body["updated_at"])
@@ -666,6 +668,8 @@ func TestCreateLogEntry_WithFields(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.NotEmpty(t, body["id"])
 	assert.Equal(t, logID, body["log_id"])
+	assert.NotEmpty(t, body["user_id"])
+	assert.Equal(t, "alice", body["username"])
 
 	fields := body["fields"].(map[string]any)
 	assert.Equal(t, "25", fields["count"])
@@ -860,6 +864,8 @@ func TestListLogEntries_ReturnsEntries(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Len(t, body, 2)
+	assert.Equal(t, "alice", body[0]["username"])
+	assert.Equal(t, "alice", body[1]["username"])
 }
 
 func TestListLogEntries_OtherUsersLog(t *testing.T) {
@@ -934,6 +940,8 @@ func TestUpdateLogEntry_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, entryID, body["id"])
 	assert.Equal(t, logID, body["log_id"])
+	assert.NotEmpty(t, body["user_id"])
+	assert.Equal(t, "alice", body["username"])
 	assert.Contains(t, body["occurred_at"], "2025-06-15T10:30:00")
 	assert.NotEmpty(t, body["created_at"])
 	assert.NotEmpty(t, body["updated_at"])
@@ -972,6 +980,8 @@ func TestUpdateLogEntry_WithFields(t *testing.T) {
 	}, cookies)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.NotEmpty(t, body["user_id"])
+	assert.Equal(t, "alice", body["username"])
 	fields := body["fields"].(map[string]any)
 	assert.Equal(t, "30", fields["count"])
 	assert.Equal(t, "evening set", fields["notes"])
@@ -1285,4 +1295,80 @@ func TestDeleteLog_Unauthenticated(t *testing.T) {
 	resp, _ := deleteJSON(srv.URL+"/api/logs/00000000-0000-0000-0000-000000000000", nil)
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+// --- Entry Creator Tracking ---
+
+func TestCreateLogEntry_SharedUser_TracksCorrectUser(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	_, tokenBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := tokenBody["share_token"].(string)
+	postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+
+	resp, body := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, bobCookies)
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, "bob", body["username"])
+}
+
+func TestListLogEntries_SharedLog_ShowsCorrectUsers(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	_, tokenBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := tokenBody["share_token"].(string)
+	postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, aliceCookies)
+	postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, bobCookies)
+
+	resp, entries := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", aliceCookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, entries, 2)
+	// Entries ordered by occurred_at DESC, bob's entry (created second) is first
+	assert.Equal(t, "bob", entries[0]["username"])
+	assert.Equal(t, "alice", entries[1]["username"])
+}
+
+func TestUpdateLogEntry_PreservesOriginalCreator(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, created := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared Log"}, aliceCookies)
+	logID := created["id"].(string)
+
+	_, tokenBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := tokenBody["share_token"].(string)
+	postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+
+	// Alice creates an entry
+	_, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, aliceCookies)
+	entryID := entry["id"].(string)
+
+	// Bob updates it
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": "2025-06-15T10:30:00Z",
+	}, bobCookies)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "alice", body["username"])
 }

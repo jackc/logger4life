@@ -61,8 +61,8 @@ end
 desc "Perform all preparation necessary to run tests"
 task "test:prepare" => ["tmp/test", "tmp/test/.databases-prepared"]
 
-desc "Run go tests"
-task test: ["test:prepare"] do
+desc "Run Go tests"
+task "test:backend" => ["test:prepare"] do
   sh "go test ./..."
 end
 
@@ -71,4 +71,7 @@ task "test:browser" => ["test:prepare"] do
   sh "npm test"
 end
 
-task :default => :test
+desc "Run all tests"
+task test: ["test:backend", "test:browser"]
+
+task default: :test

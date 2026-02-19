@@ -19,7 +19,8 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 - `rake build:binary` — Build Go binary only (`build/logger4life`)
 
 ### Testing
-- `rake test` — Run Go backend tests (`go test ./...`); auto-prepares test databases
+- `rake test` — Run all tests; auto-prepares test databases
+- `rake test:backend` — Run Go backend tests (`go test ./...`); auto-prepares test databases
 - `rake test:browser` — Run Playwright browser tests (or `npm test`)
 - `rake test:prepare` — Prepare test databases only
 - `npm run test:report` — Show Playwright HTML report

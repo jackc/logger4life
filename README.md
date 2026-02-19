@@ -91,7 +91,8 @@ The app will be available at `http://localhost:5173` with API requests proxied t
 | `rake run` | Build and run the Go backend (port 4000) |
 | `rake rerun` | Watch for backend changes and auto-restart |
 | `rake build` | Build everything (frontend assets + Go binary) |
-| `rake test` | Run Go backend tests |
+| `rake test` | Run all tests |
+| `rake test:backend` | Run Go backend tests |
 | `rake test:browser` | Run Playwright browser tests |
 
 ## Deployment

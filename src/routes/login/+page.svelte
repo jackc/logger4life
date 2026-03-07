@@ -1,13 +1,22 @@
 <script>
-	import { login, getAuth } from '$lib/auth.svelte.js';
+	import { login, passkeyLogin, getAuth } from '$lib/auth.svelte.js';
+	import { isWebAuthnSupported } from '$lib/passkeys.js';
+	import { getSettings } from '$lib/settings.svelte.js';
 	import { goto } from '$app/navigation';
 
 	const auth = getAuth();
+	const settings = getSettings();
 
 	let username = $state('');
 	let password = $state('');
 	let error = $state('');
 	let submitting = $state(false);
+	let passkeySubmitting = $state(false);
+	let webauthnSupported = $state(false);
+
+	$effect(() => {
+		webauthnSupported = isWebAuthnSupported();
+	});
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -20,6 +29,19 @@
 			error = err.message;
 		} finally {
 			submitting = false;
+		}
+	}
+
+	async function handlePasskeyLogin() {
+		error = '';
+		passkeySubmitting = true;
+		try {
+			await passkeyLogin();
+			goto('/logs');
+		} catch (err) {
+			error = err.message;
+		} finally {
+			passkeySubmitting = false;
 		}
 	}
 
@@ -75,5 +97,22 @@
 		<p class="mt-4 text-sm text-center text-gray-600">
 			Don't have an account? <a href="/register" class="text-blue-600 hover:underline">Register</a>
 		</p>
+
+		{#if webauthnSupported && settings.passkeysEnabled}
+			<div class="flex items-center mt-5 mb-1">
+				<hr class="flex-1 border-gray-300" />
+				<span class="px-3 text-gray-400 text-sm">or</span>
+				<hr class="flex-1 border-gray-300" />
+			</div>
+
+			<button
+				type="button"
+				onclick={handlePasskeyLogin}
+				disabled={passkeySubmitting}
+				class="w-full border border-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-50 disabled:opacity-50"
+			>
+				{passkeySubmitting ? 'Verifying...' : 'Sign in with passkey'}
+			</button>
+		{/if}
 	</div>
 </div>

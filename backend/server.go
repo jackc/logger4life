@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 )
@@ -58,6 +59,18 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	log.Printf("Database connected: %s", greeting)
 
+	var wan *webauthn.WebAuthn
+	if cfg.PasskeysEnabled() {
+		wan, err = webauthn.New(&webauthn.Config{
+			RPDisplayName: "Logger4Life",
+			RPID:          cfg.WebAuthnRPID,
+			RPOrigins:     []string{cfg.WebAuthnOrigin},
+		})
+		if err != nil {
+			return fmt.Errorf("unable to initialize webauthn: %w", err)
+		}
+	}
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(loadSession(pool))
@@ -67,6 +80,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	r.Get("/api/settings", handleSettings(cfg))
 	r.Post("/api/register", handleRegister(pool, cfg.AllowRegistration))
 	r.Post("/api/login", handleLogin(pool))
+	if wan != nil {
+		r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(pool, wan))
+		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan))
+	}
 
 	// Protected routes
 	r.Group(func(r chi.Router) {
@@ -75,6 +92,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Get("/api/me", handleMe)
 		r.Put("/api/me/email", handleChangeEmail(pool))
 		r.Put("/api/me/password", handleChangePassword(pool))
+		if wan != nil {
+			r.Get("/api/me/passkeys", handleListPasskeys(pool))
+			r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(pool))
+			r.Delete("/api/me/passkeys/{passkeyID}", handleDeletePasskey(pool))
+			r.Post("/api/me/passkeys/register/begin", handlePasskeyRegisterBegin(pool, wan))
+			r.Post("/api/me/passkeys/register/finish", handlePasskeyRegisterFinish(pool, wan))
+		}
 
 		// Logs
 		r.Post("/api/logs", handleCreateLog(pool))
@@ -106,6 +130,7 @@ func handleSettings(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"allow_registration": cfg.AllowRegistration,
+			"passkeys_enabled":   cfg.PasskeysEnabled(),
 		})
 	}
 }

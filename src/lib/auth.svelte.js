@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPut } from './api.js';
+import { startPasskeyLogin } from './passkeys.js';
 
 let user = $state(null);
 let loading = $state(true);
@@ -33,6 +34,10 @@ export async function register(username, email, password) {
 export async function logout() {
 	await apiPost('/api/logout', {});
 	user = null;
+}
+
+export async function passkeyLogin() {
+	user = await startPasskeyLogin();
 }
 
 export async function changeEmail(email) {

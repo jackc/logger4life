@@ -3,6 +3,8 @@
 
 -- Clean the test database so tern can re-run migrations from scratch.
 \c logger4life_test
+DROP TABLE IF EXISTS webauthn_challenges CASCADE;
+DROP TABLE IF EXISTS passkeys CASCADE;
 DROP TABLE IF EXISTS log_shares CASCADE;
 DROP TABLE IF EXISTS log_entries CASCADE;
 DROP TABLE IF EXISTS logs CASCADE;

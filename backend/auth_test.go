@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,8 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM webauthn_challenges")
+		pool.Exec(context.Background(), "DELETE FROM passkeys")
 		pool.Exec(context.Background(), "DELETE FROM log_shares")
 		pool.Exec(context.Background(), "DELETE FROM log_entries")
 		pool.Exec(context.Background(), "DELETE FROM logs")
@@ -33,17 +36,31 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		pool.Close()
 	})
 
+	wan, err := webauthn.New(&webauthn.Config{
+		RPDisplayName: "Logger4Life Test",
+		RPID:          "localhost",
+		RPOrigins:     []string{"http://localhost"},
+	})
+	require.NoError(t, err)
+
 	r := chi.NewRouter()
 	r.Use(loadSession(pool))
-	r.Get("/api/settings", handleSettings(Config{AllowRegistration: allowRegistration}))
+	r.Get("/api/settings", handleSettings(Config{AllowRegistration: allowRegistration, WebAuthnRPID: "localhost", WebAuthnOrigin: "http://localhost"}))
 	r.Post("/api/register", handleRegister(pool, allowRegistration))
 	r.Post("/api/login", handleLogin(pool))
+	r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(pool, wan))
+	r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan))
 	r.Group(func(r chi.Router) {
 		r.Use(requireAuth)
 		r.Post("/api/logout", handleLogout(pool))
 		r.Get("/api/me", handleMe)
 		r.Put("/api/me/email", handleChangeEmail(pool))
 		r.Put("/api/me/password", handleChangePassword(pool))
+		r.Get("/api/me/passkeys", handleListPasskeys(pool))
+		r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(pool))
+		r.Delete("/api/me/passkeys/{passkeyID}", handleDeletePasskey(pool))
+		r.Post("/api/me/passkeys/register/begin", handlePasskeyRegisterBegin(pool, wan))
+		r.Post("/api/me/passkeys/register/finish", handlePasskeyRegisterFinish(pool, wan))
 		r.Post("/api/logs", handleCreateLog(pool))
 		r.Get("/api/logs", handleListLogs(pool))
 		r.Get("/api/logs/{logID}", handleGetLog(pool))

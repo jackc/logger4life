@@ -52,12 +52,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	defer pool.Close()
 
-	var greeting string
-	err = pool.QueryRow(ctx, "select 'Hello, World!'").Scan(&greeting)
+	err = pool.QueryRow(ctx, "select 1").Scan(new(int))
 	if err != nil {
 		return fmt.Errorf("unable to query database: %w", err)
 	}
-	log.Printf("Database connected: %s", greeting)
+	log.Printf("Database connected")
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {

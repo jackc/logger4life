@@ -85,6 +85,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	r.Use(middleware.Logger)
 	r.Use(loadSession(pool))
 
+	// Health check
+	r.Get("/health", handleHealth(pool))
+
 	// Public routes
 	r.Get("/api/hello", handleHello(pool))
 	r.Get("/api/settings", handleSettings(cfg))
@@ -134,6 +137,21 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	log.Printf("Starting server on %s (registration: %v)", cfg.ListenAddress, cfg.AllowRegistration)
 	return http.ListenAndServe(cfg.ListenAddress, r)
+}
+
+func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := pool.QueryRow(r.Context(), "select 1").Scan(new(int))
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"status": "error",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status": "ok",
+		})
+	}
 }
 
 func handleSettings(cfg Config) http.HandlerFunc {

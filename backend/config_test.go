@@ -1,11 +1,9 @@
 package backend
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -15,74 +13,35 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Contains(t, cfg.DatabaseURL, "logger4life_dev")
 }
 
-func TestLoadConfigFile_AllowRegistrationTrue(t *testing.T) {
-	f, err := os.CreateTemp("", "config-*.conf")
-	require.NoError(t, err)
-	defer os.Remove(f.Name())
+func TestConfigFromEnv(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/mydb")
+	t.Setenv("LISTEN_ADDRESS", ":8080")
+	t.Setenv("ALLOW_REGISTRATION", "true")
+	t.Setenv("WEBAUTHN_RP_ID", "example.com")
+	t.Setenv("WEBAUTHN_ORIGIN", "https://example.com")
 
-	f.WriteString("allow_registration=true\n")
-	f.Close()
-
-	cfg, err := LoadConfigFile(f.Name())
-	require.NoError(t, err)
-	assert.True(t, cfg.AllowRegistration)
-}
-
-func TestLoadConfigFile_AllowRegistrationFalse(t *testing.T) {
-	f, err := os.CreateTemp("", "config-*.conf")
-	require.NoError(t, err)
-	defer os.Remove(f.Name())
-
-	f.WriteString("allow_registration=false\n")
-	f.Close()
-
-	cfg, err := LoadConfigFile(f.Name())
-	require.NoError(t, err)
-	assert.False(t, cfg.AllowRegistration)
-}
-
-func TestLoadConfigFile_MissingAllowRegistration(t *testing.T) {
-	f, err := os.CreateTemp("", "config-*.conf")
-	require.NoError(t, err)
-	defer os.Remove(f.Name())
-
-	f.WriteString("database_url=postgres://localhost/test\n")
-	f.Close()
-
-	cfg, err := LoadConfigFile(f.Name())
-	require.NoError(t, err)
-	assert.False(t, cfg.AllowRegistration)
-}
-
-func TestLoadConfigFile_CommentsAndBlanks(t *testing.T) {
-	f, err := os.CreateTemp("", "config-*.conf")
-	require.NoError(t, err)
-	defer os.Remove(f.Name())
-
-	f.WriteString("# This is a comment\n\nallow_registration=true\n")
-	f.Close()
-
-	cfg, err := LoadConfigFile(f.Name())
-	require.NoError(t, err)
-	assert.True(t, cfg.AllowRegistration)
-}
-
-func TestLoadConfigFile_AllKeys(t *testing.T) {
-	f, err := os.CreateTemp("", "config-*.conf")
-	require.NoError(t, err)
-	defer os.Remove(f.Name())
-
-	f.WriteString("database_url=postgres://localhost/mydb\nlisten_address=:8080\nallow_registration=true\n")
-	f.Close()
-
-	cfg, err := LoadConfigFile(f.Name())
-	require.NoError(t, err)
+	cfg := ConfigFromEnv()
 	assert.Equal(t, "postgres://localhost/mydb", cfg.DatabaseURL)
 	assert.Equal(t, ":8080", cfg.ListenAddress)
 	assert.True(t, cfg.AllowRegistration)
+	assert.Equal(t, "example.com", cfg.WebAuthnRPID)
+	assert.Equal(t, "https://example.com", cfg.WebAuthnOrigin)
+	assert.True(t, cfg.PasskeysEnabled())
 }
 
-func TestLoadConfigFile_FileNotFound(t *testing.T) {
-	_, err := LoadConfigFile("/nonexistent/config.conf")
-	assert.Error(t, err)
+func TestConfigFromEnv_Defaults(t *testing.T) {
+	cfg := ConfigFromEnv()
+	assert.Contains(t, cfg.DatabaseURL, "logger4life_dev")
+	assert.Equal(t, ":4000", cfg.ListenAddress)
+	assert.False(t, cfg.AllowRegistration)
+	assert.Empty(t, cfg.WebAuthnRPID)
+	assert.Empty(t, cfg.WebAuthnOrigin)
+	assert.False(t, cfg.PasskeysEnabled())
+}
+
+func TestConfigFromEnv_AllowRegistrationFalse(t *testing.T) {
+	t.Setenv("ALLOW_REGISTRATION", "false")
+
+	cfg := ConfigFromEnv()
+	assert.False(t, cfg.AllowRegistration)
 }

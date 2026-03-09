@@ -12,7 +12,8 @@ Restart=on-failure
 RestartSec=30
 
 WorkingDirectory=/apps/logger4life/current
-ExecStart=/apps/logger4life/current/bin/logger4life server --config /apps/logger4life/shared/logger4life.conf
+EnvironmentFile=/apps/logger4life/shared/logger4life.env
+ExecStart=/apps/logger4life/current/bin/logger4life server
 
 [Install]
 WantedBy=multi-user.target

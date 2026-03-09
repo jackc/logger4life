@@ -1,11 +1,6 @@
 package backend
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-	"strings"
-)
+import "os"
 
 type Config struct {
 	DatabaseURL       string
@@ -29,40 +24,24 @@ func (c Config) PasskeysEnabled() bool {
 	return c.WebAuthnRPID != "" && c.WebAuthnOrigin != ""
 }
 
-func LoadConfigFile(path string) (Config, error) {
+func ConfigFromEnv() Config {
 	cfg := DefaultConfig()
 
-	f, err := os.Open(path)
-	if err != nil {
-		return cfg, fmt.Errorf("open config file: %w", err)
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		cfg.DatabaseURL = v
 	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-
-		switch key {
-		case "database_url":
-			cfg.DatabaseURL = value
-		case "listen_address":
-			cfg.ListenAddress = value
-		case "allow_registration":
-			cfg.AllowRegistration = (value == "true")
-		case "webauthn_rp_id":
-			cfg.WebAuthnRPID = value
-		case "webauthn_origin":
-			cfg.WebAuthnOrigin = value
-		}
+	if v := os.Getenv("LISTEN_ADDRESS"); v != "" {
+		cfg.ListenAddress = v
 	}
-	return cfg, scanner.Err()
+	if v := os.Getenv("ALLOW_REGISTRATION"); v == "true" {
+		cfg.AllowRegistration = true
+	}
+	if v := os.Getenv("WEBAUTHN_RP_ID"); v != "" {
+		cfg.WebAuthnRPID = v
+	}
+	if v := os.Getenv("WEBAUTHN_ORIGIN"); v != "" {
+		cfg.WebAuthnOrigin = v
+	}
+
+	return cfg
 }

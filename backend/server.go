@@ -19,31 +19,42 @@ var serverCmd = &cobra.Command{
 	RunE:  runServer,
 }
 
-var configFile string
-var allowRegistration bool
+var (
+	flagDatabaseURL       string
+	flagListenAddress     string
+	flagAllowRegistration bool
+	flagWebAuthnRPID      string
+	flagWebAuthnOrigin    string
+)
 
 func init() {
 	rootCmd.AddCommand(serverCmd)
-	serverCmd.Flags().StringVar(&configFile, "config", "", "path to configuration file")
-	serverCmd.Flags().BoolVar(&allowRegistration, "allow-registration", false, "allow new user registration")
+	serverCmd.Flags().StringVar(&flagDatabaseURL, "database-url", "", "database connection URL")
+	serverCmd.Flags().StringVar(&flagListenAddress, "listen-address", "", "address to listen on (e.g. :4000)")
+	serverCmd.Flags().BoolVar(&flagAllowRegistration, "allow-registration", false, "allow new user registration")
+	serverCmd.Flags().StringVar(&flagWebAuthnRPID, "webauthn-rp-id", "", "WebAuthn relying party ID")
+	serverCmd.Flags().StringVar(&flagWebAuthnOrigin, "webauthn-origin", "", "WebAuthn origin URL")
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	var cfg Config
-	if configFile != "" {
-		var err error
-		cfg, err = LoadConfigFile(configFile)
-		if err != nil {
-			return fmt.Errorf("unable to load config: %w", err)
-		}
-	} else {
-		cfg = DefaultConfig()
-	}
+	cfg := ConfigFromEnv()
 
+	if cmd.Flags().Changed("database-url") {
+		cfg.DatabaseURL = flagDatabaseURL
+	}
+	if cmd.Flags().Changed("listen-address") {
+		cfg.ListenAddress = flagListenAddress
+	}
 	if cmd.Flags().Changed("allow-registration") {
-		cfg.AllowRegistration = allowRegistration
+		cfg.AllowRegistration = flagAllowRegistration
+	}
+	if cmd.Flags().Changed("webauthn-rp-id") {
+		cfg.WebAuthnRPID = flagWebAuthnRPID
+	}
+	if cmd.Flags().Changed("webauthn-origin") {
+		cfg.WebAuthnOrigin = flagWebAuthnOrigin
 	}
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)

@@ -10,8 +10,7 @@
 /public
 /tmp
 /logger4life_*
-/logger4life.conf
-/logger4life.test.conf
+/logger4life.env
 
 # Playwright
 /test-results/

@@ -19,7 +19,7 @@ export default defineConfig({
 	],
 	webServer: [
 		{
-			command: 'go run . server --config test/logger4life_test.conf',
+			command: 'DATABASE_URL=postgres://postgres:postgres@localhost:5432/logger4life_test LISTEN_ADDRESS=:4001 ALLOW_REGISTRATION=true WEBAUTHN_RP_ID=localhost WEBAUTHN_ORIGIN=http://localhost:5174 go run . server',
 			url: 'http://localhost:4001/api/hello',
 		},
 		{

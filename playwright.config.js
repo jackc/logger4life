@@ -19,7 +19,7 @@ export default defineConfig({
 	],
 	webServer: [
 		{
-			command: 'DATABASE_URL=postgres://postgres:postgres@localhost:5432/logger4life_test LISTEN_ADDRESS=:4001 ALLOW_REGISTRATION=true WEBAUTHN_RP_ID=localhost WEBAUTHN_ORIGIN=http://localhost:5174 go run . server',
+			command: 'DATABASE_URL=postgres://postgres:postgres@localhost:5432/logger4life_test BIND_ADDRESS=127.0.0.1 PORT=4001 ALLOW_REGISTRATION=true WEBAUTHN_RP_ID=localhost WEBAUTHN_ORIGIN=http://localhost:5174 go run . server',
 			url: 'http://localhost:4001/api/hello',
 		},
 		{

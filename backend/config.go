@@ -1,10 +1,14 @@
 package backend
 
-import "os"
+import (
+	"net"
+	"os"
+)
 
 type Config struct {
 	DatabaseURL       string
-	ListenAddress     string
+	BindAddress       string
+	Port              string
 	AllowRegistration bool
 	WebAuthnRPID      string
 	WebAuthnOrigin    string
@@ -13,11 +17,16 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		DatabaseURL:       "postgres://postgres:postgres@localhost:5432/logger4life_dev",
-		ListenAddress:     ":4000",
+		BindAddress:       "127.0.0.1",
+		Port:              "4000",
 		AllowRegistration: false,
 		WebAuthnRPID:      "",
 		WebAuthnOrigin:    "",
 	}
+}
+
+func (c Config) ListenAddress() string {
+	return net.JoinHostPort(c.BindAddress, c.Port)
 }
 
 func (c Config) PasskeysEnabled() bool {
@@ -30,8 +39,11 @@ func ConfigFromEnv() Config {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
 		cfg.DatabaseURL = v
 	}
-	if v := os.Getenv("LISTEN_ADDRESS"); v != "" {
-		cfg.ListenAddress = v
+	if v := os.Getenv("BIND_ADDRESS"); v != "" {
+		cfg.BindAddress = v
+	}
+	if v := os.Getenv("PORT"); v != "" {
+		cfg.Port = v
 	}
 	if v := os.Getenv("ALLOW_REGISTRATION"); v == "true" {
 		cfg.AllowRegistration = true

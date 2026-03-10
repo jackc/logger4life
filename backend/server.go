@@ -21,7 +21,8 @@ var serverCmd = &cobra.Command{
 
 var (
 	flagDatabaseURL       string
-	flagListenAddress     string
+	flagBindAddress       string
+	flagPort              string
 	flagAllowRegistration bool
 	flagWebAuthnRPID      string
 	flagWebAuthnOrigin    string
@@ -30,7 +31,8 @@ var (
 func init() {
 	rootCmd.AddCommand(serverCmd)
 	serverCmd.Flags().StringVar(&flagDatabaseURL, "database-url", "", "database connection URL")
-	serverCmd.Flags().StringVar(&flagListenAddress, "listen-address", "", "address to listen on (e.g. :4000)")
+	serverCmd.Flags().StringVar(&flagBindAddress, "bind-address", "", "address to bind to (default 127.0.0.1)")
+	serverCmd.Flags().StringVar(&flagPort, "port", "", "port to listen on (default 4000)")
 	serverCmd.Flags().BoolVar(&flagAllowRegistration, "allow-registration", false, "allow new user registration")
 	serverCmd.Flags().StringVar(&flagWebAuthnRPID, "webauthn-rp-id", "", "WebAuthn relying party ID")
 	serverCmd.Flags().StringVar(&flagWebAuthnOrigin, "webauthn-origin", "", "WebAuthn origin URL")
@@ -44,8 +46,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("database-url") {
 		cfg.DatabaseURL = flagDatabaseURL
 	}
-	if cmd.Flags().Changed("listen-address") {
-		cfg.ListenAddress = flagListenAddress
+	if cmd.Flags().Changed("bind-address") {
+		cfg.BindAddress = flagBindAddress
+	}
+	if cmd.Flags().Changed("port") {
+		cfg.Port = flagPort
 	}
 	if cmd.Flags().Changed("allow-registration") {
 		cfg.AllowRegistration = flagAllowRegistration
@@ -135,8 +140,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Post("/api/join/{token}", handleJoinLog(pool))
 	})
 
-	log.Printf("Starting server on %s (registration: %v)", cfg.ListenAddress, cfg.AllowRegistration)
-	return http.ListenAndServe(cfg.ListenAddress, r)
+	log.Printf("Starting server on %s (registration: %v)", cfg.ListenAddress(), cfg.AllowRegistration)
+	return http.ListenAndServe(cfg.ListenAddress(), r)
 }
 
 func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {

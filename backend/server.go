@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -103,9 +104,24 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 
 	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+				w.Header().Set(middleware.RequestIDHeader, reqID)
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	r.Use(httplog.RequestLogger(logger, &httplog.Options{
 		Level:         cfg.SlogLevel(),
 		RecoverPanics: true,
+		LogExtraAttrs: func(req *http.Request, _ string, _ int) []slog.Attr {
+			if reqID := middleware.GetReqID(req.Context()); reqID != "" {
+				return []slog.Attr{slog.String("request_id", reqID)}
+			}
+			return nil
+		},
 	}))
 	r.Use(loadSession(pool))
 

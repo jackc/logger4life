@@ -23,7 +23,7 @@
           },
           {
             "handler": "file_server",
-            "root": "{{.SlotDir}}/assets/_app/immutable",
+            "root": "{{.SlotDir}}/assets",
             "precompressed": {
               "gzip": {},
               "zstd": {},

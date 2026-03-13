@@ -39,7 +39,7 @@ func init() {
 	serverCmd.Flags().StringVar(&flagWebAuthnRPID, "webauthn-rp-id", "", "WebAuthn relying party ID")
 	serverCmd.Flags().StringVar(&flagWebAuthnOrigin, "webauthn-origin", "", "WebAuthn origin URL")
 	serverCmd.Flags().StringVar(&flagLogLevel, "log-level", "", "log level (debug, info, warn, error)")
-	serverCmd.Flags().StringVar(&flagLogFormat, "log-format", "", "log format (json, text)")
+	serverCmd.Flags().StringVar(&flagLogFormat, "log-format", "", "log format (json, text, journal)")
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -72,7 +72,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 		cfg.LogFormat = flagLogFormat
 	}
 
-	logger := slog.New(cfg.SlogHandler())
+	handler, err := cfg.SlogHandler()
+	if err != nil {
+		return fmt.Errorf("unable to initialize logger: %w", err)
+	}
+	logger := slog.New(handler)
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {

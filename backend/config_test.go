@@ -51,3 +51,27 @@ func TestConfigFromEnv_AllowRegistrationFalse(t *testing.T) {
 	cfg := ConfigFromEnv()
 	assert.False(t, cfg.AllowRegistration)
 }
+
+func TestNormalizeJournalKey(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"time", "TIME"},
+		{"msg", "MSG"},
+		{"http.request.method", "HTTP_REQUEST_METHOD"},
+		{"@timestamp", "TIMESTAMP"},
+		{"user_agent.original", "USER_AGENT_ORIGINAL"},
+		{"log.level", "LOG_LEVEL"},
+		{"simple", "SIMPLE"},
+		{"ALREADY_UPPER", "ALREADY_UPPER"},
+		{"123leading_digits", "LEADING_DIGITS"},
+		{"_leading_underscore", "LEADING_UNDERSCORE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, normalizeJournalKey(tt.input))
+		})
+	}
+}

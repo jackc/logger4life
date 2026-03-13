@@ -5,6 +5,9 @@ import (
 	"net"
 	"os"
 	"strings"
+	"unicode"
+
+	slogjournal "github.com/systemd/slog-journal"
 )
 
 type Config struct {
@@ -83,10 +86,46 @@ func (c Config) SlogLevel() slog.Level {
 	}
 }
 
-func (c Config) SlogHandler() slog.Handler {
-	opts := &slog.HandlerOptions{Level: c.SlogLevel()}
-	if strings.ToLower(c.LogFormat) == "text" {
-		return slog.NewTextHandler(os.Stdout, opts)
+func (c Config) SlogHandler() (slog.Handler, error) {
+	switch strings.ToLower(c.LogFormat) {
+	case "text":
+		opts := &slog.HandlerOptions{Level: c.SlogLevel()}
+		return slog.NewTextHandler(os.Stdout, opts), nil
+	case "journal":
+		return slogjournal.NewHandler(&slogjournal.Options{
+			Level:        c.SlogLevel(),
+			ReplaceAttr:  journalReplaceAttr,
+			ReplaceGroup: normalizeJournalKey,
+		})
+	default:
+		opts := &slog.HandlerOptions{Level: c.SlogLevel()}
+		return slog.NewJSONHandler(os.Stdout, opts), nil
 	}
-	return slog.NewJSONHandler(os.Stdout, opts)
+}
+
+// normalizeJournalKey converts a slog key or group name to a valid journald
+// field name matching ^[A-Z_][A-Z0-9_]*$.
+func normalizeJournalKey(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(unicode.ToUpper(r))
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	// Strip leading digits/underscores to ensure the key starts with a letter.
+	result := strings.TrimLeftFunc(b.String(), func(r rune) bool {
+		return !unicode.IsLetter(r)
+	})
+	if result == "" {
+		return "UNKNOWN"
+	}
+	return result
+}
+
+func journalReplaceAttr(groups []string, a slog.Attr) slog.Attr {
+	a.Key = normalizeJournalKey(a.Key)
+	return a
 }

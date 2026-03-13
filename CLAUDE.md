@@ -35,9 +35,10 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 
 ### Backend (Go) — `backend/`
 - **CLI**: Cobra-based with subcommands (e.g., `server`). Entry point: `main.go` → `backend.Execute()` → `backend/root.go`
-- **HTTP**: Chi v5 router on port 4000 with `middleware.Logger`. API routes under `/api/`.
+- **HTTP**: Chi v5 router on port 4000 with structured request logging via `httplog/v3`. API routes under `/api/`.
 - **Database**: pgx v5 with connection pooling (`pgxpool`). Connects to PostgreSQL.
-- **Config**: Environment variables and CLI flags. Precedence: defaults < env vars < CLI flags. Env vars: `DATABASE_URL`, `BIND_ADDRESS`, `PORT`, `ALLOW_REGISTRATION`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`. CLI flags: `--database-url`, `--bind-address`, `--port`, `--allow-registration`, `--webauthn-rp-id`, `--webauthn-origin`.
+- **Config**: Environment variables and CLI flags. Precedence: defaults < env vars < CLI flags. Env vars: `DATABASE_URL`, `BIND_ADDRESS`, `PORT`, `ALLOW_REGISTRATION`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`, `LOG_LEVEL`, `LOG_FORMAT`. CLI flags: `--database-url`, `--bind-address`, `--port`, `--allow-registration`, `--webauthn-rp-id`, `--webauthn-origin`, `--log-level`, `--log-format`.
+- **Logging**: Structured logging via `log/slog` and `httplog/v3`. `LOG_LEVEL` accepts `debug`, `info` (default), `warn`, `error`. `LOG_FORMAT` accepts `json` (default), `text`, or `journal` (logs directly to systemd journald via `slog-journal`).
 - **Registration**: Disabled by default. Enable via `ALLOW_REGISTRATION=true` env var or `--allow-registration` CLI flag.
 - UUIDs for primary keys (v7 preferred; v4 for users to hide creation time).
 

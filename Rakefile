@@ -34,9 +34,6 @@ end
 # Asset build with tracking file for dependency management
 file "build/assets/.built" => ASSET_SOURCES do
   sh "npm run build"
-  Dir.glob("build/assets/**/*.{js,css,html}").each do |path|
-    sh "zopfli", path
-  end
   touch "build/assets/.built"
 end
 

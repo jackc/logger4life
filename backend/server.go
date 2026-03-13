@@ -113,17 +113,22 @@ func runServer(cmd *cobra.Command, args []string) error {
 			next.ServeHTTP(w, r)
 		})
 	})
+	r.Use(loadSession(pool))
 	r.Use(httplog.RequestLogger(logger, &httplog.Options{
 		Level:         cfg.SlogLevel(),
 		RecoverPanics: true,
 		LogExtraAttrs: func(req *http.Request, _ string, _ int) []slog.Attr {
+			var attrs []slog.Attr
 			if reqID := middleware.GetReqID(req.Context()); reqID != "" {
-				return []slog.Attr{slog.String("request_id", reqID)}
+				attrs = append(attrs, slog.String("request_id", reqID))
 			}
-			return nil
+			if user := userFromContext(req.Context()); user != nil {
+				attrs = append(attrs, slog.String("user_id", user.ID))
+				attrs = append(attrs, slog.String("username", user.Username))
+			}
+			return attrs
 		},
 	}))
-	r.Use(loadSession(pool))
 
 	// Health check
 	r.Get("/health", handleHealth(pool))

@@ -1,8 +1,10 @@
 package backend
 
 import (
+	"log/slog"
 	"net"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -12,6 +14,8 @@ type Config struct {
 	AllowRegistration bool
 	WebAuthnRPID      string
 	WebAuthnOrigin    string
+	LogLevel          string
+	LogFormat         string
 }
 
 func DefaultConfig() Config {
@@ -22,6 +26,8 @@ func DefaultConfig() Config {
 		AllowRegistration: false,
 		WebAuthnRPID:      "",
 		WebAuthnOrigin:    "",
+		LogLevel:          "info",
+		LogFormat:         "json",
 	}
 }
 
@@ -54,6 +60,33 @@ func ConfigFromEnv() Config {
 	if v := os.Getenv("WEBAUTHN_ORIGIN"); v != "" {
 		cfg.WebAuthnOrigin = v
 	}
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		cfg.LogLevel = v
+	}
+	if v := os.Getenv("LOG_FORMAT"); v != "" {
+		cfg.LogFormat = v
+	}
 
 	return cfg
+}
+
+func (c Config) SlogLevel() slog.Level {
+	switch strings.ToLower(c.LogLevel) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+func (c Config) SlogHandler() slog.Handler {
+	opts := &slog.HandlerOptions{Level: c.SlogLevel()}
+	if strings.ToLower(c.LogFormat) == "text" {
+		return slog.NewTextHandler(os.Stdout, opts)
+	}
+	return slog.NewJSONHandler(os.Stdout, opts)
 }

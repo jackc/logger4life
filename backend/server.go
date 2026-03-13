@@ -3,11 +3,11 @@ package backend
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httplog/v3"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -26,6 +26,8 @@ var (
 	flagAllowRegistration bool
 	flagWebAuthnRPID      string
 	flagWebAuthnOrigin    string
+	flagLogLevel          string
+	flagLogFormat         string
 )
 
 func init() {
@@ -36,6 +38,8 @@ func init() {
 	serverCmd.Flags().BoolVar(&flagAllowRegistration, "allow-registration", false, "allow new user registration")
 	serverCmd.Flags().StringVar(&flagWebAuthnRPID, "webauthn-rp-id", "", "WebAuthn relying party ID")
 	serverCmd.Flags().StringVar(&flagWebAuthnOrigin, "webauthn-origin", "", "WebAuthn origin URL")
+	serverCmd.Flags().StringVar(&flagLogLevel, "log-level", "", "log level (debug, info, warn, error)")
+	serverCmd.Flags().StringVar(&flagLogFormat, "log-format", "", "log format (json, text)")
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -61,6 +65,14 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("webauthn-origin") {
 		cfg.WebAuthnOrigin = flagWebAuthnOrigin
 	}
+	if cmd.Flags().Changed("log-level") {
+		cfg.LogLevel = flagLogLevel
+	}
+	if cmd.Flags().Changed("log-format") {
+		cfg.LogFormat = flagLogFormat
+	}
+
+	logger := slog.New(cfg.SlogHandler())
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -72,7 +84,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("unable to query database: %w", err)
 	}
-	log.Printf("Database connected")
+	logger.Info("Database connected")
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
@@ -87,7 +99,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(httplog.RequestLogger(logger, &httplog.Options{
+		Level:         cfg.SlogLevel(),
+		RecoverPanics: true,
+	}))
 	r.Use(loadSession(pool))
 
 	// Health check
@@ -140,7 +155,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Post("/api/join/{token}", handleJoinLog(pool))
 	})
 
-	log.Printf("Starting server on %s (registration: %v)", cfg.ListenAddress(), cfg.AllowRegistration)
+	logger.Info("Starting server", "address", cfg.ListenAddress(), "registration", cfg.AllowRegistration)
 	return http.ListenAndServe(cfg.ListenAddress(), r)
 }
 

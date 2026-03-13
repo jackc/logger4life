@@ -25,9 +25,8 @@
             "handler": "file_server",
             "root": "{{.SlotDir}}/assets",
             "precompressed": {
-              "gzip": {},
-              "zstd": {},
-              "br": {}
+              "br": {},
+              "gzip": {}
             }
           }
         ]
@@ -59,9 +58,8 @@
             "root": "{{.SlotDir}}/assets",
             "pass_thru": true,
             "precompressed": {
-              "gzip": {},
-              "zstd": {},
-              "br": {}
+              "br": {},
+              "gzip": {}
             }
           },
           {

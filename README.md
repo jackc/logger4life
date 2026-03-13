@@ -97,4 +97,22 @@ The app will be available at `http://localhost:5173` with API requests proxied t
 
 ## Deployment
 
-The `config` directory contains sample config files for nginx and systemd.
+Logger4Life can easily be deployed with [verna](https://github.com/jackc/verna).
+
+There are rake tasks that build artifacts suitable for deployment with verna and `deploy/caddy-handle-template.json`
+contains a preconfigured Caddy handle template.
+
+If these are used, then deployment is one-line command.
+
+```
+rake build/linux_amd64.tar.gz && verna app deploy build/linux_amd64.tar.gz
+```
+
+Set your verna config in `.mise.local.toml`. For example:
+
+```toml
+[env]
+
+VERNA_SSH_HOST = "logger4life.example.com"
+VERNA_APP = "logger4life"
+```

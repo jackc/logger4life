@@ -1,0 +1,24 @@
+{
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {
+      "version": "1.0.5",
+      "resolved": "ghcr.io/anthropics/devcontainer-features/claude-code@sha256:cfc2e7d3e9fd3b9b01f8d5cb158508a884c8c0ede2e23ed10f32dea5d4ffe69a",
+      "integrity": "sha256:cfc2e7d3e9fd3b9b01f8d5cb158508a884c8c0ede2e23ed10f32dea5d4ffe69a"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "version": "2.5.7",
+      "resolved": "ghcr.io/devcontainers/features/common-utils@sha256:dbf431d6b42d55cde50fa1df75c7f7c3999a90cde6d73f7a7071174b3c3d0cc4",
+      "integrity": "sha256:dbf431d6b42d55cde50fa1df75c7f7c3999a90cde6d73f7a7071174b3c3d0cc4"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.3.4",
+      "resolved": "ghcr.io/devcontainers/features/go@sha256:d85e921f91b41340055bb12b325d9d551170ed04b3b832e33530bf42f167c032",
+      "integrity": "sha256:d85e921f91b41340055bb12b325d9d551170ed04b3b832e33530bf42f167c032"
+    },
+    "ghcr.io/rails/devcontainer/features/ruby:2.1.2": {
+      "version": "2.1.2",
+      "resolved": "ghcr.io/rails/devcontainer/features/ruby@sha256:4616b023b374d03a0ce17d0b68e463641cfd1c46f0615ad8530f5687a294e079",
+      "integrity": "sha256:4616b023b374d03a0ce17d0b68e463641cfd1c46f0615ad8530f5687a294e079"
+    }
+  }
+}

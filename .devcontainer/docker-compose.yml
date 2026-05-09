@@ -7,6 +7,8 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ..:/workspaces/logger4life:cached
+      - devstate-local:/persist/local
+      - devstate-shared:/persist/shared
     command: sleep infinity
     environment:
       # PostgreSQL connection settings for testing
@@ -27,3 +29,10 @@ services:
 
 volumes:
   postgresql:
+  # per-container persistence (unique per devcontainer instance via project-name prefix)
+  devstate-local:
+  # shared across all containers for this project
+  # pre-created in devcontainer.json's initializeCommand
+  devstate-shared:
+    name: devstate-shared-logger4life
+    external: true

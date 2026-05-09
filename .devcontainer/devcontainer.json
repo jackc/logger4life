@@ -4,14 +4,6 @@
   "service": "app",
   "workspaceFolder": "/workspaces/logger4life",
 
-  "mounts": [
-    // per-container persistence
-    "source=devstate-local-${devcontainerId},target=/persist/local,type=volume",
-
-    // shared across all containers for this project
-    "source=devstate-shared-logger4life,target=/persist/shared,type=volume"
-  ],
-
   "containerEnv": {
     "CLAUDE_CONFIG_DIR": "/persist/shared/claude",
     "ATUIN_CONFIG_DIR":  "/persist/shared/atuin/config",
@@ -56,7 +48,7 @@
     }
   },
 
-  "initializeCommand": "echo 'COMPOSE_PROJECT_NAME=logger4life-${devcontainerId}' > .devcontainer/.env",
+  "initializeCommand": "docker volume create devstate-shared-logger4life >/dev/null && echo 'COMPOSE_PROJECT_NAME=logger4life-${devcontainerId}' > .devcontainer/.env",
 
   "onCreateCommand": ".devcontainer/on-create.bash",
 

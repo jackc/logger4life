@@ -16,3 +16,6 @@
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Created by initializeCommand to set COMPOSE_PROJECT_NAME for docker-compose.
+.devcontainer/.env

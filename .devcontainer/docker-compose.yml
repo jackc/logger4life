@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ../..:/workspaces:cached
+      - ..:/workspaces/logger4life:cached
     command: sleep infinity
     environment:
       # PostgreSQL connection settings for testing

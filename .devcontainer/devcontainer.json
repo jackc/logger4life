@@ -1,8 +1,27 @@
 {
-  "name": "logger4life",
+  "name": "${localWorkspaceFolderBasename}",
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceFolder": "/workspaces/logger4life",
+
+  "mounts": [
+    // per-container persistence
+    "source=devstate-local-${devcontainerId},target=/persist/local,type=volume",
+
+    // shared across all containers for this project
+    "source=devstate-shared-logger4life,target=/persist/shared,type=volume"
+  ],
+
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/persist/shared/claude",
+    "ATUIN_CONFIG_DIR":  "/persist/shared/atuin/config",
+    "ATUIN_DATA_DIR":    "/persist/shared/atuin/data",
+    "GOPATH":            "/persist/shared/go",
+    "MISE_DATA_DIR":     "/persist/shared/mise/data",
+    "MISE_CACHE_DIR":    "/persist/shared/mise/cache",
+    "PSQL_HISTORY":      "/persist/shared/psql/history"
+  },
+
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
@@ -36,6 +55,8 @@
       "label": "Playwright Report"
     }
   },
+
+  "initializeCommand": "echo 'COMPOSE_PROJECT_NAME=logger4life-${devcontainerId}' > .devcontainer/.env",
 
   "onCreateCommand": ".devcontainer/on-create.bash",
 

@@ -48,7 +48,7 @@
     }
   },
 
-  "initializeCommand": "docker volume create devstate-shared-logger4life >/dev/null && echo 'COMPOSE_PROJECT_NAME=logger4life-${devcontainerId}' > .devcontainer/.env",
+  "initializeCommand": "docker volume create devstate-shared-logger4life >/dev/null",
 
   "onCreateCommand": ".devcontainer/on-create.bash",
 

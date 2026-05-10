@@ -17,14 +17,19 @@ fi
 
 DOWNLOAD_URL="https://github.com/watchexec/watchexec/releases/download/v${WATCHEXEC_VERSION}/watchexec-${WATCHEXEC_VERSION}-${ARCH_SUFFIX}-unknown-linux-gnu.deb"
 
-# Download and install watchexec
-echo "Downloading watchexec from $DOWNLOAD_URL"
+CACHE_DIR="/persist/shared/devcontainer-downloads"
+ARTIFACT="$(basename "$DOWNLOAD_URL")"
+CACHED="$CACHE_DIR/$ARTIFACT"
 
-# Download and extract to /tmp, then move binary to /usr/local/bin
-TMP_DIR="/tmp/watchexec_install"
-mkdir -p "$TMP_DIR"
-curl -L "$DOWNLOAD_URL" > "$TMP_DIR/watchexec.deb"
-sudo dpkg -i "$TMP_DIR/watchexec.deb"
-rm -rf "$TMP_DIR"
+mkdir -p "$CACHE_DIR"
+if [ ! -f "$CACHED" ]; then
+  echo "Downloading $ARTIFACT from $DOWNLOAD_URL"
+  curl -fL "$DOWNLOAD_URL" -o "$CACHED.partial"
+  mv "$CACHED.partial" "$CACHED"
+else
+  echo "Using cached $ARTIFACT"
+fi
+
+sudo dpkg -i "$CACHED"
 
 echo "watchexec v${WATCHEXEC_VERSION} installed successfully"

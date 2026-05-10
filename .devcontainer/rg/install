@@ -19,13 +19,22 @@ fi
 
 DOWNLOAD_URL="https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep-${RG_VERSION}-${ARCH_SUFFIX}-unknown-linux-${C_RUNTIME}.tar.gz"
 
-# Download and install rg
-echo "Downloading rg from $DOWNLOAD_URL"
+CACHE_DIR="/persist/shared/devcontainer-downloads"
+ARTIFACT="$(basename "$DOWNLOAD_URL")"
+CACHED="$CACHE_DIR/$ARTIFACT"
 
-# Download and extract to /tmp, then move binary to /usr/local/bin
+mkdir -p "$CACHE_DIR"
+if [ ! -f "$CACHED" ]; then
+  echo "Downloading $ARTIFACT from $DOWNLOAD_URL"
+  curl -fL "$DOWNLOAD_URL" -o "$CACHED.partial"
+  mv "$CACHED.partial" "$CACHED"
+else
+  echo "Using cached $ARTIFACT"
+fi
+
 TMP_DIR="/tmp/rg_install"
 mkdir -p "$TMP_DIR"
-curl -L "$DOWNLOAD_URL" | tar -xz -C "$TMP_DIR"
+tar -xz -C "$TMP_DIR" -f "$CACHED"
 sudo mv "$TMP_DIR/ripgrep-${RG_VERSION}-${ARCH_SUFFIX}-unknown-linux-${C_RUNTIME}/rg" /usr/local/bin/rg
 sudo chmod +x /usr/local/bin/rg
 rm -rf "$TMP_DIR"

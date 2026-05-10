@@ -127,7 +127,7 @@ func handlePasskeyRegisterBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http
 
 		wanUser, err := loadWebAuthnUser(r.Context(), pool, user.ID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -137,13 +137,13 @@ func handlePasskeyRegisterBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http
 			webauthn.WithExclusions(webauthn.Credentials(wanUser.credentials).CredentialDescriptors()),
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
 		challengeID, err := storeChallenge(r.Context(), pool, &user.ID, session, "registration")
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -182,7 +182,7 @@ func handlePasskeyRegisterFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) htt
 
 		wanUser, err := loadWebAuthnUser(r.Context(), pool, user.ID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -210,7 +210,7 @@ func handlePasskeyRegisterFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) htt
 			req.Description,
 		).Scan(&passkeyID, &createdAt)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -228,13 +228,13 @@ func handlePasskeyLoginBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		assertion, session, err := wan.BeginDiscoverableLogin()
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
 		challengeID, err := storeChallenge(r.Context(), pool, nil, session, "login")
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -295,13 +295,13 @@ func handlePasskeyLoginFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.H
 			credential.ID,
 		).Scan(&userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
 		token, err := createSession(r.Context(), pool, userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		setSessionCookie(w, token)
@@ -312,7 +312,7 @@ func handlePasskeyLoginFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.H
 			userID,
 		).Scan(&resp.ID, &resp.Username, &resp.Email)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -337,7 +337,7 @@ func handleListPasskeys(pool *pgxpool.Pool) http.HandlerFunc {
 			user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer rows.Close()
@@ -346,7 +346,7 @@ func handleListPasskeys(pool *pgxpool.Pool) http.HandlerFunc {
 		for rows.Next() {
 			var p passkeyResponse
 			if err := rows.Scan(&p.ID, &p.Description, &p.CreatedAt); err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				internalError(w, r, err)
 				return
 			}
 			passkeys = append(passkeys, p)
@@ -400,7 +400,7 @@ func handleDeletePasskey(pool *pgxpool.Pool) http.HandlerFunc {
 			passkeyID, user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if result.RowsAffected() == 0 {

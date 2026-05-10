@@ -64,7 +64,7 @@ func handleCreateShareToken(pool *pgxpool.Pool) http.HandlerFunc {
 
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -73,7 +73,7 @@ func handleCreateShareToken(pool *pgxpool.Pool) http.HandlerFunc {
 			b, logID, user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if tag.RowsAffected() == 0 {
@@ -95,7 +95,7 @@ func handleDeleteShareToken(pool *pgxpool.Pool) http.HandlerFunc {
 			logID, user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if tag.RowsAffected() == 0 {
@@ -129,7 +129,7 @@ func handleListShares(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if ownerID != user.ID {
@@ -146,7 +146,7 @@ func handleListShares(pool *pgxpool.Pool) http.HandlerFunc {
 			logID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer rows.Close()
@@ -155,7 +155,7 @@ func handleListShares(pool *pgxpool.Pool) http.HandlerFunc {
 		for rows.Next() {
 			var s sharedUserResponse
 			if err := rows.Scan(&s.ID, &s.Username, &s.SharedAt); err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				internalError(w, r, err)
 				return
 			}
 			shares = append(shares, s)
@@ -182,7 +182,7 @@ func handleRemoveShare(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if ownerID != user.ID {
@@ -195,7 +195,7 @@ func handleRemoveShare(pool *pgxpool.Pool) http.HandlerFunc {
 			shareID, logID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if tag.RowsAffected() == 0 {
@@ -239,7 +239,7 @@ func handleGetShareInfo(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "invalid share link"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -296,7 +296,7 @@ func handleJoinLog(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "invalid share link"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -316,7 +316,7 @@ func handleJoinLog(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusOK, joinLogResponse{LogID: logID, LogName: logName})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 

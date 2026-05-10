@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,7 +42,7 @@ func handleHello(pool *pgxpool.Pool) http.HandlerFunc {
 		var msg string
 		err := pool.QueryRow(r.Context(), "select 'Hello, World!'").Scan(&msg)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			internalError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"message": msg})
@@ -81,7 +82,7 @@ func handleRegister(pool *pgxpool.Pool, allowRegistration bool) http.HandlerFunc
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -99,13 +100,13 @@ func handleRegister(pool *pgxpool.Pool, allowRegistration bool) http.HandlerFunc
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "username already taken"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
 		token, err := createSession(r.Context(), pool, user.ID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		setSessionCookie(w, token)
@@ -133,7 +134,7 @@ func handleLogin(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid username or password"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -144,7 +145,7 @@ func handleLogin(pool *pgxpool.Pool) http.HandlerFunc {
 
 		token, err := createSession(r.Context(), pool, id)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		setSessionCookie(w, token)
@@ -255,7 +256,7 @@ func handleChangeEmail(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "email already in use"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -284,7 +285,7 @@ func handleChangePassword(pool *pgxpool.Pool) http.HandlerFunc {
 			user.ID,
 		).Scan(&passwordHash)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -295,7 +296,7 @@ func handleChangePassword(pool *pgxpool.Pool) http.HandlerFunc {
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -304,7 +305,7 @@ func handleChangePassword(pool *pgxpool.Pool) http.HandlerFunc {
 			string(hash), user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -316,4 +317,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+// internalError attaches err to the request log (so the httplog request line
+// records it at ERROR level) and responds with the standard 500 JSON. Use for
+// unexpected failures such as DB, crypto, or IO errors.
+func internalError(w http.ResponseWriter, r *http.Request, err error) {
+	httplog.SetError(r.Context(), err)
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 }

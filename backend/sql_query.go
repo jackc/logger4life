@@ -79,7 +79,7 @@ func handleExecuteSQL(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter) http.Ha
 
 		conn, err := pool.Acquire(r.Context())
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer conn.Release()
@@ -89,7 +89,7 @@ func handleExecuteSQL(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter) http.Ha
 			AccessMode: pgx.ReadOnly,
 		})
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer tx.Rollback(r.Context())
@@ -102,20 +102,20 @@ func handleExecuteSQL(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter) http.Ha
 		}
 		for _, stmt := range setup {
 			if _, err := tx.Exec(r.Context(), stmt); err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				internalError(w, r, err)
 				return
 			}
 		}
 		if _, err := tx.Exec(r.Context(), "SELECT set_config('app.current_user_id', $1, true)", user.ID); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if _, err := tx.Exec(r.Context(), "SET LOCAL ROLE logger4life_sql_user"); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if _, err := tx.Exec(r.Context(), "SET LOCAL search_path TO sql_query"); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -256,7 +256,7 @@ func handleGetSQLSchema(pool *pgxpool.Pool) http.HandlerFunc {
 			ORDER BY c.relname, a.attnum
 		`)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer rows.Close()
@@ -273,7 +273,7 @@ func handleGetSQLSchema(pool *pgxpool.Pool) http.HandlerFunc {
 				colComment  *string
 			)
 			if err := rows.Scan(&viewName, &viewComment, &colName, &dataType, &colComment); err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				internalError(w, r, err)
 				return
 			}
 			v, ok := viewIndex[viewName]
@@ -289,7 +289,7 @@ func handleGetSQLSchema(pool *pgxpool.Pool) http.HandlerFunc {
 			})
 		}
 		if err := rows.Err(); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -339,7 +339,7 @@ func handleListSavedQueries(pool *pgxpool.Pool) http.HandlerFunc {
 			user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer rows.Close()
@@ -348,7 +348,7 @@ func handleListSavedQueries(pool *pgxpool.Pool) http.HandlerFunc {
 		for rows.Next() {
 			var q savedQueryResponse
 			if err := rows.Scan(&q.ID, &q.Name, &q.QueryText, &q.CreatedAt, &q.UpdatedAt); err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				internalError(w, r, err)
 				return
 			}
 			out = append(out, q)
@@ -386,7 +386,7 @@ func handleCreateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "a saved query with that name already exists"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -428,7 +428,7 @@ func handleUpdateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "a saved query with that name already exists"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -446,7 +446,7 @@ func handleDeleteSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
 			queryID, user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if tag.RowsAffected() == 0 {

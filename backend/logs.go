@@ -175,7 +175,7 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "a log with that name already exists"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -202,7 +202,7 @@ func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
 			user.ID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer rows.Close()
@@ -211,7 +211,7 @@ func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
 		for rows.Next() {
 			var l logResponse
 			if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner); err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				internalError(w, r, err)
 				return
 			}
 			if l.Fields == nil {
@@ -235,7 +235,7 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -246,7 +246,7 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 			logID,
 		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -307,7 +307,7 @@ func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "a log with that name already exists"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -334,7 +334,7 @@ func handleDeleteLog(pool *pgxpool.Pool) http.HandlerFunc {
 		)
 
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if tag.RowsAffected() == 0 {
@@ -366,7 +366,7 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -383,7 +383,7 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 		).Scan(&entry.ID, &entry.LogID, &entry.UserID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
 
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -420,7 +420,7 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -442,7 +442,7 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "entry not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -450,7 +450,7 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 			`SELECT username FROM users WHERE id = $1`, entry.UserID,
 		).Scan(&entry.Username)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -473,7 +473,7 @@ func handleDeleteLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -483,7 +483,7 @@ func handleDeleteLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 		)
 
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		if tag.RowsAffected() == 0 {
@@ -506,7 +506,7 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 
@@ -519,7 +519,7 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 			logID,
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			internalError(w, r, err)
 			return
 		}
 		defer rows.Close()
@@ -528,7 +528,7 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 		for rows.Next() {
 			var e logEntryResponse
 			if err := rows.Scan(&e.ID, &e.LogID, &e.UserID, &e.Username, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				internalError(w, r, err)
 				return
 			}
 			if e.Fields == nil {

@@ -11,7 +11,8 @@
     "GOPATH":            "/persist/shared/go",
     "MISE_DATA_DIR":     "/persist/shared/mise/data",
     "MISE_CACHE_DIR":    "/persist/shared/mise/cache",
-    "PSQL_HISTORY":      "/persist/shared/psql/history"
+    "PSQL_HISTORY":      "/persist/shared/psql/history",
+    "PLAYWRIGHT_BROWSERS_PATH": "/persist/shared/playwright"
   },
 
   // Features to add to the dev container. More info: https://containers.dev/features.

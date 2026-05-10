@@ -19,6 +19,7 @@
 			<span class="text-gray-400">...</span>
 		{:else if auth.isLoggedIn}
 			<a href="/logs" class="text-gray-700 hover:text-blue-600">My Logs</a>
+			<a href="/sql" class="text-gray-700 hover:text-blue-600">SQL</a>
 			<a href="/me" class="text-gray-700 hover:text-blue-600">{auth.user.username}</a>
 			<button onclick={() => logout()} class="text-gray-500 hover:text-red-600">Logout</button>
 		{:else}

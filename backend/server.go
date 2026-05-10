@@ -143,6 +143,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan))
 	}
 
+	sqlArbiter := newSQLArbiter()
+
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(requireAuth)
@@ -178,6 +180,14 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(pool))
 		r.Get("/api/join/{token}", handleGetShareInfo(pool))
 		r.Post("/api/join/{token}", handleJoinLog(pool))
+
+		// SQL query feature
+		r.Post("/api/sql/execute", handleExecuteSQL(pool, sqlArbiter))
+		r.Get("/api/sql/schema", handleGetSQLSchema(pool))
+		r.Get("/api/sql/saved", handleListSavedQueries(pool))
+		r.Post("/api/sql/saved", handleCreateSavedQuery(pool))
+		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(pool))
+		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(pool))
 	})
 
 	logger.Info("Starting server", "address", cfg.ListenAddress(), "registration", cfg.AllowRegistration)

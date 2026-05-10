@@ -28,6 +28,7 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM webauthn_challenges")
 		pool.Exec(context.Background(), "DELETE FROM passkeys")
+		pool.Exec(context.Background(), "DELETE FROM saved_sql_queries")
 		pool.Exec(context.Background(), "DELETE FROM log_shares")
 		pool.Exec(context.Background(), "DELETE FROM log_entries")
 		pool.Exec(context.Background(), "DELETE FROM logs")
@@ -76,6 +77,14 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(pool))
 		r.Get("/api/join/{token}", handleGetShareInfo(pool))
 		r.Post("/api/join/{token}", handleJoinLog(pool))
+
+		sqlArbiter := newSQLArbiter()
+		r.Post("/api/sql/execute", handleExecuteSQL(pool, sqlArbiter))
+		r.Get("/api/sql/schema", handleGetSQLSchema(pool))
+		r.Get("/api/sql/saved", handleListSavedQueries(pool))
+		r.Post("/api/sql/saved", handleCreateSavedQuery(pool))
+		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(pool))
+		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(pool))
 	})
 
 	return httptest.NewServer(r)

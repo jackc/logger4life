@@ -297,6 +297,109 @@ func TestOAuthEndToEnd(t *testing.T) {
 	assert.NotEqual(t, access, refreshed["access_token"], "refreshed token should differ")
 }
 
+// TestRefreshTokenReuseRevokesFamily verifies OAuth 2.1 BCP §4.14.2: when
+// a refresh token that has already been rotated is presented again, the
+// entire token family is revoked — both the newly-issued refresh token
+// and its associated access token become unusable.
+func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
+	srv, _, _ := setupOAuthTestServer(t)
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar}
+
+	resp, err := client.Post(srv.URL+"/api/register", "application/json",
+		strings.NewReader(`{"username":"reuse_user","password":"password123"}`))
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	resp, err = client.Post(srv.URL+"/oauth/register", "application/json",
+		strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
+	require.NoError(t, err)
+	var dcr map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
+	resp.Body.Close()
+	clientID := dcr["client_id"].(string)
+
+	verifier, challenge := pkceParams(t)
+	noFollow := &http.Client{
+		Jar:           jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	v := url.Values{}
+	v.Set("response_type", "code")
+	v.Set("client_id", clientID)
+	v.Set("redirect_uri", "http://localhost/cb")
+	v.Set("code_challenge", challenge)
+	v.Set("code_challenge_method", "S256")
+	v.Set("scope", "mcp")
+	v.Set("state", "reuse-test-state")
+	v.Set("resource", srv.URL)
+	v.Set("approve", "true")
+	resp, err = noFollow.PostForm(srv.URL+"/oauth/authorize", v)
+	require.NoError(t, err)
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	resp.Body.Close()
+	code := loc.Query().Get("code")
+
+	tokValues := url.Values{}
+	tokValues.Set("grant_type", "authorization_code")
+	tokValues.Set("client_id", clientID)
+	tokValues.Set("code", code)
+	tokValues.Set("redirect_uri", "http://localhost/cb")
+	tokValues.Set("code_verifier", verifier)
+	tokValues.Set("resource", srv.URL)
+	resp, err = http.PostForm(srv.URL+"/oauth/token", tokValues)
+	require.NoError(t, err)
+	var tok map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tok))
+	resp.Body.Close()
+	refresh1 := tok["refresh_token"].(string)
+
+	// First refresh succeeds and rotates the refresh token.
+	refreshValues := url.Values{}
+	refreshValues.Set("grant_type", "refresh_token")
+	refreshValues.Set("client_id", clientID)
+	refreshValues.Set("refresh_token", refresh1)
+	resp, err = http.PostForm(srv.URL+"/oauth/token", refreshValues)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var refreshed map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&refreshed))
+	resp.Body.Close()
+	refresh2 := refreshed["refresh_token"].(string)
+	access2 := refreshed["access_token"].(string)
+
+	// Presenting the original (now-revoked) refresh token again is the
+	// reuse signal — should fail with invalid_grant.
+	resp, err = http.PostForm(srv.URL+"/oauth/token", refreshValues)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// As a side effect, the newly-rotated refresh token AND its access
+	// token must also be revoked — the entire family is dead.
+	familyRefresh := url.Values{}
+	familyRefresh.Set("grant_type", "refresh_token")
+	familyRefresh.Set("client_id", clientID)
+	familyRefresh.Set("refresh_token", refresh2)
+	resp, err = http.PostForm(srv.URL+"/oauth/token", familyRefresh)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
+		"rotated refresh token must be revoked after reuse of its predecessor")
+
+	// And the access token from the second pair should no longer authenticate.
+	mcpReq, _ := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}`))
+	mcpReq.Header.Set("Authorization", "Bearer "+access2)
+	mcpReq.Header.Set("Content-Type", "application/json")
+	mcpReq.Header.Set("Accept", "application/json, text/event-stream")
+	mcpResp, err := http.DefaultClient.Do(mcpReq)
+	require.NoError(t, err)
+	defer mcpResp.Body.Close()
+	assert.Equal(t, http.StatusUnauthorized, mcpResp.StatusCode,
+		"access token in revoked family must be rejected by /mcp")
+}
+
 // TestAuthorizeRejectsAudienceMismatch verifies RFC 8707 enforcement: a
 // resource parameter that doesn't match our canonical URL is rejected.
 func TestAuthorizeRejectsAudienceMismatch(t *testing.T) {

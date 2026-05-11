@@ -30,17 +30,22 @@ CREATE INDEX oauth_authorization_codes_expires_at_idx ON oauth_authorization_cod
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON oauth_authorization_codes TO {{.app_user}};
 
+-- family_id identifies the chain of refresh + access tokens originating from
+-- a single authorization grant. Carried forward across refresh rotations so
+-- that a detected refresh-token reuse can revoke the entire family.
 CREATE TABLE oauth_access_tokens (
     token_hash bytea PRIMARY KEY,
     client_id text NOT NULL REFERENCES oauth_clients(id) ON DELETE CASCADE,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     refresh_token_hash bytea,
+    family_id uuid NOT NULL,
     scope text NOT NULL,
     audience text NOT NULL,
     expires_at timestamptz NOT NULL
 );
 CREATE INDEX oauth_access_tokens_user_id_idx ON oauth_access_tokens (user_id);
 CREATE INDEX oauth_access_tokens_refresh_idx ON oauth_access_tokens (refresh_token_hash);
+CREATE INDEX oauth_access_tokens_family_idx ON oauth_access_tokens (family_id);
 CREATE INDEX oauth_access_tokens_expires_at_idx ON oauth_access_tokens (expires_at);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON oauth_access_tokens TO {{.app_user}};
@@ -49,12 +54,14 @@ CREATE TABLE oauth_refresh_tokens (
     token_hash bytea PRIMARY KEY,
     client_id text NOT NULL REFERENCES oauth_clients(id) ON DELETE CASCADE,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    family_id uuid NOT NULL,
     scope text NOT NULL,
     audience text NOT NULL,
     expires_at timestamptz NOT NULL,
     revoked boolean NOT NULL DEFAULT false
 );
 CREATE INDEX oauth_refresh_tokens_user_id_idx ON oauth_refresh_tokens (user_id);
+CREATE INDEX oauth_refresh_tokens_family_idx ON oauth_refresh_tokens (family_id);
 CREATE INDEX oauth_refresh_tokens_expires_at_idx ON oauth_refresh_tokens (expires_at);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON oauth_refresh_tokens TO {{.app_user}};

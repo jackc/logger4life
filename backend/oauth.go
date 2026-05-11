@@ -418,11 +418,17 @@ func (p *oauthProvider) tokenAuthCodeGrant(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	familyID, err := uuid.NewV7()
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
 	tokens, err := p.issueTokenPair(ctx, oauthAccessTokenRow{
 		ClientID: stored.ClientID,
 		UserID:   stored.UserID,
 		Scope:    stored.Scope,
 		Audience: stored.Audience,
+		FamilyID: familyID.String(),
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -444,6 +450,12 @@ func (p *oauthProvider) tokenRefreshGrant(w http.ResponseWriter, r *http.Request
 
 	stored, err := consumeRefreshToken(ctx, p.pool, refresh)
 	if err != nil {
+		if errors.Is(err, errOAuthReuseDetected) {
+			// Log internally; respond with the same generic invalid_grant the
+			// other failure modes use so we don't reveal that reuse was the
+			// trigger or that the family was revoked.
+			httplog.SetError(r.Context(), err)
+		}
 		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", "refresh_token is invalid, expired, or revoked")
 		return
 	}

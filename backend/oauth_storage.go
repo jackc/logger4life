@@ -14,6 +14,12 @@ import (
 // invalidated. Callers translate this into the appropriate OAuth error.
 var errOAuthNotFound = errors.New("oauth: record not found")
 
+// errOAuthReuseDetected is returned by consumeRefreshToken when a refresh
+// token that has already been revoked is presented again. The entire token
+// family is revoked as a side effect; callers should log this but return a
+// generic invalid_grant to the client so we don't leak the detection.
+var errOAuthReuseDetected = errors.New("oauth: refresh token reuse detected")
+
 // hashToken applies SHA-256 to an opaque token. The hash is what we persist
 // — the plaintext token never lands in the database.
 func hashToken(token string) []byte {
@@ -120,10 +126,13 @@ type oauthAccessTokenRow struct {
 	Username  string
 	Scope     string
 	Audience  string
+	FamilyID  string
 	ExpiresAt time.Time
 }
 
-// persistTokenPair inserts a paired access + refresh token row.
+// persistTokenPair inserts a paired access + refresh token row. The family_id
+// in info is carried onto both rows so that detected reuse can revoke the
+// entire chain originating from a single authorization grant.
 func persistTokenPair(ctx context.Context, pool *pgxpool.Pool, t oauthTokens, info oauthAccessTokenRow) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -133,18 +142,19 @@ func persistTokenPair(ctx context.Context, pool *pgxpool.Pool, t oauthTokens, in
 
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO oauth_refresh_tokens
-		   (token_hash, client_id, user_id, scope, audience, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		hashToken(t.RefreshToken), info.ClientID, info.UserID, info.Scope, info.Audience, t.RefreshExpiresAt,
+		   (token_hash, client_id, user_id, family_id, scope, audience, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		hashToken(t.RefreshToken), info.ClientID, info.UserID, info.FamilyID,
+		info.Scope, info.Audience, t.RefreshExpiresAt,
 	); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO oauth_access_tokens
-		   (token_hash, client_id, user_id, refresh_token_hash, scope, audience, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		   (token_hash, client_id, user_id, refresh_token_hash, family_id, scope, audience, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		hashToken(t.AccessToken), info.ClientID, info.UserID, hashToken(t.RefreshToken),
-		info.Scope, info.Audience, t.AccessExpiresAt,
+		info.FamilyID, info.Scope, info.Audience, t.AccessExpiresAt,
 	); err != nil {
 		return err
 	}
@@ -172,9 +182,14 @@ func lookupAccessToken(ctx context.Context, pool *pgxpool.Pool, token string) (*
 	return &r, nil
 }
 
-// consumeRefreshToken validates a refresh token, then atomically marks it
-// revoked and deletes the associated access token. Returns the bound user +
-// client + scope + audience for issuing the replacement pair.
+// consumeRefreshToken validates a refresh token and, atomically:
+//   - if the row is missing → errOAuthNotFound
+//   - if the row exists but is already revoked → errOAuthReuseDetected, and
+//     the entire family_id chain is revoked as a side effect
+//   - if the row exists but is expired → errOAuthNotFound
+//   - otherwise: mark revoked=true, delete the chained access token, and
+//     return the bound user + client + scope + audience + family_id so the
+//     caller can issue a replacement pair under the same family.
 func consumeRefreshToken(ctx context.Context, pool *pgxpool.Pool, token string) (*oauthAccessTokenRow, error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -183,17 +198,51 @@ func consumeRefreshToken(ctx context.Context, pool *pgxpool.Pool, token string) 
 	defer tx.Rollback(ctx)
 
 	var r oauthAccessTokenRow
+	var revoked bool
 	err = tx.QueryRow(ctx,
-		`UPDATE oauth_refresh_tokens
-		    SET revoked = true
-		  WHERE token_hash = $1 AND revoked = false AND expires_at > now()
-		  RETURNING client_id, user_id, scope, audience, expires_at`,
+		`SELECT client_id, user_id, family_id, scope, audience, expires_at, revoked
+		   FROM oauth_refresh_tokens
+		  WHERE token_hash = $1
+		  FOR UPDATE`,
 		hashToken(token),
-	).Scan(&r.ClientID, &r.UserID, &r.Scope, &r.Audience, &r.ExpiresAt)
+	).Scan(&r.ClientID, &r.UserID, &r.FamilyID, &r.Scope, &r.Audience, &r.ExpiresAt, &revoked)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errOAuthNotFound
 		}
+		return nil, err
+	}
+
+	if revoked {
+		// Refresh-token reuse. Revoke every refresh token in the family and
+		// drop every access token belonging to those refresh tokens. This is
+		// the OAuth 2.1 BCP §4.14.2 family-revocation response.
+		if _, err := tx.Exec(ctx,
+			`UPDATE oauth_refresh_tokens SET revoked = true WHERE family_id = $1`,
+			r.FamilyID,
+		); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM oauth_access_tokens WHERE family_id = $1`,
+			r.FamilyID,
+		); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+		return nil, errOAuthReuseDetected
+	}
+
+	if time.Now().After(r.ExpiresAt) {
+		return nil, errOAuthNotFound
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE oauth_refresh_tokens SET revoked = true WHERE token_hash = $1`,
+		hashToken(token),
+	); err != nil {
 		return nil, err
 	}
 	// Drop any access tokens chained to this refresh token. They become

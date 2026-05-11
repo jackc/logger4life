@@ -36,7 +36,12 @@
           {
             "path": [
               "/health",
-              "/api/*"
+              "/api/*",
+              "/.well-known/oauth-protected-resource",
+              "/.well-known/oauth-authorization-server",
+              "/oauth/*",
+              "/mcp",
+              "/mcp/*"
             ]
           }
         ],

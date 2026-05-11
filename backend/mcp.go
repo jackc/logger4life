@@ -69,6 +69,19 @@ func mcpToolError(ctx context.Context, err error) error {
 	return errors.New("internal error")
 }
 
+// requireMCPUser pulls the AuthUser attached to the request context by
+// requireBearerToken. The middleware already rejects unauthenticated
+// requests, so a nil result indicates a wiring bug rather than user input;
+// we surface it as an explicit error to keep tool handlers from
+// dereferencing a nil pointer.
+func requireMCPUser(ctx context.Context) (*AuthUser, error) {
+	user := userFromContext(ctx)
+	if user == nil {
+		return nil, errors.New("no authenticated user in context")
+	}
+	return user, nil
+}
+
 func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oauthProvider) *mcpServer {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "logger4life",
@@ -80,9 +93,9 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		Name:        "list_logs",
 		Description: "List all logs the authenticated user owns or has been shared on, ordered alphabetically.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listLogsInput) (*mcp.CallToolResult, listLogsOutput, error) {
-		user := userFromContext(ctx)
-		if user == nil {
-			return nil, listLogsOutput{}, fmt.Errorf("no authenticated user in context")
+		user, err := requireMCPUser(ctx)
+		if err != nil {
+			return nil, listLogsOutput{}, err
 		}
 		logs, err := listLogsForUser(ctx, pool, user.ID)
 		if err != nil {
@@ -95,8 +108,8 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		Name:        "get_sql_schema",
 		Description: "Describe the read-only views available for SQL queries (sql_query.logs and sql_query.log_entries) including columns, types, and per-column comments. Call this before writing a query to know what to select.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ getSQLSchemaInput) (*mcp.CallToolResult, getSQLSchemaOutput, error) {
-		if userFromContext(ctx) == nil {
-			return nil, getSQLSchemaOutput{}, fmt.Errorf("no authenticated user in context")
+		if _, err := requireMCPUser(ctx); err != nil {
+			return nil, getSQLSchemaOutput{}, err
 		}
 		views, err := listSQLSchemaViews(ctx, pool)
 		if err != nil {
@@ -109,9 +122,9 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		Name:        "run_sql",
 		Description: "Run a read-only SELECT against the sql_query schema views as the authenticated user. Only SELECT statements on the logs and log_entries views are allowed; results are capped at 1000 rows.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in runSQLInput) (*mcp.CallToolResult, runSQLOutput, error) {
-		user := userFromContext(ctx)
-		if user == nil {
-			return nil, runSQLOutput{}, fmt.Errorf("no authenticated user in context")
+		user, err := requireMCPUser(ctx)
+		if err != nil {
+			return nil, runSQLOutput{}, err
 		}
 		result, err := executeUserSQL(ctx, pool, arbiter, user.ID, in.Query)
 		if err != nil {
@@ -124,9 +137,9 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		Name:        "list_saved_queries",
 		Description: "List the authenticated user's saved SQL queries, ordered alphabetically by name. Each entry includes the query text so a follow-up run_sql call can execute or adapt it.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listSavedQueriesInput) (*mcp.CallToolResult, listSavedQueriesOutput, error) {
-		user := userFromContext(ctx)
-		if user == nil {
-			return nil, listSavedQueriesOutput{}, fmt.Errorf("no authenticated user in context")
+		user, err := requireMCPUser(ctx)
+		if err != nil {
+			return nil, listSavedQueriesOutput{}, err
 		}
 		queries, err := listSavedQueriesForUser(ctx, pool, user.ID)
 		if err != nil {
@@ -139,9 +152,9 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		Name:        "run_saved_query",
 		Description: "Look up a saved query by name and execute it. Equivalent to calling list_saved_queries then run_sql with the matching query_text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in runSavedQueryInput) (*mcp.CallToolResult, runSQLOutput, error) {
-		user := userFromContext(ctx)
-		if user == nil {
-			return nil, runSQLOutput{}, fmt.Errorf("no authenticated user in context")
+		user, err := requireMCPUser(ctx)
+		if err != nil {
+			return nil, runSQLOutput{}, err
 		}
 		name := strings.TrimSpace(in.Name)
 		if name == "" {

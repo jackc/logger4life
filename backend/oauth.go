@@ -286,6 +286,7 @@ func (p *oauthProvider) handleAuthorize() http.HandlerFunc {
 			renderConsentPage(w, r, consentData{
 				Username:    user.Username,
 				ClientID:    params.ClientID,
+				ClientName:  client.ClientName,
 				RedirectURI: params.RedirectURI,
 				Scopes:      strings.Fields(params.Scope),
 				FormFields:  r.Form,

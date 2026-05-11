@@ -12,6 +12,7 @@ import (
 type consentData struct {
 	Username    string
 	ClientID    string
+	ClientName  string
 	RedirectURI string
 	Scopes      []string
 	FormFields  url.Values
@@ -27,6 +28,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!doctype htm
   h1 { font-size: 1.25rem; margin-bottom: 1rem; }
   .card { border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; }
   .meta { color: #666; font-size: 0.9rem; margin: 0.25rem 0; }
+  .warn { background: #fff4e5; border-left: 3px solid #d97706; padding: 0.5rem 0.75rem; font-size: 0.9rem; margin: 0.5rem 0; }
   ul { padding-left: 1.25rem; }
   .actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; }
   button { font-size: 1rem; padding: 0.5rem 1.25rem; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #fff; }
@@ -38,7 +40,15 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!doctype htm
   <div class="card">
     <h1>Authorize MCP access</h1>
     <p>Signed in as <strong>{{.Username}}</strong>.</p>
-    <p>Application <code>{{.ClientID}}</code> wants to access your Logger4Life data.</p>
+    {{if .ClientName}}
+    <p>Application <strong>{{.ClientName}}</strong> wants to access your Logger4Life data.</p>
+    <p class="meta">Client ID: <code>{{.ClientID}}</code></p>
+    {{else}}
+    <p>An application wants to access your Logger4Life data.</p>
+    <p class="meta">Client ID: <code>{{.ClientID}}</code></p>
+    <p class="warn">⚠ This application did not provide a name during registration. Only approve if you initiated this request.</p>
+    {{end}}
+    <p class="meta">The application name is self-reported and not verified by Logger4Life — only approve if you recognize and trust the source.</p>
     {{if .RedirectURI}}<p class="meta">Will redirect to: <code>{{.RedirectURI}}</code></p>{{end}}
     {{if .Scopes}}
     <p>Requested scopes:</p>

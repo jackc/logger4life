@@ -50,7 +50,15 @@ func newMCPServer(pool *pgxpool.Pool, oauth *oauthProvider) *mcpServer {
 
 	handler := mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return srv },
-		nil,
+		&mcp.StreamableHTTPOptions{
+			// We're behind a trusted reverse proxy (Caddy) that may forward
+			// the original public Host header while connecting to us over
+			// loopback. The SDK's default DNS-rebinding protection treats
+			// that combination as a rejection, but the rebinding attack it
+			// guards against doesn't apply when the upstream is reached via
+			// a verified reverse proxy.
+			DisableLocalhostProtection: true,
+		},
 	)
 	return &mcpServer{server: srv, handler: handler, oauth: oauth}
 }

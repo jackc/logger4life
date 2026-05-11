@@ -116,3 +116,31 @@ Set your verna config in `.mise.local.toml`. For example:
 VERNA_SSH_HOST = "logger4life.example.com"
 VERNA_APP = "logger4life"
 ```
+
+## MCP (Model Context Protocol)
+
+Logger4Life can expose a `list_logs` tool to AI assistants over the
+[Model Context Protocol](https://modelcontextprotocol.io). Set
+`MCP_CANONICAL_URL` to enable the OAuth 2.1 authorization server
+(`/oauth/...`) and the MCP endpoint (`/mcp`):
+
+```
+verna app env set MCP_CANONICAL_URL=https://logger4life.example.com
+```
+
+The value must be the public origin without a trailing slash. It is used
+as both the OAuth issuer and the RFC 8707 audience binding for issued
+access tokens.
+
+When adding the connector in a client (e.g. claude.ai → Settings →
+Connectors → Add custom connector), provide the **full MCP endpoint
+URL**, not just the origin:
+
+```
+https://logger4life.example.com/mcp
+```
+
+Some clients normalize the URL by stripping the path and treating the
+origin as both the OAuth server and MCP endpoint; if you only provide
+the origin, the OAuth handshake succeeds but the client's first MCP
+request hits `/` (the SPA) instead of `/mcp` and fails opaquely.

@@ -67,7 +67,7 @@ Share your logs with other users so they can view and add entries:
 
 ### Getting Started
 
-1. Set up the PostgreSQL databases (`logger4life_dev` and `logger4life_test`) and the `logger4life_app` role.
+1. Set up the PostgreSQL databases (`logger4life_dev` and `logger4life_test`) and the `logger4life` role.
 2. Run database migrations:
    ```sh
    tern migrate --config postgresql/tern.conf --migrations postgresql/migrations

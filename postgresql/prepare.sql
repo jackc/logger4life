@@ -1,12 +1,12 @@
--- Create user 'logger4life_app' if it doesn't exist
+-- Create user 'logger4life' if it doesn't exist
 DO
 $$
 BEGIN
   IF NOT EXISTS (
     SELECT FROM pg_catalog.pg_roles
-    WHERE rolname = 'logger4life_app'
+    WHERE rolname = 'logger4life'
   ) THEN
-    CREATE ROLE logger4life_app WITH LOGIN PASSWORD 'password';
+    CREATE ROLE logger4life WITH LOGIN PASSWORD 'password';
   END IF;
 END
 $$;

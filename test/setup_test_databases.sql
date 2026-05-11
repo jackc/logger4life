@@ -3,6 +3,11 @@
 
 -- Clean the test database so tern can re-run migrations from scratch.
 \c logger4life_test
+DROP TABLE IF EXISTS oauth_pkce_sessions CASCADE;
+DROP TABLE IF EXISTS oauth_refresh_tokens CASCADE;
+DROP TABLE IF EXISTS oauth_access_tokens CASCADE;
+DROP TABLE IF EXISTS oauth_authorize_codes CASCADE;
+DROP TABLE IF EXISTS oauth_clients CASCADE;
 DROP TABLE IF EXISTS saved_sql_queries CASCADE;
 DROP SCHEMA IF EXISTS sql_query CASCADE;
 DROP TABLE IF EXISTS webauthn_challenges CASCADE;

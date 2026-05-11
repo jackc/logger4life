@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -187,39 +188,50 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
+// listLogsForUser returns all logs the user owns or has been shared on,
+// sorted alphabetically. Shared by handleListLogs (HTTP) and the MCP
+// list_logs tool.
+func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]logResponse, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, name, fields, created_at, updated_at, is_owner FROM (
+			SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, true AS is_owner
+			FROM logs l WHERE l.user_id = $1
+			UNION ALL
+			SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, false AS is_owner
+			FROM logs l JOIN log_shares ls ON l.id = ls.log_id WHERE ls.user_id = $1
+		) combined ORDER BY lower(name)`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	logs := []logResponse{}
+	for rows.Next() {
+		var l logResponse
+		if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner); err != nil {
+			return nil, err
+		}
+		if l.Fields == nil {
+			l.Fields = []fieldDefinition{}
+		}
+		logs = append(logs, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
 func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
-
-		rows, err := pool.Query(r.Context(),
-			`SELECT id, name, fields, created_at, updated_at, is_owner FROM (
-				SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, true AS is_owner
-				FROM logs l WHERE l.user_id = $1
-				UNION ALL
-				SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, false AS is_owner
-				FROM logs l JOIN log_shares ls ON l.id = ls.log_id WHERE ls.user_id = $1
-			) combined ORDER BY lower(name)`,
-			user.ID,
-		)
+		logs, err := listLogsForUser(r.Context(), pool, user.ID)
 		if err != nil {
 			internalError(w, r, err)
 			return
 		}
-		defer rows.Close()
-
-		logs := []logResponse{}
-		for rows.Next() {
-			var l logResponse
-			if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner); err != nil {
-				internalError(w, r, err)
-				return
-			}
-			if l.Fields == nil {
-				l.Fields = []fieldDefinition{}
-			}
-			logs = append(logs, l)
-		}
-
 		writeJSON(w, http.StatusOK, logs)
 	}
 }

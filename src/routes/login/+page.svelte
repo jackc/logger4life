@@ -3,6 +3,7 @@
 	import { isWebAuthnSupported } from '$lib/passkeys.js';
 	import { getSettings } from '$lib/settings.svelte.js';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 
 	const auth = getAuth();
 	const settings = getSettings();
@@ -14,6 +15,23 @@
 	let passkeySubmitting = $state(false);
 	let webauthnSupported = $state(false);
 
+	// Same-origin path or full URL on this origin only — never redirect to
+	// arbitrary external sites.
+	function safeReturnTo() {
+		const raw = page.url.searchParams.get('return_to');
+		if (!raw) return '/logs';
+		// Same-origin absolute URL: strip to path+query+hash.
+		try {
+			const u = new URL(raw, page.url);
+			if (u.origin === page.url.origin) {
+				return u.pathname + u.search + u.hash;
+			}
+		} catch {}
+		// Otherwise require a leading "/" and disallow protocol-relative ("//").
+		if (raw.startsWith('/') && !raw.startsWith('//')) return raw;
+		return '/logs';
+	}
+
 	$effect(() => {
 		webauthnSupported = isWebAuthnSupported();
 	});
@@ -24,7 +42,8 @@
 		submitting = true;
 		try {
 			await login(username, password);
-			goto('/logs');
+			// Use a full navigation so non-SPA routes like /oauth/authorize work.
+			window.location.assign(safeReturnTo());
 		} catch (err) {
 			error = err.message;
 		} finally {
@@ -37,7 +56,7 @@
 		passkeySubmitting = true;
 		try {
 			await passkeyLogin();
-			goto('/logs');
+			window.location.assign(safeReturnTo());
 		} catch (err) {
 			error = err.message;
 		} finally {
@@ -47,7 +66,7 @@
 
 	$effect(() => {
 		if (!auth.loading && auth.isLoggedIn) {
-			goto('/logs');
+			window.location.assign(safeReturnTo());
 		}
 	});
 </script>

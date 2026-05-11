@@ -2,11 +2,15 @@ package backend
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -410,4 +414,47 @@ func TestSavedQueries_ValidationErrors(t *testing.T) {
 	}, cookies)
 	assert.Equal(t, http.StatusBadRequest, resp2.StatusCode)
 	assert.Contains(t, body2["error"], "query_text")
+}
+
+// ---------------------------------------------------------------------------
+// getSavedQueryByName (used by the run_saved_query MCP tool)
+// ---------------------------------------------------------------------------
+
+func TestGetSavedQueryByName(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+	cookies := registerUser(t, srv.URL, "alice")
+
+	meResp, meBody := getJSON(srv.URL+"/api/me", cookies)
+	require.Equal(t, http.StatusOK, meResp.StatusCode)
+	userID := meBody["id"].(string)
+
+	_, createBody := postJSON(srv.URL+"/api/sql/saved", map[string]any{
+		"name":       "log count",
+		"query_text": "SELECT count(*) FROM logs",
+	}, cookies)
+	wantID := createBody["id"].(string)
+
+	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
+	require.NoError(t, err)
+	defer pool.Close()
+
+	q, err := getSavedQueryByName(context.Background(), pool, userID, "log count")
+	require.NoError(t, err)
+	assert.Equal(t, wantID, q.ID)
+	assert.Equal(t, "log count", q.Name)
+	assert.Equal(t, "SELECT count(*) FROM logs", q.QueryText)
+
+	_, err = getSavedQueryByName(context.Background(), pool, userID, "nope")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, pgx.ErrNoRows), "expected pgx.ErrNoRows, got %v", err)
+
+	// Different user with the same query name must not be visible.
+	otherCookies := registerUser(t, srv.URL, "bob")
+	meResp2, meBody2 := getJSON(srv.URL+"/api/me", otherCookies)
+	require.Equal(t, http.StatusOK, meResp2.StatusCode)
+	bobID := meBody2["id"].(string)
+	_, err = getSavedQueryByName(context.Background(), pool, bobID, "log count")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, pgx.ErrNoRows))
 }

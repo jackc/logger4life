@@ -44,7 +44,7 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxp
 	t.Cleanup(srv.Close)
 
 	oauth := newOAuthProvider(pool, srv.URL)
-	mcpSrv := newMCPServer(pool, oauth)
+	mcpSrv := newMCPServer(pool, newSQLArbiter(), oauth)
 
 	r := chi.NewRouter()
 	r.Use(loadSession(pool))

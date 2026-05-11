@@ -2,10 +2,14 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/httplog/v3"
+	pgsqlarbiter "github.com/jackc/pgsqlarbiter-go"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -26,7 +30,46 @@ type listLogsOutput struct {
 	Logs []logResponse `json:"logs" jsonschema:"the list of logs the authenticated user owns or has been shared on"`
 }
 
-func newMCPServer(pool *pgxpool.Pool, oauth *oauthProvider) *mcpServer {
+type getSQLSchemaInput struct{}
+
+type getSQLSchemaOutput struct {
+	Views []*sqlSchemaView `json:"views" jsonschema:"views the user can query in the sql_query schema, with their columns and comments"`
+}
+
+type listSavedQueriesInput struct{}
+
+type listSavedQueriesOutput struct {
+	Queries []savedQueryResponse `json:"queries" jsonschema:"the user's saved SQL queries, ordered alphabetically by name"`
+}
+
+type runSavedQueryInput struct {
+	Name string `json:"name" jsonschema:"name of the saved query to run (case-sensitive, as returned by list_saved_queries)"`
+}
+
+type runSQLInput struct {
+	Query string `json:"query" jsonschema:"a read-only SELECT against the sql_query schema views (logs, log_entries)"`
+}
+
+// runSQLOutput mirrors sqlExecuteResponse so the schema is identical to the
+// /api/sql/execute response shape.
+type runSQLOutput = sqlExecuteResponse
+
+// mcpToolError converts a downstream helper error into the right MCP-facing
+// error. *userSQLError messages are safe to surface to the caller and pass
+// through unchanged; every other error is attached to the request log via
+// httplog.SetError and replaced with a generic "internal error" so we don't
+// leak DB / pool / IO details to the MCP client. Mirrors the internalError
+// convention used by the HTTP handlers.
+func mcpToolError(ctx context.Context, err error) error {
+	var userErr *userSQLError
+	if errors.As(err, &userErr) {
+		return err
+	}
+	httplog.SetError(ctx, err)
+	return errors.New("internal error")
+}
+
+func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oauthProvider) *mcpServer {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "logger4life",
 		Title:   "Logger4Life",
@@ -43,9 +86,79 @@ func newMCPServer(pool *pgxpool.Pool, oauth *oauthProvider) *mcpServer {
 		}
 		logs, err := listLogsForUser(ctx, pool, user.ID)
 		if err != nil {
-			return nil, listLogsOutput{}, err
+			return nil, listLogsOutput{}, mcpToolError(ctx, err)
 		}
 		return nil, listLogsOutput{Logs: logs}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "get_sql_schema",
+		Description: "Describe the read-only views available for SQL queries (sql_query.logs and sql_query.log_entries) including columns, types, and per-column comments. Call this before writing a query to know what to select.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ getSQLSchemaInput) (*mcp.CallToolResult, getSQLSchemaOutput, error) {
+		if userFromContext(ctx) == nil {
+			return nil, getSQLSchemaOutput{}, fmt.Errorf("no authenticated user in context")
+		}
+		views, err := listSQLSchemaViews(ctx, pool)
+		if err != nil {
+			return nil, getSQLSchemaOutput{}, mcpToolError(ctx, err)
+		}
+		return nil, getSQLSchemaOutput{Views: views}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "run_sql",
+		Description: "Run a read-only SELECT against the sql_query schema views as the authenticated user. Only SELECT statements on the logs and log_entries views are allowed; results are capped at 1000 rows.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in runSQLInput) (*mcp.CallToolResult, runSQLOutput, error) {
+		user := userFromContext(ctx)
+		if user == nil {
+			return nil, runSQLOutput{}, fmt.Errorf("no authenticated user in context")
+		}
+		result, err := executeUserSQL(ctx, pool, arbiter, user.ID, in.Query)
+		if err != nil {
+			return nil, runSQLOutput{}, mcpToolError(ctx, err)
+		}
+		return nil, result, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "list_saved_queries",
+		Description: "List the authenticated user's saved SQL queries, ordered alphabetically by name. Each entry includes the query text so a follow-up run_sql call can execute or adapt it.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listSavedQueriesInput) (*mcp.CallToolResult, listSavedQueriesOutput, error) {
+		user := userFromContext(ctx)
+		if user == nil {
+			return nil, listSavedQueriesOutput{}, fmt.Errorf("no authenticated user in context")
+		}
+		queries, err := listSavedQueriesForUser(ctx, pool, user.ID)
+		if err != nil {
+			return nil, listSavedQueriesOutput{}, mcpToolError(ctx, err)
+		}
+		return nil, listSavedQueriesOutput{Queries: queries}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "run_saved_query",
+		Description: "Look up a saved query by name and execute it. Equivalent to calling list_saved_queries then run_sql with the matching query_text.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in runSavedQueryInput) (*mcp.CallToolResult, runSQLOutput, error) {
+		user := userFromContext(ctx)
+		if user == nil {
+			return nil, runSQLOutput{}, fmt.Errorf("no authenticated user in context")
+		}
+		name := strings.TrimSpace(in.Name)
+		if name == "" {
+			return nil, runSQLOutput{}, fmt.Errorf("name is required")
+		}
+		saved, err := getSavedQueryByName(ctx, pool, user.ID, name)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, runSQLOutput{}, fmt.Errorf("no saved query named %q", name)
+			}
+			return nil, runSQLOutput{}, mcpToolError(ctx, err)
+		}
+		result, err := executeUserSQL(ctx, pool, arbiter, user.ID, saved.QueryText)
+		if err != nil {
+			return nil, runSQLOutput{}, mcpToolError(ctx, err)
+		}
+		return nil, result, nil
 	})
 
 	handler := mcp.NewStreamableHTTPHandler(

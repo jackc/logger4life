@@ -163,7 +163,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// 8707 audience binding for issued access tokens).
 	if cfg.MCPEnabled() {
 		oauth := newOAuthProvider(pool, cfg.MCPCanonicalURL)
-		mcpSrv := newMCPServer(pool, oauth)
+		mcpSrv := newMCPServer(pool, sqlArbiter, oauth)
 
 		r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 		r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())

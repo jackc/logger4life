@@ -193,12 +193,18 @@ func createSession(ctx context.Context, pool *pgxpool.Pool, userID string) (stri
 	return hex.EncodeToString(b), nil
 }
 
+// secureCookies controls the Cookie.Secure attribute on the session cookie.
+// Set once at server startup from cfg.SecureCookies; reads after that are
+// safe without synchronization.
+var secureCookies bool
+
 func setSessionCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secureCookies,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(sessionDuration.Seconds()),
 	})
@@ -210,6 +216,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secureCookies,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})

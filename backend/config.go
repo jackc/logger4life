@@ -20,6 +20,7 @@ type Config struct {
 	LogLevel          string
 	LogFormat         string
 	MCPCanonicalURL   string
+	SecureCookies     bool
 }
 
 func DefaultConfig() Config {
@@ -33,6 +34,7 @@ func DefaultConfig() Config {
 		LogLevel:          "info",
 		LogFormat:         "json",
 		MCPCanonicalURL:   "",
+		SecureCookies:     false,
 	}
 }
 
@@ -80,6 +82,9 @@ func ConfigFromEnv() Config {
 	}
 	if v := os.Getenv("MCP_CANONICAL_URL"); v != "" {
 		cfg.MCPCanonicalURL = strings.TrimRight(v, "/")
+	}
+	if v := os.Getenv("SECURE_COOKIES"); v == "true" {
+		cfg.SecureCookies = true
 	}
 
 	return cfg

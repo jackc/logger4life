@@ -31,6 +31,7 @@ var (
 	flagLogLevel          string
 	flagLogFormat         string
 	flagMCPCanonicalURL   string
+	flagSecureCookies     bool
 )
 
 func init() {
@@ -44,6 +45,7 @@ func init() {
 	serverCmd.Flags().StringVar(&flagLogLevel, "log-level", "", "log level (debug, info, warn, error)")
 	serverCmd.Flags().StringVar(&flagLogFormat, "log-format", "", "log format (json, text, journal)")
 	serverCmd.Flags().StringVar(&flagMCPCanonicalURL, "mcp-canonical-url", "", "public canonical URL of this server; enables MCP+OAuth routes when set")
+	serverCmd.Flags().BoolVar(&flagSecureCookies, "secure-cookies", false, "set the Secure attribute on session cookies (required behind HTTPS)")
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -78,6 +80,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("mcp-canonical-url") {
 		cfg.MCPCanonicalURL = strings.TrimRight(flagMCPCanonicalURL, "/")
 	}
+	if cmd.Flags().Changed("secure-cookies") {
+		cfg.SecureCookies = flagSecureCookies
+	}
+
+	secureCookies = cfg.SecureCookies
 
 	handler, err := cfg.SlogHandler()
 	if err != nil {

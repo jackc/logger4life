@@ -144,3 +144,15 @@ Some clients normalize the URL by stripping the path and treating the
 origin as both the OAuth server and MCP endpoint; if you only provide
 the origin, the OAuth handshake succeeds but the client's first MCP
 request hits `/` (the SPA) instead of `/mcp` and fails opaquely.
+
+## Production cookie hardening
+
+When running behind HTTPS, set `SECURE_COOKIES=true` so the session
+cookie gets the `Secure` attribute and won't be sent over plain HTTP:
+
+```
+verna app env set SECURE_COOKIES=true
+```
+
+The default is `false` so local dev over `http://localhost` keeps
+working unchanged.

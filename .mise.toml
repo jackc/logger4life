@@ -9,6 +9,6 @@ TERN_CONFIG = "postgresql/tern.conf"
 TERN_MIGRATIONS = "postgresql/migrations"
 
 [tools]
-go = '1.26.0'
+go = '1.26.1'
 nodejs = '24.13.0'
 ruby = '4.0.1'

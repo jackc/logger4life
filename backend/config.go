@@ -19,6 +19,7 @@ type Config struct {
 	WebAuthnOrigin    string
 	LogLevel          string
 	LogFormat         string
+	MCPCanonicalURL   string
 }
 
 func DefaultConfig() Config {
@@ -31,6 +32,7 @@ func DefaultConfig() Config {
 		WebAuthnOrigin:    "",
 		LogLevel:          "info",
 		LogFormat:         "json",
+		MCPCanonicalURL:   "",
 	}
 }
 
@@ -40,6 +42,13 @@ func (c Config) ListenAddress() string {
 
 func (c Config) PasskeysEnabled() bool {
 	return c.WebAuthnRPID != "" && c.WebAuthnOrigin != ""
+}
+
+// MCPEnabled reports whether MCP+OAuth routes should be mounted. They require
+// a canonical public URL to use as both the OAuth issuer and the RFC 8707
+// audience for bearer tokens.
+func (c Config) MCPEnabled() bool {
+	return c.MCPCanonicalURL != ""
 }
 
 func ConfigFromEnv() Config {
@@ -68,6 +77,9 @@ func ConfigFromEnv() Config {
 	}
 	if v := os.Getenv("LOG_FORMAT"); v != "" {
 		cfg.LogFormat = v
+	}
+	if v := os.Getenv("MCP_CANONICAL_URL"); v != "" {
+		cfg.MCPCanonicalURL = strings.TrimRight(v, "/")
 	}
 
 	return cfg

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -29,6 +30,7 @@ var (
 	flagWebAuthnOrigin    string
 	flagLogLevel          string
 	flagLogFormat         string
+	flagMCPCanonicalURL   string
 )
 
 func init() {
@@ -41,6 +43,7 @@ func init() {
 	serverCmd.Flags().StringVar(&flagWebAuthnOrigin, "webauthn-origin", "", "WebAuthn origin URL")
 	serverCmd.Flags().StringVar(&flagLogLevel, "log-level", "", "log level (debug, info, warn, error)")
 	serverCmd.Flags().StringVar(&flagLogFormat, "log-format", "", "log format (json, text, journal)")
+	serverCmd.Flags().StringVar(&flagMCPCanonicalURL, "mcp-canonical-url", "", "public canonical URL of this server; enables MCP+OAuth routes when set")
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -71,6 +74,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	if cmd.Flags().Changed("log-format") {
 		cfg.LogFormat = flagLogFormat
+	}
+	if cmd.Flags().Changed("mcp-canonical-url") {
+		cfg.MCPCanonicalURL = strings.TrimRight(flagMCPCanonicalURL, "/")
 	}
 
 	handler, err := cfg.SlogHandler()
@@ -144,6 +150,31 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 
 	sqlArbiter := newSQLArbiter()
+
+	// OAuth + MCP. Mounted only when a canonical URL is configured (because
+	// the canonical URL is needed both as the OAuth issuer and as the RFC
+	// 8707 audience binding for issued access tokens).
+	if cfg.MCPEnabled() {
+		oauth := newOAuthProvider(pool, cfg.MCPCanonicalURL)
+		mcpSrv := newMCPServer(pool, oauth)
+
+		r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
+		r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
+		r.Post("/oauth/register", oauth.handleDynamicClientRegistration())
+		r.Get("/oauth/authorize", oauth.handleAuthorize())
+		r.Post("/oauth/authorize", oauth.handleAuthorize())
+		r.Post("/oauth/token", oauth.handleToken())
+		r.Post("/oauth/revoke", oauth.handleRevoke())
+
+		// /mcp authenticates via bearer token, NOT via the cookie-session
+		// loadSession+requireAuth path used for the SPA's /api routes.
+		r.Group(func(r chi.Router) {
+			r.Use(mcpSrv.requireBearerToken())
+			r.Mount("/mcp", mcpSrv.handler)
+		})
+
+		logger.Info("MCP enabled", "canonical_url", cfg.MCPCanonicalURL)
+	}
 
 	// Protected routes
 	r.Group(func(r chi.Router) {

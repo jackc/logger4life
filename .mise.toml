@@ -10,7 +10,7 @@ TERN_MIGRATIONS = "postgresql/migrations"
 
 [tools]
 fd = "latest"
-go = '1.26.1'
+go = '1.26.3'
 nodejs = '24.13.0'
 rg = "latest"
 ruby = '4.0.1'

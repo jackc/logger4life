@@ -105,18 +105,6 @@ func consumeAuthorizationCode(ctx context.Context, pool *pgxpool.Pool, code stri
 	return &c, nil
 }
 
-// invalidateCodesForRequest marks every code issued under the same
-// authorization grant as used. Called when a code-replay is detected so
-// any sibling tokens can no longer be exchanged.
-func invalidateCodesForUser(ctx context.Context, pool *pgxpool.Pool, userID, clientID string) error {
-	_, err := pool.Exec(ctx,
-		`UPDATE oauth_authorization_codes SET used = true
-		 WHERE user_id = $1 AND client_id = $2`,
-		userID, clientID,
-	)
-	return err
-}
-
 // ===== Access + refresh tokens =====
 
 type oauthTokens struct {

@@ -305,7 +305,14 @@ func handleJoinLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		_, err = pool.Exec(r.Context(),
+		tx, err := pool.Begin(r.Context())
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		defer tx.Rollback(r.Context())
+
+		_, err = tx.Exec(r.Context(),
 			`INSERT INTO log_shares (log_id, user_id) VALUES ($1, $2)`,
 			logID, user.ID,
 		)
@@ -316,6 +323,26 @@ func handleJoinLog(pool *pgxpool.Pool) http.HandlerFunc {
 				writeJSON(w, http.StatusOK, joinLogResponse{LogID: logID, LogName: logName})
 				return
 			}
+			internalError(w, r, err)
+			return
+		}
+
+		// ON CONFLICT preserves a placement left behind by a prior share removal,
+		// so re-joining after being removed doesn't 23505 on the placement PK.
+		// It also keeps the user's previous folder/position on re-join.
+		_, err = tx.Exec(r.Context(),
+			`INSERT INTO user_log_placements (user_id, log_id, folder_id, position)
+			 SELECT $1, $2, NULL, COALESCE(max(position) + 1, 0)
+			 FROM user_log_placements WHERE user_id = $1 AND folder_id IS NULL
+			 ON CONFLICT (user_id, log_id) DO NOTHING`,
+			user.ID, logID,
+		)
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+
+		if err := tx.Commit(r.Context()); err != nil {
 			internalError(w, r, err)
 			return
 		}

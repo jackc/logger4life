@@ -17,6 +17,7 @@ export async function apiPut(url, body) {
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(body),
 	});
+	if (res.status === 204) return null;
 	const data = await res.json();
 	if (!res.ok) {
 		throw new Error(data.error || 'Request failed');

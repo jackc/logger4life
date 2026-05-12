@@ -318,3 +318,65 @@ test('delete a log', async ({ page }) => {
 	await expect(page.getByRole('link', { name: 'ToDelete' })).not.toBeVisible();
 	await expect(page.getByText('No logs yet')).toBeVisible();
 });
+
+test('create a folder, move a log into it, then delete the folder once empty', async ({ page }) => {
+	await registerAndLogin(page);
+
+	// Create a log.
+	await page.fill('input[name="log-name"]', 'Water');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Water' })).toBeVisible();
+
+	// Create a folder.
+	await page.fill('input[placeholder="New folder name..."]', 'Health');
+	await page.click('[data-testid="create-folder"]');
+	await expect(page.locator('[data-testid="folder-name"]:has-text("Health")')).toBeVisible();
+
+	// Move the log into the folder using the "Move to…" picker.
+	await page.locator('[data-testid="log-row"]').filter({ hasText: 'Water' })
+		.locator('[data-testid="move-to"]').click();
+	await page.locator('[data-testid="move-picker"] button:has-text("Health")').click();
+
+	// The log row should now be indented (under the folder).
+	const logRow = page.locator('[data-testid="log-row"]').filter({ hasText: 'Water' });
+	await expect(logRow).toHaveAttribute('style', /margin-left: 1\.5rem/);
+
+	// Attempting to delete the non-empty folder fails.
+	page.on('dialog', dialog => dialog.accept());
+	await page.locator('[data-testid="folder-row"]').filter({ hasText: 'Health' })
+		.locator('[data-testid="delete-folder"]').click();
+	await expect(page.getByText('not empty')).toBeVisible();
+
+	// Move the log back to root.
+	await logRow.locator('[data-testid="move-to"]').click();
+	await page.locator('[data-testid="move-picker"] button:has-text("(root)")').click();
+
+	// Now the folder is empty and can be deleted.
+	await page.locator('[data-testid="folder-row"]').filter({ hasText: 'Health' })
+		.locator('[data-testid="delete-folder"]').click();
+	await expect(page.locator('[data-testid="folder-row"]:has-text("Health")')).not.toBeVisible();
+});
+
+test('reorder logs with up arrow', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'First');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'First' })).toBeVisible();
+	await page.fill('input[name="log-name"]', 'Second');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Second' })).toBeVisible();
+
+	// Initially: First (idx 0), Second (idx 1).
+	let rows = page.locator('[data-testid="log-row"]');
+	await expect(rows).toHaveCount(2);
+	await expect(rows.nth(0)).toContainText('First');
+	await expect(rows.nth(1)).toContainText('Second');
+
+	// Move Second up.
+	await rows.nth(1).locator('[data-testid="move-up"]').click();
+
+	rows = page.locator('[data-testid="log-row"]');
+	await expect(rows.nth(0)).toContainText('Second');
+	await expect(rows.nth(1)).toContainText('First');
+});

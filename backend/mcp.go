@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/go-chi/httplog/v3"
@@ -101,6 +102,12 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		if err != nil {
 			return nil, listLogsOutput{}, mcpToolError(ctx, err)
 		}
+		// listLogsForUser returns rows in user-organized (folder, position)
+		// order for the SPA. The MCP contract promises alphabetical, so sort
+		// here rather than coupling the tool to UI organization.
+		sort.SliceStable(logs, func(i, j int) bool {
+			return strings.ToLower(logs[i].Name) < strings.ToLower(logs[j].Name)
+		})
 		return nil, listLogsOutput{Logs: logs}, nil
 	})
 

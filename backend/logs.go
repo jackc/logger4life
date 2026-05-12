@@ -34,8 +34,15 @@ type logResponse struct {
 	Fields     []fieldDefinition `json:"fields"`
 	IsOwner    bool              `json:"is_owner"`
 	ShareToken *string           `json:"share_token,omitempty"`
+	FolderID   *string           `json:"folder_id"`
+	Position   int               `json:"position"`
 	CreatedAt  time.Time         `json:"created_at"`
 	UpdatedAt  time.Time         `json:"updated_at"`
+}
+
+type updateLogPlacementRequest struct {
+	FolderID *string `json:"folder_id"`
+	Position int     `json:"position"`
 }
 
 type createLogEntryRequest struct {
@@ -163,8 +170,15 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		tx, err := pool.Begin(r.Context())
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		defer tx.Rollback(r.Context())
+
 		var l logResponse
-		err := pool.QueryRow(r.Context(),
+		err = tx.QueryRow(r.Context(),
 			`INSERT INTO logs (user_id, name, fields) VALUES ($1, $2, $3)
 			 RETURNING id, name, fields, created_at, updated_at`,
 			user.ID, req.Name, req.Fields,
@@ -180,6 +194,23 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		err = tx.QueryRow(r.Context(),
+			`INSERT INTO user_log_placements (user_id, log_id, folder_id, position)
+			 SELECT $1, $2, NULL, COALESCE(max(position) + 1, 0)
+			 FROM user_log_placements WHERE user_id = $1 AND folder_id IS NULL
+			 RETURNING position`,
+			user.ID, l.ID,
+		).Scan(&l.Position)
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+
+		if err := tx.Commit(r.Context()); err != nil {
+			internalError(w, r, err)
+			return
+		}
+
 		l.IsOwner = true
 		if l.Fields == nil {
 			l.Fields = []fieldDefinition{}
@@ -189,17 +220,18 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 }
 
 // listLogsForUser returns all logs the user owns or has been shared on,
-// sorted alphabetically. Shared by handleListLogs (HTTP) and the MCP
-// list_logs tool.
+// ordered by their per-user placement (folder then position). Shared by
+// handleListLogs (HTTP) and the MCP list_logs tool.
 func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]logResponse, error) {
 	rows, err := pool.Query(ctx,
-		`SELECT id, name, fields, created_at, updated_at, is_owner FROM (
-			SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, true AS is_owner
-			FROM logs l WHERE l.user_id = $1
-			UNION ALL
-			SELECT l.id, l.name, l.fields, l.created_at, l.updated_at, false AS is_owner
-			FROM logs l JOIN log_shares ls ON l.id = ls.log_id WHERE ls.user_id = $1
-		) combined ORDER BY lower(name)`,
+		`SELECT l.id, l.name, l.fields, l.created_at, l.updated_at,
+		        (l.user_id = $1) AS is_owner,
+		        p.folder_id, p.position
+		 FROM logs l
+		 JOIN user_log_placements p ON p.log_id = l.id AND p.user_id = $1
+		 WHERE l.user_id = $1
+		    OR EXISTS (SELECT 1 FROM log_shares ls WHERE ls.log_id = l.id AND ls.user_id = $1)
+		 ORDER BY p.folder_id NULLS FIRST, p.position`,
 		userID,
 	)
 	if err != nil {
@@ -210,7 +242,7 @@ func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]
 	logs := []logResponse{}
 	for rows.Next() {
 		var l logResponse
-		if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner, &l.FolderID, &l.Position); err != nil {
 			return nil, err
 		}
 		if l.Fields == nil {
@@ -254,9 +286,13 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 		var l logResponse
 		var shareToken []byte
 		err = pool.QueryRow(r.Context(),
-			`SELECT id, name, fields, share_token, created_at, updated_at FROM logs WHERE id = $1`,
-			logID,
-		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt)
+			`SELECT l.id, l.name, l.fields, l.share_token, l.created_at, l.updated_at,
+			        p.folder_id, p.position
+			 FROM logs l
+			 JOIN user_log_placements p ON p.log_id = l.id AND p.user_id = $1
+			 WHERE l.id = $2`,
+			user.ID, logID,
+		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position)
 		if err != nil {
 			internalError(w, r, err)
 			return
@@ -303,11 +339,17 @@ func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
 		var l logResponse
 		var shareToken []byte
 		err := pool.QueryRow(r.Context(),
-			`UPDATE logs SET name = $1, fields = $2, updated_at = now()
-			 WHERE id = $3 AND user_id = $4
-			 RETURNING id, name, fields, share_token, created_at, updated_at`,
+			`WITH updated AS (
+				UPDATE logs SET name = $1, fields = $2, updated_at = now()
+				WHERE id = $3 AND user_id = $4
+				RETURNING id, name, fields, share_token, created_at, updated_at
+			)
+			SELECT u.id, u.name, u.fields, u.share_token, u.created_at, u.updated_at,
+			       p.folder_id, p.position
+			FROM updated u
+			JOIN user_log_placements p ON p.log_id = u.id AND p.user_id = $4`,
 			req.Name, req.Fields, logID, user.ID,
-		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt)
+		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position)
 
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -550,5 +592,157 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, entries)
+	}
+}
+
+// handleUpdateLogPlacement moves the caller's placement row for a log: changes
+// which folder it sits in and/or its position among siblings. The placement
+// is per-user — moving here does not affect any other user who can see the
+// same shared log.
+func handleUpdateLogPlacement(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		logID := chi.URLParam(r, "logID")
+
+		var req updateLogPlacementRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if req.Position < 0 {
+			req.Position = 0
+		}
+
+		if _, err := checkLogAccess(r.Context(), pool, logID, user.ID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			internalError(w, r, err)
+			return
+		}
+
+		tx, err := pool.Begin(r.Context())
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		defer tx.Rollback(r.Context())
+
+		var oldFolder *string
+		var oldPosition int
+		err = tx.QueryRow(r.Context(),
+			`SELECT folder_id, position FROM user_log_placements
+			 WHERE user_id = $1 AND log_id = $2 FOR UPDATE`,
+			user.ID, logID,
+		).Scan(&oldFolder, &oldPosition)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			internalError(w, r, err)
+			return
+		}
+
+		if req.FolderID != nil {
+			if err := folderOwnedByUser(r.Context(), tx, *req.FolderID, user.ID); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "folder not found"})
+					return
+				}
+				internalError(w, r, err)
+				return
+			}
+		}
+
+		sameFolder := (oldFolder == nil && req.FolderID == nil) ||
+			(oldFolder != nil && req.FolderID != nil && *oldFolder == *req.FolderID)
+
+		if sameFolder {
+			if req.Position > oldPosition {
+				var siblingCount int
+				if err := tx.QueryRow(r.Context(),
+					`SELECT count(*) FROM user_log_placements WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2`,
+					user.ID, oldFolder,
+				).Scan(&siblingCount); err != nil {
+					internalError(w, r, err)
+					return
+				}
+				if req.Position > siblingCount-1 {
+					req.Position = siblingCount - 1
+				}
+				if _, err := tx.Exec(r.Context(),
+					`UPDATE user_log_placements SET position = position - 1
+					 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2
+					   AND position > $3 AND position <= $4`,
+					user.ID, oldFolder, oldPosition, req.Position,
+				); err != nil {
+					internalError(w, r, err)
+					return
+				}
+			} else if req.Position < oldPosition {
+				if _, err := tx.Exec(r.Context(),
+					`UPDATE user_log_placements SET position = position + 1
+					 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2
+					   AND position >= $3 AND position < $4`,
+					user.ID, oldFolder, req.Position, oldPosition,
+				); err != nil {
+					internalError(w, r, err)
+					return
+				}
+			}
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements SET position = $1, updated_at = now()
+				 WHERE user_id = $2 AND log_id = $3`,
+				req.Position, user.ID, logID,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+		} else {
+			var destCount int
+			if err := tx.QueryRow(r.Context(),
+				`SELECT count(*) FROM user_log_placements WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2`,
+				user.ID, req.FolderID,
+			).Scan(&destCount); err != nil {
+				internalError(w, r, err)
+				return
+			}
+			if req.Position > destCount {
+				req.Position = destCount
+			}
+
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements SET position = position - 1
+				 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2 AND position > $3`,
+				user.ID, oldFolder, oldPosition,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements SET position = position + 1
+				 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2 AND position >= $3`,
+				user.ID, req.FolderID, req.Position,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements SET folder_id = $1, position = $2, updated_at = now()
+				 WHERE user_id = $3 AND log_id = $4`,
+				req.FolderID, req.Position, user.ID, logID,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+		}
+
+		if err := tx.Commit(r.Context()); err != nil {
+			internalError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

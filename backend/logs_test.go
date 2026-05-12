@@ -1372,3 +1372,223 @@ func TestUpdateLogEntry_PreservesOriginalCreator(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "alice", body["username"])
 }
+
+// --- Placement ---
+
+func TestCreateLog_AssignsPlacement(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, a := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+	_, b := postJSON(srv.URL+"/api/logs", map[string]any{"name": "B"}, cookies)
+
+	assert.Nil(t, a["folder_id"])
+	assert.EqualValues(t, 0, a["position"])
+	assert.Nil(t, b["folder_id"])
+	assert.EqualValues(t, 1, b["position"])
+}
+
+func TestListLogs_OrderedByPlacement(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	// Create alphabetically out of order.
+	_, c := postJSON(srv.URL+"/api/logs", map[string]any{"name": "C"}, cookies)
+	postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+	postJSON(srv.URL+"/api/logs", map[string]any{"name": "B"}, cookies)
+
+	_, body := getJSONArray(srv.URL+"/api/logs", cookies)
+	require.Len(t, body, 3)
+	// Order follows insertion (positions 0,1,2), not alphabetical.
+	assert.Equal(t, c["id"], body[0]["id"])
+	assert.Equal(t, "A", body[1]["name"])
+	assert.Equal(t, "B", body[2]["name"])
+}
+
+func TestUpdateLogPlacement_MoveIntoFolder(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, folder := postJSON(srv.URL+"/api/folders", map[string]any{"name": "F"}, cookies)
+	folderID := folder["id"].(string)
+
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "L"}, cookies)
+	logID := log["id"].(string)
+
+	resp, _ := putJSON(srv.URL+"/api/logs/"+logID+"/placement", map[string]any{
+		"folder_id": folderID,
+		"position":  0,
+	}, cookies)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, body := getJSON(srv.URL+"/api/logs/"+logID, cookies)
+	assert.Equal(t, folderID, body["folder_id"])
+	assert.EqualValues(t, 0, body["position"])
+}
+
+func TestUpdateLogPlacement_ReorderWithinFolder(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, a := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+	_, b := postJSON(srv.URL+"/api/logs", map[string]any{"name": "B"}, cookies)
+	_, c := postJSON(srv.URL+"/api/logs", map[string]any{"name": "C"}, cookies)
+
+	// Move C to position 0 -> C, A, B
+	resp, _ := putJSON(srv.URL+"/api/logs/"+c["id"].(string)+"/placement", map[string]any{
+		"folder_id": nil,
+		"position":  0,
+	}, cookies)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, body := getJSONArray(srv.URL+"/api/logs", cookies)
+	require.Len(t, body, 3)
+	assert.Equal(t, c["id"], body[0]["id"])
+	assert.Equal(t, a["id"], body[1]["id"])
+	assert.Equal(t, b["id"], body[2]["id"])
+}
+
+func TestUpdateLogPlacement_PerUserNotShared(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	// Alice creates a log and shares it with Bob.
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared"}, aliceCookies)
+	logID := log["id"].(string)
+
+	_, shareBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := shareBody["share_token"].(string)
+	postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+
+	// Bob creates a folder and moves the shared log into it.
+	_, folder := postJSON(srv.URL+"/api/folders", map[string]any{"name": "Bob's"}, bobCookies)
+	folderID := folder["id"].(string)
+
+	resp, _ := putJSON(srv.URL+"/api/logs/"+logID+"/placement", map[string]any{
+		"folder_id": folderID,
+		"position":  0,
+	}, bobCookies)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	// Bob sees the log in his folder.
+	_, bobView := getJSON(srv.URL+"/api/logs/"+logID, bobCookies)
+	assert.Equal(t, folderID, bobView["folder_id"])
+
+	// Alice still sees the log at her root, unaffected.
+	_, aliceView := getJSON(srv.URL+"/api/logs/"+logID, aliceCookies)
+	assert.Nil(t, aliceView["folder_id"])
+}
+
+func TestUpdateLogPlacement_FolderBelongsToOtherUser(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, aliceFolder := postJSON(srv.URL+"/api/folders", map[string]any{"name": "Alice"}, aliceCookies)
+	aliceFolderID := aliceFolder["id"].(string)
+
+	_, bobLog := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Bob's"}, bobCookies)
+	bobLogID := bobLog["id"].(string)
+
+	resp, body := putJSON(srv.URL+"/api/logs/"+bobLogID+"/placement", map[string]any{
+		"folder_id": aliceFolderID,
+		"position":  0,
+	}, bobCookies)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "folder")
+}
+
+func TestUpdateLogPlacement_NoAccess(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "L"}, aliceCookies)
+	logID := log["id"].(string)
+
+	resp, _ := putJSON(srv.URL+"/api/logs/"+logID+"/placement", map[string]any{
+		"folder_id": nil,
+		"position":  0,
+	}, bobCookies)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestJoinLog_CreatesPlacementForJoiner(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared"}, aliceCookies)
+	logID := log["id"].(string)
+
+	_, shareBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := shareBody["share_token"].(string)
+	postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+
+	_, body := getJSONArray(srv.URL+"/api/logs", bobCookies)
+	require.Len(t, body, 1)
+	assert.Equal(t, logID, body[0]["id"])
+	assert.Nil(t, body[0]["folder_id"])
+	assert.EqualValues(t, 0, body[0]["position"])
+	assert.Equal(t, false, body[0]["is_owner"])
+}
+
+// Regression: removing a share leaves the user's placement row in place
+// (there's no FK between log_shares and user_log_placements). A subsequent
+// re-join must not 23505 on the placement PK.
+func TestJoinLog_RejoinAfterShareRemoval(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared"}, aliceCookies)
+	logID := log["id"].(string)
+
+	_, shareBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := shareBody["share_token"].(string)
+
+	// Bob joins, organizes the log into a folder, then Alice removes him.
+	resp, _ := postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	_, folder := postJSON(srv.URL+"/api/folders", map[string]any{"name": "Bob's"}, bobCookies)
+	folderID := folder["id"].(string)
+	resp, _ = putJSON(srv.URL+"/api/logs/"+logID+"/placement", map[string]any{
+		"folder_id": folderID,
+		"position":  0,
+	}, bobCookies)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, shares := getJSONArray(srv.URL+"/api/logs/"+logID+"/shares", aliceCookies)
+	require.Len(t, shares, 1)
+	shareID := shares[0]["id"].(string)
+	resp, _ = deleteJSON(srv.URL+"/api/logs/"+logID+"/shares/"+shareID, aliceCookies)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	// Bob re-joins — must succeed, must not 500.
+	resp, _ = postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// And the prior placement (folder, position) was preserved.
+	_, body := getJSON(srv.URL+"/api/logs/"+logID, bobCookies)
+	assert.Equal(t, folderID, body["folder_id"])
+}

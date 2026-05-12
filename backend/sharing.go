@@ -329,11 +329,14 @@ func handleJoinLog(pool *pgxpool.Pool) http.HandlerFunc {
 
 		// ON CONFLICT preserves a placement left behind by a prior share removal,
 		// so re-joining after being removed doesn't 23505 on the placement PK.
-		// It also keeps the user's previous folder/position on re-join.
+		// It also keeps the user's previous folder/position/pin on re-join.
 		_, err = tx.Exec(r.Context(),
-			`INSERT INTO user_log_placements (user_id, log_id, folder_id, position)
-			 SELECT $1, $2, NULL, COALESCE(max(position) + 1, 0)
-			 FROM user_log_placements WHERE user_id = $1 AND folder_id IS NULL
+			`INSERT INTO user_log_placements (user_id, log_id, folder_id, position, pinned_to_home, home_position)
+			 SELECT $1, $2, NULL,
+			        COALESCE(max(position) FILTER (WHERE folder_id IS NULL) + 1, 0),
+			        true,
+			        COALESCE(max(home_position) FILTER (WHERE pinned_to_home) + 1, 0)
+			 FROM user_log_placements WHERE user_id = $1
 			 ON CONFLICT (user_id, log_id) DO NOTHING`,
 			user.ID, logID,
 		)

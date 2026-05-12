@@ -70,6 +70,8 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		r.Put("/api/logs/{logID}", handleUpdateLog(pool))
 		r.Delete("/api/logs/{logID}", handleDeleteLog(pool))
 		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(pool))
+		r.Put("/api/logs/{logID}/pin", handlePinLog(pool))
+		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(pool))
 		r.Post("/api/folders", handleCreateFolder(pool))
 		r.Get("/api/folders", handleListFolders(pool))
 		r.Put("/api/folders/{folderID}", handleRenameFolder(pool))

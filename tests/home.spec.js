@@ -92,3 +92,42 @@ test('view entries link navigates to log detail', async ({ page }) => {
 	await page.click('a:has-text("View entries")');
 	await expect(page.locator('h1:has-text("Water")')).toBeVisible();
 });
+
+test('unpinned logs disappear from home; empty-state shows', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'Water');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Water' })).toBeVisible();
+
+	// Unpin it from the /logs page (star toggle).
+	await page.locator('[data-testid="log-row"]').filter({ hasText: 'Water' })
+		.locator('[data-testid="pin-toggle"]').click();
+
+	await page.goto('/');
+	await expect(page.getByText('No logs pinned to your home page')).toBeVisible();
+	await expect(page.locator('[data-testid="log-card"]')).toHaveCount(0);
+});
+
+test('reorder pinned logs on the home page with up arrow', async ({ page }) => {
+	await registerAndLogin(page);
+
+	await page.fill('input[name="log-name"]', 'First');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'First' })).toBeVisible();
+	await page.fill('input[name="log-name"]', 'Second');
+	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Second' })).toBeVisible();
+
+	await page.goto('/');
+	let cards = page.locator('[data-testid="log-card"]');
+	await expect(cards).toHaveCount(2);
+	await expect(cards.nth(0)).toContainText('First');
+	await expect(cards.nth(1)).toContainText('Second');
+
+	await cards.nth(1).locator('[data-testid="home-move-up"]').click();
+
+	cards = page.locator('[data-testid="log-card"]');
+	await expect(cards.nth(0)).toContainText('Second');
+	await expect(cards.nth(1)).toContainText('First');
+});

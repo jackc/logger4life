@@ -150,6 +150,15 @@
 		}
 	}
 
+	async function togglePin(log) {
+		try {
+			await apiPut(`/api/logs/${log.id}/pin`, { pinned: !log.pinned_to_home });
+			await fetchAll();
+		} catch (err) {
+			error = err.message;
+		}
+	}
+
 	async function moveLog(log, direction) {
 		const siblings = logs
 			.filter((l) => (l.folder_id || null) === (log.folder_id || null))
@@ -273,6 +282,15 @@
 			{/if}
 		</a>
 		<div class="flex items-center gap-1 text-sm">
+			<button
+				onclick={() => togglePin(log)}
+				class="px-2 {log.pinned_to_home ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 hover:text-yellow-500'}"
+				aria-label={log.pinned_to_home ? 'Unpin from home' : 'Pin to home'}
+				title={log.pinned_to_home ? 'Unpin from home' : 'Pin to home'}
+				data-testid="pin-toggle"
+			>
+				{log.pinned_to_home ? '★' : '☆'}
+			</button>
 			<button
 				onclick={() => moveLog(log, -1)}
 				disabled={idx === 0}

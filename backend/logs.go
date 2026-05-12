@@ -29,20 +29,30 @@ type createLogRequest struct {
 }
 
 type logResponse struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Fields     []fieldDefinition `json:"fields"`
-	IsOwner    bool              `json:"is_owner"`
-	ShareToken *string           `json:"share_token,omitempty"`
-	FolderID   *string           `json:"folder_id"`
-	Position   int               `json:"position"`
-	CreatedAt  time.Time         `json:"created_at"`
-	UpdatedAt  time.Time         `json:"updated_at"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Fields       []fieldDefinition `json:"fields"`
+	IsOwner      bool              `json:"is_owner"`
+	ShareToken   *string           `json:"share_token,omitempty"`
+	FolderID     *string           `json:"folder_id"`
+	Position     int               `json:"position"`
+	PinnedToHome bool              `json:"pinned_to_home"`
+	HomePosition int               `json:"home_position"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
 type updateLogPlacementRequest struct {
 	FolderID *string `json:"folder_id"`
 	Position int     `json:"position"`
+}
+
+type pinLogRequest struct {
+	Pinned bool `json:"pinned"`
+}
+
+type updateHomePositionRequest struct {
+	HomePosition int `json:"home_position"`
 }
 
 type createLogEntryRequest struct {
@@ -195,12 +205,15 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		err = tx.QueryRow(r.Context(),
-			`INSERT INTO user_log_placements (user_id, log_id, folder_id, position)
-			 SELECT $1, $2, NULL, COALESCE(max(position) + 1, 0)
-			 FROM user_log_placements WHERE user_id = $1 AND folder_id IS NULL
-			 RETURNING position`,
+			`INSERT INTO user_log_placements (user_id, log_id, folder_id, position, pinned_to_home, home_position)
+			 SELECT $1, $2, NULL,
+			        COALESCE(max(position) FILTER (WHERE folder_id IS NULL) + 1, 0),
+			        true,
+			        COALESCE(max(home_position) FILTER (WHERE pinned_to_home) + 1, 0)
+			 FROM user_log_placements WHERE user_id = $1
+			 RETURNING position, pinned_to_home, home_position`,
 			user.ID, l.ID,
-		).Scan(&l.Position)
+		).Scan(&l.Position, &l.PinnedToHome, &l.HomePosition)
 		if err != nil {
 			internalError(w, r, err)
 			return
@@ -226,7 +239,7 @@ func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]
 	rows, err := pool.Query(ctx,
 		`SELECT l.id, l.name, l.fields, l.created_at, l.updated_at,
 		        (l.user_id = $1) AS is_owner,
-		        p.folder_id, p.position
+		        p.folder_id, p.position, p.pinned_to_home, p.home_position
 		 FROM logs l
 		 JOIN user_log_placements p ON p.log_id = l.id AND p.user_id = $1
 		 WHERE l.user_id = $1
@@ -242,7 +255,7 @@ func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]
 	logs := []logResponse{}
 	for rows.Next() {
 		var l logResponse
-		if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner, &l.FolderID, &l.Position); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition); err != nil {
 			return nil, err
 		}
 		if l.Fields == nil {
@@ -287,12 +300,12 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 		var shareToken []byte
 		err = pool.QueryRow(r.Context(),
 			`SELECT l.id, l.name, l.fields, l.share_token, l.created_at, l.updated_at,
-			        p.folder_id, p.position
+			        p.folder_id, p.position, p.pinned_to_home, p.home_position
 			 FROM logs l
 			 JOIN user_log_placements p ON p.log_id = l.id AND p.user_id = $1
 			 WHERE l.id = $2`,
 			user.ID, logID,
-		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position)
+		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition)
 		if err != nil {
 			internalError(w, r, err)
 			return
@@ -345,11 +358,11 @@ func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
 				RETURNING id, name, fields, share_token, created_at, updated_at
 			)
 			SELECT u.id, u.name, u.fields, u.share_token, u.created_at, u.updated_at,
-			       p.folder_id, p.position
+			       p.folder_id, p.position, p.pinned_to_home, p.home_position
 			FROM updated u
 			JOIN user_log_placements p ON p.log_id = u.id AND p.user_id = $4`,
 			req.Name, req.Fields, logID, user.ID,
-		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position)
+		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition)
 
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -737,6 +750,211 @@ func handleUpdateLogPlacement(pool *pgxpool.Pool) http.HandlerFunc {
 				internalError(w, r, err)
 				return
 			}
+		}
+
+		if err := tx.Commit(r.Context()); err != nil {
+			internalError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// handlePinLog toggles whether the log appears on the caller's quick-log
+// home page. Pinning a previously-unpinned log appends it to the end of the
+// home list. Unpinning leaves home_position untouched (no renumbering),
+// since the home page filters by pinned_to_home and gaps don't render.
+func handlePinLog(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		logID := chi.URLParam(r, "logID")
+
+		var req pinLogRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+
+		if _, err := checkLogAccess(r.Context(), pool, logID, user.ID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			internalError(w, r, err)
+			return
+		}
+
+		tx, err := pool.Begin(r.Context())
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		defer tx.Rollback(r.Context())
+
+		var currentlyPinned bool
+		err = tx.QueryRow(r.Context(),
+			`SELECT pinned_to_home FROM user_log_placements
+			 WHERE user_id = $1 AND log_id = $2 FOR UPDATE`,
+			user.ID, logID,
+		).Scan(&currentlyPinned)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			internalError(w, r, err)
+			return
+		}
+
+		if req.Pinned == currentlyPinned {
+			if err := tx.Commit(r.Context()); err != nil {
+				internalError(w, r, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if req.Pinned {
+			// Pinning: append to end of pinned siblings.
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements
+				 SET pinned_to_home = true,
+				     home_position = COALESCE(
+				         (SELECT max(home_position) + 1
+				          FROM user_log_placements
+				          WHERE user_id = $1 AND pinned_to_home),
+				         0
+				     ),
+				     updated_at = now()
+				 WHERE user_id = $1 AND log_id = $2`,
+				user.ID, logID,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+		} else {
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements
+				 SET pinned_to_home = false, updated_at = now()
+				 WHERE user_id = $1 AND log_id = $2`,
+				user.ID, logID,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+		}
+
+		if err := tx.Commit(r.Context()); err != nil {
+			internalError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// handleUpdateLogHomePosition reorders a pinned log within the caller's home
+// page list. Only pinned siblings participate in renumbering; unpinned rows
+// retain whatever home_position they had.
+func handleUpdateLogHomePosition(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		logID := chi.URLParam(r, "logID")
+
+		var req updateHomePositionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if req.HomePosition < 0 {
+			req.HomePosition = 0
+		}
+
+		if _, err := checkLogAccess(r.Context(), pool, logID, user.ID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			internalError(w, r, err)
+			return
+		}
+
+		tx, err := pool.Begin(r.Context())
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		defer tx.Rollback(r.Context())
+
+		var pinned bool
+		var oldPosition int
+		err = tx.QueryRow(r.Context(),
+			`SELECT pinned_to_home, home_position FROM user_log_placements
+			 WHERE user_id = $1 AND log_id = $2 FOR UPDATE`,
+			user.ID, logID,
+		).Scan(&pinned, &oldPosition)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
+			internalError(w, r, err)
+			return
+		}
+		if !pinned {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "log is not pinned to home"})
+			return
+		}
+
+		// Cap target to last position among pinned siblings.
+		var pinnedCount int
+		if err := tx.QueryRow(r.Context(),
+			`SELECT count(*) FROM user_log_placements WHERE user_id = $1 AND pinned_to_home`,
+			user.ID,
+		).Scan(&pinnedCount); err != nil {
+			internalError(w, r, err)
+			return
+		}
+		if req.HomePosition > pinnedCount-1 {
+			req.HomePosition = pinnedCount - 1
+		}
+		if req.HomePosition == oldPosition {
+			if err := tx.Commit(r.Context()); err != nil {
+				internalError(w, r, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if req.HomePosition > oldPosition {
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements SET home_position = home_position - 1
+				 WHERE user_id = $1 AND pinned_to_home
+				   AND home_position > $2 AND home_position <= $3`,
+				user.ID, oldPosition, req.HomePosition,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+		} else {
+			if _, err := tx.Exec(r.Context(),
+				`UPDATE user_log_placements SET home_position = home_position + 1
+				 WHERE user_id = $1 AND pinned_to_home
+				   AND home_position >= $2 AND home_position < $3`,
+				user.ID, req.HomePosition, oldPosition,
+			); err != nil {
+				internalError(w, r, err)
+				return
+			}
+		}
+		if _, err := tx.Exec(r.Context(),
+			`UPDATE user_log_placements SET home_position = $1, updated_at = now()
+			 WHERE user_id = $2 AND log_id = $3`,
+			req.HomePosition, user.ID, logID,
+		); err != nil {
+			internalError(w, r, err)
+			return
 		}
 
 		if err := tx.Commit(r.Context()); err != nil {

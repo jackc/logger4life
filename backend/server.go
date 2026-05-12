@@ -205,6 +205,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Put("/api/logs/{logID}", handleUpdateLog(pool))
 		r.Delete("/api/logs/{logID}", handleDeleteLog(pool))
 		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(pool))
+		r.Put("/api/logs/{logID}/pin", handlePinLog(pool))
+		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(pool))
 
 		// Folders
 		r.Post("/api/folders", handleCreateFolder(pool))

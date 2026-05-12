@@ -1,12 +1,18 @@
 <script>
 	import { getAuth } from '$lib/auth.svelte.js';
-	import { apiGet, apiPost } from '$lib/api.js';
+	import { apiGet, apiPost, apiPut } from '$lib/api.js';
 
 	const auth = getAuth();
 
 	let logs = $state([]);
 	let loading = $state(true);
 	let cardState = $state({});
+
+	const pinnedLogs = $derived(
+		logs
+			.filter((l) => l.pinned_to_home)
+			.sort((a, b) => a.home_position - b.home_position)
+	);
 
 	function buildInitialFieldValues(log) {
 		const values = {};
@@ -41,6 +47,18 @@
 			logs = [];
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function moveLog(log, direction) {
+		const idx = pinnedLogs.findIndex((l) => l.id === log.id);
+		const target = idx + direction;
+		if (target < 0 || target >= pinnedLogs.length) return;
+		try {
+			await apiPut(`/api/logs/${log.id}/home-position`, { home_position: target });
+			await fetchLogs();
+		} catch {
+			// ignore — next fetch will re-sync
 		}
 	}
 
@@ -116,20 +134,45 @@
 					<p class="text-gray-600 mb-4">You don't have any logs yet.</p>
 					<a href="/logs" class="text-blue-600 hover:underline font-medium">Create your first log</a>
 				</div>
+			{:else if pinnedLogs.length === 0}
+				<div class="bg-white rounded-lg shadow p-6 text-center">
+					<p class="text-gray-600 mb-4">No logs pinned to your home page.</p>
+					<a href="/logs" class="text-blue-600 hover:underline font-medium">Pin logs on the logs page</a>
+				</div>
 			{:else}
 				<div class="space-y-4">
-					{#each logs as log (log.id)}
+					{#each pinnedLogs as log, idx (log.id)}
 						{@const state = cardState[log.id]}
 						{#if state}
 							<div class="bg-white rounded-lg shadow p-4" data-testid="log-card">
-								<div class="flex items-center justify-between mb-3">
-									<div>
+								<div class="flex items-center justify-between mb-3 gap-2">
+									<div class="min-w-0 flex-1">
 										<h2 class="text-lg font-semibold text-gray-800 inline">{log.name}</h2>
 										{#if !log.is_owner}
 											<span class="text-xs text-gray-400 ml-1">(shared)</span>
 										{/if}
 									</div>
-									<a href="/logs/{log.id}" class="text-blue-600 hover:underline text-sm">View entries</a>
+									<div class="flex items-center gap-1 text-sm">
+										<button
+											onclick={() => moveLog(log, -1)}
+											disabled={idx === 0}
+											class="text-gray-500 hover:text-blue-600 disabled:opacity-30 px-2"
+											aria-label="Move up"
+											data-testid="home-move-up"
+										>
+											↑
+										</button>
+										<button
+											onclick={() => moveLog(log, 1)}
+											disabled={idx === pinnedLogs.length - 1}
+											class="text-gray-500 hover:text-blue-600 disabled:opacity-30 px-2"
+											aria-label="Move down"
+											data-testid="home-move-down"
+										>
+											↓
+										</button>
+										<a href="/logs/{log.id}" class="text-blue-600 hover:underline px-2">View entries</a>
+									</div>
 								</div>
 
 								{#if log.fields?.length > 0}

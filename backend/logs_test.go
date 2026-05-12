@@ -1550,6 +1550,153 @@ func TestJoinLog_CreatesPlacementForJoiner(t *testing.T) {
 	assert.Equal(t, false, body[0]["is_owner"])
 }
 
+// --- Pin to home + home position ---
+
+func TestCreateLog_DefaultsPinnedWithHomePosition(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, a := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+	_, b := postJSON(srv.URL+"/api/logs", map[string]any{"name": "B"}, cookies)
+
+	assert.Equal(t, true, a["pinned_to_home"])
+	assert.EqualValues(t, 0, a["home_position"])
+	assert.Equal(t, true, b["pinned_to_home"])
+	assert.EqualValues(t, 1, b["home_position"])
+}
+
+func TestPinLog_UnpinAndRepin(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+
+	_, a := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+	_, b := postJSON(srv.URL+"/api/logs", map[string]any{"name": "B"}, cookies)
+	_, c := postJSON(srv.URL+"/api/logs", map[string]any{"name": "C"}, cookies)
+
+	// Unpin B.
+	resp, _ := putJSON(srv.URL+"/api/logs/"+b["id"].(string)+"/pin",
+		map[string]any{"pinned": false}, cookies)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, body := getJSON(srv.URL+"/api/logs/"+b["id"].(string), cookies)
+	assert.Equal(t, false, body["pinned_to_home"])
+
+	// A and C still pinned at their original home_positions (0 and 2).
+	_, ja := getJSON(srv.URL+"/api/logs/"+a["id"].(string), cookies)
+	_, jc := getJSON(srv.URL+"/api/logs/"+c["id"].(string), cookies)
+	assert.EqualValues(t, 0, ja["home_position"])
+	assert.EqualValues(t, 2, jc["home_position"])
+
+	// Re-pin B: appended to end (home_position = max+1 = 3).
+	resp, _ = putJSON(srv.URL+"/api/logs/"+b["id"].(string)+"/pin",
+		map[string]any{"pinned": true}, cookies)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, body = getJSON(srv.URL+"/api/logs/"+b["id"].(string), cookies)
+	assert.Equal(t, true, body["pinned_to_home"])
+	assert.EqualValues(t, 3, body["home_position"])
+}
+
+func TestPinLog_IdempotentNoChange(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+	_, a := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+
+	// Already pinned. Pinning again is a no-op (home_position stays 0).
+	resp, _ := putJSON(srv.URL+"/api/logs/"+a["id"].(string)+"/pin",
+		map[string]any{"pinned": true}, cookies)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, body := getJSON(srv.URL+"/api/logs/"+a["id"].(string), cookies)
+	assert.EqualValues(t, 0, body["home_position"])
+}
+
+func TestPinLog_PerUserNotShared(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared"}, aliceCookies)
+	logID := log["id"].(string)
+	_, shareBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := shareBody["share_token"].(string)
+	postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+
+	// Bob unpins for himself. Alice's pin state stays true.
+	resp, _ := putJSON(srv.URL+"/api/logs/"+logID+"/pin",
+		map[string]any{"pinned": false}, bobCookies)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, bobView := getJSON(srv.URL+"/api/logs/"+logID, bobCookies)
+	assert.Equal(t, false, bobView["pinned_to_home"])
+
+	_, aliceView := getJSON(srv.URL+"/api/logs/"+logID, aliceCookies)
+	assert.Equal(t, true, aliceView["pinned_to_home"])
+}
+
+func TestUpdateLogHomePosition_Reorder(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+	_, a := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+	_, b := postJSON(srv.URL+"/api/logs", map[string]any{"name": "B"}, cookies)
+	_, c := postJSON(srv.URL+"/api/logs", map[string]any{"name": "C"}, cookies)
+
+	// Move C from position 2 to position 0 -> C, A, B.
+	resp, _ := putJSON(srv.URL+"/api/logs/"+c["id"].(string)+"/home-position",
+		map[string]any{"home_position": 0}, cookies)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_, ja := getJSON(srv.URL+"/api/logs/"+a["id"].(string), cookies)
+	_, jb := getJSON(srv.URL+"/api/logs/"+b["id"].(string), cookies)
+	_, jc := getJSON(srv.URL+"/api/logs/"+c["id"].(string), cookies)
+	assert.EqualValues(t, 0, jc["home_position"])
+	assert.EqualValues(t, 1, ja["home_position"])
+	assert.EqualValues(t, 2, jb["home_position"])
+}
+
+func TestUpdateLogHomePosition_RejectsUnpinned(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "alice")
+	_, a := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, cookies)
+	logID := a["id"].(string)
+
+	// Unpin it.
+	resp, _ := putJSON(srv.URL+"/api/logs/"+logID+"/pin",
+		map[string]any{"pinned": false}, cookies)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	// Reordering an unpinned log returns 400.
+	resp, body := putJSON(srv.URL+"/api/logs/"+logID+"/home-position",
+		map[string]any{"home_position": 0}, cookies)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, body["error"], "not pinned")
+}
+
+func TestUpdateLogHomePosition_NoAccess(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "A"}, aliceCookies)
+
+	resp, _ := putJSON(srv.URL+"/api/logs/"+log["id"].(string)+"/home-position",
+		map[string]any{"home_position": 0}, bobCookies)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
 // Regression: removing a share leaves the user's placement row in place
 // (there's no FK between log_shares and user_log_placements). A subsequent
 // re-join must not 23505 on the placement PK.

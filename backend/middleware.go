@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"net/http"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type contextKey string
@@ -18,7 +16,7 @@ type AuthUser struct {
 	Email    *string
 }
 
-func loadSession(pool *pgxpool.Pool) func(http.Handler) http.Handler {
+func loadSession(pool DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(sessionCookieName)

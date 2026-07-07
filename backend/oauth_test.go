@@ -46,10 +46,14 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxp
 	oauth := newOAuthProvider(pool, srv.URL)
 	mcpSrv := newMCPServer(pool, newSQLArbiter(), oauth)
 
+	// db is the backend-agnostic seam for core handlers; pool stays for the
+	// PostgreSQL-only OAuth/MCP wiring above.
+	db := pgxDB{pool: pool}
+
 	r := chi.NewRouter()
-	r.Use(loadSession(pool))
-	r.Post("/api/register", handleRegister(pool, true))
-	r.Post("/api/login", handleLogin(pool))
+	r.Use(loadSession(db))
+	r.Post("/api/register", handleRegister(db, true))
+	r.Post("/api/login", handleLogin(db))
 	r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 	r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
 	r.Post("/oauth/register", oauth.handleDynamicClientRegistration())

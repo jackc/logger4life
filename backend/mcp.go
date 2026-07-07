@@ -98,7 +98,7 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		if err != nil {
 			return nil, listLogsOutput{}, err
 		}
-		logs, err := listLogsForUser(ctx, pool, user.ID)
+		logs, err := listLogsForUser(ctx, pgxDB{pool: pool}, user.ID)
 		if err != nil {
 			return nil, listLogsOutput{}, mcpToolError(ctx, err)
 		}

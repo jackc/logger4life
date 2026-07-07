@@ -13,7 +13,6 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // webAuthnUser implements the webauthn.User interface.
@@ -28,7 +27,7 @@ func (u *webAuthnUser) WebAuthnName() string                       { return u.na
 func (u *webAuthnUser) WebAuthnDisplayName() string                { return u.name }
 func (u *webAuthnUser) WebAuthnCredentials() []webauthn.Credential { return u.credentials }
 
-func loadWebAuthnUser(ctx context.Context, pool *pgxpool.Pool, userID string) (*webAuthnUser, error) {
+func loadWebAuthnUser(ctx context.Context, pool DB, userID string) (*webAuthnUser, error) {
 	uid, err := uuid.FromString(userID)
 	if err != nil {
 		return nil, err
@@ -80,7 +79,7 @@ func loadWebAuthnUser(ctx context.Context, pool *pgxpool.Pool, userID string) (*
 
 // Challenge storage helpers
 
-func storeChallenge(ctx context.Context, pool *pgxpool.Pool, userID *string, session *webauthn.SessionData, challengeType string) (string, error) {
+func storeChallenge(ctx context.Context, pool DB, userID *string, session *webauthn.SessionData, challengeType string) (string, error) {
 	// Clean up expired challenges opportunistically
 	pool.Exec(ctx, `DELETE FROM webauthn_challenges WHERE expires_at < now()`)
 
@@ -97,7 +96,7 @@ func storeChallenge(ctx context.Context, pool *pgxpool.Pool, userID *string, ses
 	return id, err
 }
 
-func loadAndDeleteChallenge(ctx context.Context, pool *pgxpool.Pool, challengeID string, challengeType string) (*webauthn.SessionData, error) {
+func loadAndDeleteChallenge(ctx context.Context, pool DB, challengeID string, challengeType string) (*webauthn.SessionData, error) {
 	var data []byte
 	var expiresAt time.Time
 	err := pool.QueryRow(ctx,
@@ -121,7 +120,7 @@ func loadAndDeleteChallenge(ctx context.Context, pool *pgxpool.Pool, challengeID
 
 // Registration handlers (authenticated)
 
-func handlePasskeyRegisterBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+func handlePasskeyRegisterBegin(pool DB, wan *webauthn.WebAuthn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -154,7 +153,7 @@ func handlePasskeyRegisterBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http
 	}
 }
 
-func handlePasskeyRegisterFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+func handlePasskeyRegisterFinish(pool DB, wan *webauthn.WebAuthn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -224,7 +223,7 @@ func handlePasskeyRegisterFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) htt
 
 // Login handlers (public)
 
-func handlePasskeyLoginBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+func handlePasskeyLoginBegin(pool DB, wan *webauthn.WebAuthn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		assertion, session, err := wan.BeginDiscoverableLogin()
 		if err != nil {
@@ -245,7 +244,7 @@ func handlePasskeyLoginBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.Ha
 	}
 }
 
-func handlePasskeyLoginFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+func handlePasskeyLoginFinish(pool DB, wan *webauthn.WebAuthn) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ChallengeID string          `json:"challenge_id"`
@@ -328,7 +327,7 @@ type passkeyResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func handleListPasskeys(pool *pgxpool.Pool) http.HandlerFunc {
+func handleListPasskeys(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -356,7 +355,7 @@ func handleListPasskeys(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleUpdatePasskey(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdatePasskey(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		passkeyID := chi.URLParam(r, "passkeyID")
@@ -390,7 +389,7 @@ func handleUpdatePasskey(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleDeletePasskey(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeletePasskey(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		passkeyID := chi.URLParam(r, "passkeyID")

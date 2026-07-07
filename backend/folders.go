@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type folderResponse struct {
@@ -39,7 +38,7 @@ type moveFolderRequest struct {
 // folderOwnedByUser returns nil if a folder with the given id is owned by the
 // user. Returns pgx.ErrNoRows if the folder doesn't exist or belongs to
 // someone else, so callers can map both cases to a 404.
-func folderOwnedByUser(ctx context.Context, q pgxQuerier, folderID, userID string) error {
+func folderOwnedByUser(ctx context.Context, q rowQuerier, folderID, userID string) error {
 	var owner string
 	err := q.QueryRow(ctx, `SELECT user_id FROM folders WHERE id = $1`, folderID).Scan(&owner)
 	if err != nil {
@@ -51,13 +50,12 @@ func folderOwnedByUser(ctx context.Context, q pgxQuerier, folderID, userID strin
 	return nil
 }
 
-// pgxQuerier abstracts over *pgxpool.Pool and pgx.Tx so helpers can run in
-// either context.
-type pgxQuerier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+// rowQuerier abstracts over DB and Tx so helpers can run in either context.
+type rowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) Row
 }
 
-func handleCreateFolder(pool *pgxpool.Pool) http.HandlerFunc {
+func handleCreateFolder(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -100,7 +98,7 @@ func handleCreateFolder(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleListFolders(pool *pgxpool.Pool) http.HandlerFunc {
+func handleListFolders(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -133,7 +131,7 @@ func handleListFolders(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleRenameFolder(pool *pgxpool.Pool) http.HandlerFunc {
+func handleRenameFolder(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		folderID := chi.URLParam(r, "folderID")
@@ -168,7 +166,7 @@ func handleRenameFolder(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleMoveFolder(pool *pgxpool.Pool) http.HandlerFunc {
+func handleMoveFolder(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		folderID := chi.URLParam(r, "folderID")
@@ -335,7 +333,7 @@ func handleMoveFolder(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleDeleteFolder(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeleteFolder(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		folderID := chi.URLParam(r, "folderID")

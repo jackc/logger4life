@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -37,7 +36,7 @@ type userResponse struct {
 	Email    *string `json:"email,omitempty"`
 }
 
-func handleHello(pool *pgxpool.Pool) http.HandlerFunc {
+func handleHello(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var msg string
 		err := pool.QueryRow(r.Context(), "select 'Hello, World!'").Scan(&msg)
@@ -49,7 +48,7 @@ func handleHello(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleRegister(pool *pgxpool.Pool, allowRegistration bool) http.HandlerFunc {
+func handleRegister(pool DB, allowRegistration bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !allowRegistration {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "registration is currently disabled"})
@@ -114,7 +113,7 @@ func handleRegister(pool *pgxpool.Pool, allowRegistration bool) http.HandlerFunc
 	}
 }
 
-func handleLogin(pool *pgxpool.Pool) http.HandlerFunc {
+func handleLogin(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -153,7 +152,7 @@ func handleLogin(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleLogout(pool *pgxpool.Pool) http.HandlerFunc {
+func handleLogout(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
 		if err == nil {
@@ -178,7 +177,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 // createSession generates a random token, stores it as raw bytes in the
 // sessions table, and returns the hex-encoded token for cookie use.
-func createSession(ctx context.Context, pool *pgxpool.Pool, userID string) (string, error) {
+func createSession(ctx context.Context, pool DB, userID string) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -231,7 +230,7 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-func handleChangeEmail(pool *pgxpool.Pool) http.HandlerFunc {
+func handleChangeEmail(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req changeEmailRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -271,7 +270,7 @@ func handleChangeEmail(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleChangePassword(pool *pgxpool.Pool) http.HandlerFunc {
+func handleChangePassword(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req changePasswordRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

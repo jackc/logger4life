@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type fieldDefinition struct {
@@ -156,7 +155,7 @@ func validateFieldValues(definitions []fieldDefinition, values map[string]any) e
 	return nil
 }
 
-func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleCreateLog(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -235,7 +234,7 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 // listLogsForUser returns all logs the user owns or has been shared on,
 // ordered by their per-user placement (folder then position). Shared by
 // handleListLogs (HTTP) and the MCP list_logs tool.
-func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]logResponse, error) {
+func listLogsForUser(ctx context.Context, pool DB, userID string) ([]logResponse, error) {
 	rows, err := pool.Query(ctx,
 		`SELECT l.id, l.name, l.fields, l.created_at, l.updated_at,
 		        (l.user_id = $1) AS is_owner,
@@ -269,7 +268,7 @@ func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]
 	return logs, nil
 }
 
-func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
+func handleListLogs(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logs, err := listLogsForUser(r.Context(), pool, user.ID)
@@ -281,7 +280,7 @@ func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleGetLog(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -324,7 +323,7 @@ func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateLog(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -390,7 +389,7 @@ func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleDeleteLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeleteLog(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -413,7 +412,7 @@ func handleDeleteLog(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
+func handleCreateLogEntry(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -462,7 +461,7 @@ func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateLogEntry(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -528,7 +527,7 @@ func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleDeleteLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeleteLogEntry(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -562,7 +561,7 @@ func handleDeleteLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
+func handleListLogEntries(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -612,7 +611,7 @@ func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
 // which folder it sits in and/or its position among siblings. The placement
 // is per-user — moving here does not affect any other user who can see the
 // same shared log.
-func handleUpdateLogPlacement(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateLogPlacement(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -764,7 +763,7 @@ func handleUpdateLogPlacement(pool *pgxpool.Pool) http.HandlerFunc {
 // home page. Pinning a previously-unpinned log appends it to the end of the
 // home list. Unpinning leaves home_position untouched (no renumbering),
 // since the home page filters by pinned_to_home and gaps don't render.
-func handlePinLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handlePinLog(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -856,7 +855,7 @@ func handlePinLog(pool *pgxpool.Pool) http.HandlerFunc {
 // handleUpdateLogHomePosition reorders a pinned log within the caller's home
 // page list. Only pinned siblings participate in renumbering; unpinned rows
 // retain whatever home_position they had.
-func handleUpdateLogHomePosition(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateLogHomePosition(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")

@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type logAccess struct {
@@ -23,7 +22,7 @@ type logAccess struct {
 
 // checkLogAccess returns access info if the user owns the log or has shared access.
 // Returns pgx.ErrNoRows if the log doesn't exist or user has no access.
-func checkLogAccess(ctx context.Context, pool *pgxpool.Pool, logID, userID string) (*logAccess, error) {
+func checkLogAccess(ctx context.Context, pool DB, logID, userID string) (*logAccess, error) {
 	var ownerID string
 	var fields []fieldDefinition
 	err := pool.QueryRow(ctx,
@@ -57,7 +56,7 @@ type shareTokenResponse struct {
 	ShareToken string `json:"share_token"`
 }
 
-func handleCreateShareToken(pool *pgxpool.Pool) http.HandlerFunc {
+func handleCreateShareToken(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -85,7 +84,7 @@ func handleCreateShareToken(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleDeleteShareToken(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeleteShareToken(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -113,7 +112,7 @@ type sharedUserResponse struct {
 	SharedAt time.Time `json:"shared_at"`
 }
 
-func handleListShares(pool *pgxpool.Pool) http.HandlerFunc {
+func handleListShares(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -165,7 +164,7 @@ func handleListShares(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleRemoveShare(pool *pgxpool.Pool) http.HandlerFunc {
+func handleRemoveShare(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -215,7 +214,7 @@ type shareInfoResponse struct {
 	AlreadyMember bool   `json:"already_member"`
 }
 
-func handleGetShareInfo(pool *pgxpool.Pool) http.HandlerFunc {
+func handleGetShareInfo(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		tokenHex := chi.URLParam(r, "token")
@@ -273,7 +272,7 @@ type joinLogResponse struct {
 	LogName string `json:"log_name"`
 }
 
-func handleJoinLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleJoinLog(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		tokenHex := chi.URLParam(r, "token")

@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 )
 
@@ -92,11 +91,17 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	logger := slog.New(handler)
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// pool is the backend-agnostic DB seam used by every core handler. pgPool is
+	// the concrete *pgxpool.Pool, non-nil only on the PostgreSQL backend; the
+	// PostgreSQL-only features (OAuth, MCP, the user SQL-query feature) take it
+	// and are mounted only when it is present. See CONVERSION_STATUS.md.
+	pool, pgPool, err := OpenDB(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return fmt.Errorf("unable to connect to database: %w", err)
+		return err
 	}
-	defer pool.Close()
+	if pgPool != nil {
+		defer pgPool.Close()
+	}
 
 	err = pool.QueryRow(ctx, "select 1").Scan(new(int))
 	if err != nil {
@@ -161,9 +166,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// OAuth + MCP. Mounted only when a canonical URL is configured (because
 	// the canonical URL is needed both as the OAuth issuer and as the RFC
 	// 8707 audience binding for issued access tokens).
-	if cfg.MCPEnabled() {
-		oauth := newOAuthProvider(pool, cfg.MCPCanonicalURL)
-		mcpSrv := newMCPServer(pool, sqlArbiter, oauth)
+	if cfg.MCPEnabled() && pgPool != nil {
+		oauth := newOAuthProvider(pgPool, cfg.MCPCanonicalURL)
+		mcpSrv := newMCPServer(pgPool, sqlArbiter, oauth)
 
 		r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 		r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
@@ -229,20 +234,24 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Get("/api/join/{token}", handleGetShareInfo(pool))
 		r.Post("/api/join/{token}", handleJoinLog(pool))
 
-		// SQL query feature
-		r.Post("/api/sql/execute", handleExecuteSQL(pool, sqlArbiter))
-		r.Get("/api/sql/schema", handleGetSQLSchema(pool))
-		r.Get("/api/sql/saved", handleListSavedQueries(pool))
-		r.Post("/api/sql/saved", handleCreateSavedQuery(pool))
-		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(pool))
-		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(pool))
+		// SQL query feature (PostgreSQL only for now — depends on pgsqlarbiter,
+		// a restricted PG role, and per-user views; disabled on jed, see
+		// CONVERSION_STATUS.md).
+		if pgPool != nil {
+			r.Post("/api/sql/execute", handleExecuteSQL(pgPool, sqlArbiter))
+			r.Get("/api/sql/schema", handleGetSQLSchema(pgPool))
+			r.Get("/api/sql/saved", handleListSavedQueries(pgPool))
+			r.Post("/api/sql/saved", handleCreateSavedQuery(pgPool))
+			r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(pgPool))
+			r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(pgPool))
+		}
 	})
 
 	logger.Info("Starting server", "address", cfg.ListenAddress(), "registration", cfg.AllowRegistration)
 	return http.ListenAndServe(cfg.ListenAddress(), r)
 }
 
-func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
+func handleHealth(pool DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := pool.QueryRow(r.Context(), "select 1").Scan(new(int))
 		if err != nil {

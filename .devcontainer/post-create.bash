@@ -11,7 +11,6 @@ eval "$(mise env -s bash)"
 bundle install
 npm install
 npx playwright install --with-deps chromium
-go install golang.org/x/tools/cmd/goimports@latest
 
 tern migrate
 PGDATABASE=logger4life_test tern migrate

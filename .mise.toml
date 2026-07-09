@@ -15,3 +15,7 @@ nodejs = '24.13.0'
 rg = "latest"
 ruby = '4.0.3'
 watchexec = "latest"
+
+"github:jackc/tern" = "2.4.1"
+"github:jackc/verna" = "0.5.1"
+"go:golang.org/x/tools/cmd/goimports" = "latest"

@@ -106,7 +106,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	logger.Info("Database connected")
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Logs: store, Folders: store})
+	app := core.New(core.Config{Logs: store, Folders: store, SavedQueries: store})
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
@@ -236,10 +236,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 		// SQL query feature
 		r.Post("/api/sql/execute", handleExecuteSQL(pool, sqlArbiter))
 		r.Get("/api/sql/schema", handleGetSQLSchema(pool))
-		r.Get("/api/sql/saved", handleListSavedQueries(pool))
-		r.Post("/api/sql/saved", handleCreateSavedQuery(pool))
-		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(pool))
-		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(pool))
+		r.Get("/api/sql/saved", handleListSavedQueries(pool, app))
+		r.Post("/api/sql/saved", handleCreateSavedQuery(pool, app))
+		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(pool, app))
+		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(pool, app))
 	})
 
 	logger.Info("Starting server", "address", cfg.ListenAddress(), "registration", cfg.AllowRegistration)

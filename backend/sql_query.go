@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/pgstore"
 	pgsqlarbiter "github.com/jackc/pgsqlarbiter-go"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -42,11 +44,11 @@ type sqlColumn struct {
 }
 
 type sqlExecuteResponse struct {
-	Columns   []sqlColumn  `json:"columns"`
-	Rows      [][]*string  `json:"rows"`
-	RowCount  int          `json:"row_count"`
-	Truncated bool         `json:"truncated"`
-	ElapsedMs int64        `json:"elapsed_ms"`
+	Columns   []sqlColumn `json:"columns"`
+	Rows      [][]*string `json:"rows"`
+	RowCount  int         `json:"row_count"`
+	Truncated bool        `json:"truncated"`
+	ElapsedMs int64       `json:"elapsed_ms"`
 }
 
 // userSQLError is a query-execution failure caused by the user's input
@@ -389,11 +391,31 @@ func getSavedQueryByName(ctx context.Context, pool *pgxpool.Pool, userID, name s
 	return q, err
 }
 
-func handleListSavedQueries(pool *pgxpool.Pool) http.HandlerFunc {
+func savedQueryCore(pool *pgxpool.Pool, configured []*core.Core) *core.Core {
+	if len(configured) > 0 {
+		return configured[0]
+	}
+	return core.New(core.Config{SavedQueries: pgstore.New(pool)})
+}
+func writeSavedQueryError(w http.ResponseWriter, r *http.Request, e error) {
+	var ve *core.ValidationError
+	switch {
+	case errors.As(e, &ve):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": ve.Err.Error()})
+	case errors.Is(e, core.ErrSavedQueryNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": e.Error()})
+	case errors.Is(e, core.ErrSavedQueryNameTaken):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": e.Error()})
+	default:
+		internalError(w, r, e)
+	}
+}
+
+func handleListSavedQueries(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := savedQueryCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
-
-		out, err := listSavedQueriesForUser(r.Context(), pool, user.ID)
+		out, err := core.ListSavedQueries.Call(core.WithUserID(r.Context(), user.ID), app, core.ListSavedQueriesParams{})
 		if err != nil {
 			internalError(w, r, err)
 			return
@@ -402,7 +424,8 @@ func handleListSavedQueries(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleCreateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
+func handleCreateSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := savedQueryCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -411,26 +434,9 @@ func handleCreateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-		if err := validateSavedQueryRequest(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-
-		var q savedQueryResponse
-		err := pool.QueryRow(r.Context(),
-			`INSERT INTO saved_sql_queries (user_id, name, query_text)
-			 VALUES ($1, $2, $3)
-			 RETURNING id, name, query_text, created_at, updated_at`,
-			user.ID, req.Name, req.QueryText,
-		).Scan(&q.ID, &q.Name, &q.QueryText, &q.CreatedAt, &q.UpdatedAt)
-
+		q, err := core.CreateSavedQuery.Call(core.WithUserID(r.Context(), user.ID), app, core.SavedQueryParams{Name: req.Name, QueryText: req.QueryText})
 		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "a saved query with that name already exists"})
-				return
-			}
-			internalError(w, r, err)
+			writeSavedQueryError(w, r, err)
 			return
 		}
 
@@ -438,7 +444,8 @@ func handleCreateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleUpdateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := savedQueryCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		queryID := chi.URLParam(r, "id")
@@ -448,31 +455,9 @@ func handleUpdateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-		if err := validateSavedQueryRequest(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-
-		var q savedQueryResponse
-		err := pool.QueryRow(r.Context(),
-			`UPDATE saved_sql_queries
-			 SET name = $1, query_text = $2, updated_at = now()
-			 WHERE id = $3 AND user_id = $4
-			 RETURNING id, name, query_text, created_at, updated_at`,
-			req.Name, req.QueryText, queryID, user.ID,
-		).Scan(&q.ID, &q.Name, &q.QueryText, &q.CreatedAt, &q.UpdatedAt)
-
+		q, err := core.UpdateSavedQuery.Call(core.WithUserID(r.Context(), user.ID), app, core.UpdateSavedQueryParams{ID: queryID, Name: req.Name, QueryText: req.QueryText})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "saved query not found"})
-				return
-			}
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "a saved query with that name already exists"})
-				return
-			}
-			internalError(w, r, err)
+			writeSavedQueryError(w, r, err)
 			return
 		}
 
@@ -480,21 +465,15 @@ func handleUpdateSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func handleDeleteSavedQuery(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeleteSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := savedQueryCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		queryID := chi.URLParam(r, "id")
 
-		tag, err := pool.Exec(r.Context(),
-			`DELETE FROM saved_sql_queries WHERE id = $1 AND user_id = $2`,
-			queryID, user.ID,
-		)
+		_, err := core.DeleteSavedQuery.Call(core.WithUserID(r.Context(), user.ID), app, core.DeleteSavedQueryParams{ID: queryID})
 		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		if tag.RowsAffected() == 0 {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "saved query not found"})
+			writeSavedQueryError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

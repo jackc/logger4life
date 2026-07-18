@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/pgstore"
 	pgsqlarbiter "github.com/jackc/pgsqlarbiter-go"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -42,7 +41,7 @@ type getSQLSchemaOutput struct {
 type listSavedQueriesInput struct{}
 
 type listSavedQueriesOutput struct {
-	Queries []savedQueryResponse `json:"queries" jsonschema:"the user's saved SQL queries, ordered alphabetically by name"`
+	Queries []core.SavedQuery `json:"queries" jsonschema:"the user's saved SQL queries, ordered alphabetically by name"`
 }
 
 type runSavedQueryInput struct {
@@ -154,7 +153,7 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		if err != nil {
 			return nil, listSavedQueriesOutput{}, err
 		}
-		queries, err := listSavedQueriesForUser(ctx, pool, user.ID)
+		queries, err := core.ListSavedQueries.Call(core.WithUserID(ctx, user.ID), app, core.ListSavedQueriesParams{})
 		if err != nil {
 			return nil, listSavedQueriesOutput{}, mcpToolError(ctx, err)
 		}
@@ -173,9 +172,9 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		if name == "" {
 			return nil, runSQLOutput{}, fmt.Errorf("name is required")
 		}
-		saved, err := getSavedQueryByName(ctx, pool, user.ID, name)
+		saved, err := core.GetSavedQuery.Call(core.WithUserID(ctx, user.ID), app, core.GetSavedQueryParams{Name: name})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, core.ErrSavedQueryNotFound) {
 				return nil, runSQLOutput{}, fmt.Errorf("no saved query named %q", name)
 			}
 			return nil, runSQLOutput{}, mcpToolError(ctx, err)

@@ -5,23 +5,20 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/domain"
+	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type fieldDefinition struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Required bool   `json:"required"`
-}
+type fieldDefinition = domain.FieldDefinition
 
 type createLogRequest struct {
 	Name   string            `json:"name"`
@@ -76,84 +73,11 @@ type logEntryResponse struct {
 }
 
 func validateFieldDefinitions(fields []fieldDefinition) error {
-	if len(fields) > 20 {
-		return fmt.Errorf("too many fields (max 20)")
-	}
-	seen := make(map[string]bool)
-	for i, f := range fields {
-		f.Name = strings.TrimSpace(f.Name)
-		fields[i].Name = f.Name
-		if f.Name == "" {
-			return fmt.Errorf("field name must not be empty")
-		}
-		if len(f.Name) > 100 {
-			return fmt.Errorf("field name must be 1-100 characters")
-		}
-		lower := strings.ToLower(f.Name)
-		if seen[lower] {
-			return fmt.Errorf("duplicate field name: %s", f.Name)
-		}
-		seen[lower] = true
-		if f.Type != "text" && f.Type != "number" && f.Type != "boolean" {
-			return fmt.Errorf("field type must be 'text', 'number', or 'boolean'")
-		}
-	}
-	return nil
+	return domain.ValidateFieldDefinitions(fields)
 }
 
 func validateFieldValues(definitions []fieldDefinition, values map[string]any) error {
-	if values == nil {
-		values = make(map[string]any)
-	}
-
-	defMap := make(map[string]fieldDefinition)
-	for _, d := range definitions {
-		defMap[d.Name] = d
-	}
-
-	for name := range values {
-		if _, ok := defMap[name]; !ok {
-			return fmt.Errorf("unknown field: %s", name)
-		}
-	}
-
-	for _, def := range definitions {
-		v, exists := values[def.Name]
-		if !exists || v == nil {
-			if def.Required {
-				return fmt.Errorf("field %q is required", def.Name)
-			}
-			continue
-		}
-		switch def.Type {
-		case "number":
-			s, ok := v.(string)
-			if !ok {
-				return fmt.Errorf("field %q must be a numeric string", def.Name)
-			}
-			if def.Required && strings.TrimSpace(s) == "" {
-				return fmt.Errorf("field %q is required", def.Name)
-			}
-			if strings.TrimSpace(s) != "" {
-				if _, err := strconv.ParseFloat(s, 64); err != nil {
-					return fmt.Errorf("field %q must be a valid number", def.Name)
-				}
-			}
-		case "text":
-			s, ok := v.(string)
-			if !ok {
-				return fmt.Errorf("field %q must be a string", def.Name)
-			}
-			if def.Required && strings.TrimSpace(s) == "" {
-				return fmt.Errorf("field %q is required", def.Name)
-			}
-		case "boolean":
-			if _, ok := v.(bool); !ok {
-				return fmt.Errorf("field %q must be true or false", def.Name)
-			}
-		}
-	}
-	return nil
+	return domain.ValidateFieldValues(definitions, values)
 }
 
 func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
@@ -269,10 +193,15 @@ func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]
 	return logs, nil
 }
 
-func handleListLogs(pool *pgxpool.Pool) http.HandlerFunc {
+func handleListLogs(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	if len(configured) > 0 {
+		app = configured[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
-		logs, err := listLogsForUser(r.Context(), pool, user.ID)
+		ctx := core.WithUserID(r.Context(), user.ID)
+		logs, err := core.ListLogs.Call(ctx, app, core.ListLogsParams{})
 		if err != nil {
 			internalError(w, r, err)
 			return

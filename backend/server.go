@@ -11,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 )
@@ -103,6 +105,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to query database: %w", err)
 	}
 	logger.Info("Database connected")
+	app := core.New(core.Config{Logs: pgstore.New(pool)})
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
@@ -200,7 +203,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 		// Logs
 		r.Post("/api/logs", handleCreateLog(pool))
-		r.Get("/api/logs", handleListLogs(pool))
+		r.Get("/api/logs", handleListLogs(pool, app))
 		r.Get("/api/logs/{logID}", handleGetLog(pool))
 		r.Put("/api/logs/{logID}", handleUpdateLog(pool))
 		r.Delete("/api/logs/{logID}", handleDeleteLog(pool))

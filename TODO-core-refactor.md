@@ -30,11 +30,11 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 ### 2. Sharing
 
-- [ ] Add store ports and actions for creating and deleting share tokens.
-- [ ] Add actions for listing and removing shared users.
-- [ ] Add actions for reading share information and joining a shared log.
-- [ ] Move access checks and membership transactions out of HTTP handlers.
-- [ ] Represent expected sharing failures as core sentinel errors.
+- [x] Add store ports and actions for creating and deleting share tokens.
+- [x] Add actions for listing and removing shared users.
+- [x] Add actions for reading share information and joining a shared log.
+- [x] Move access checks and membership transactions out of HTTP handlers.
+- [x] Represent expected sharing failures as core sentinel errors.
 
 ### 3. Authentication and sessions
 

@@ -106,7 +106,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	logger.Info("Database connected")
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store})
+	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, Sharing: store})
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
@@ -226,12 +226,12 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(pool, app))
 
 		// Sharing
-		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(pool))
-		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(pool))
-		r.Get("/api/logs/{logID}/shares", handleListShares(pool))
-		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(pool))
-		r.Get("/api/join/{token}", handleGetShareInfo(pool))
-		r.Post("/api/join/{token}", handleJoinLog(pool))
+		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(pool, app))
+		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(pool, app))
+		r.Get("/api/logs/{logID}/shares", handleListShares(pool, app))
+		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(pool, app))
+		r.Get("/api/join/{token}", handleGetShareInfo(pool, app))
+		r.Post("/api/join/{token}", handleJoinLog(pool, app))
 
 		// SQL query feature
 		r.Post("/api/sql/execute", handleExecuteSQL(pool, sqlArbiter))

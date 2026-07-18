@@ -19,10 +19,7 @@ import (
 
 type fieldDefinition = domain.FieldDefinition
 
-type createLogRequest struct {
-	Name   string            `json:"name"`
-	Fields []fieldDefinition `json:"fields"`
-}
+type createLogRequest = core.CreateLogParams
 
 type logResponse struct {
 	ID           string            `json:"id"`
@@ -79,7 +76,11 @@ func validateFieldValues(definitions []fieldDefinition, values map[string]any) e
 	return domain.ValidateFieldValues(definitions, values)
 }
 
-func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleCreateLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	if len(configured) > 0 {
+		app = configured[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -89,37 +90,14 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		req.Name = strings.TrimSpace(req.Name)
-		if len(req.Name) == 0 || len(req.Name) > 100 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be 1-100 characters"})
-			return
-		}
-
-		if req.Fields == nil {
-			req.Fields = []fieldDefinition{}
-		}
-		if err := validateFieldDefinitions(req.Fields); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-
-		tx, err := pool.Begin(r.Context())
+		l, err := core.CreateLog.Call(core.WithUserID(r.Context(), user.ID), app, req)
 		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		defer tx.Rollback(r.Context())
-
-		var l logResponse
-		err = tx.QueryRow(r.Context(),
-			`INSERT INTO logs (user_id, name, fields) VALUES ($1, $2, $3)
-			 RETURNING id, name, fields, created_at, updated_at`,
-			user.ID, req.Name, req.Fields,
-		).Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt)
-
-		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			var ve *core.ValidationError
+			if errors.As(err, &ve) {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": ve.Err.Error()})
+				return
+			}
+			if errors.Is(err, core.ErrLogNameTaken) {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "a log with that name already exists"})
 				return
 			}
@@ -127,30 +105,6 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		err = tx.QueryRow(r.Context(),
-			`INSERT INTO user_log_placements (user_id, log_id, folder_id, position, pinned_to_home, home_position)
-			 SELECT $1, $2, NULL,
-			        COALESCE(max(position) FILTER (WHERE folder_id IS NULL) + 1, 0),
-			        true,
-			        COALESCE(max(home_position) FILTER (WHERE pinned_to_home) + 1, 0)
-			 FROM user_log_placements WHERE user_id = $1
-			 RETURNING position, pinned_to_home, home_position`,
-			user.ID, l.ID,
-		).Scan(&l.Position, &l.PinnedToHome, &l.HomePosition)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		if err := tx.Commit(r.Context()); err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		l.IsOwner = true
-		if l.Fields == nil {
-			l.Fields = []fieldDefinition{}
-		}
 		writeJSON(w, http.StatusCreated, l)
 	}
 }

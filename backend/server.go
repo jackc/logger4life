@@ -203,7 +203,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 
 		// Logs
-		r.Post("/api/logs", handleCreateLog(pool))
+		r.Post("/api/logs", handleCreateLog(pool, app))
 		r.Get("/api/logs", handleListLogs(pool, app))
 		r.Get("/api/logs/{logID}", handleGetLog(pool))
 		r.Put("/api/logs/{logID}", handleUpdateLog(pool))

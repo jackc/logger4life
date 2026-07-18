@@ -1,11 +1,9 @@
 package backend
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -13,7 +11,6 @@ import (
 	"github.com/jackc/logger4life/backend/domain"
 	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -126,50 +123,32 @@ func handleListLogs(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFu
 	}
 }
 
-func handleGetLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleGetLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	if len(configured) > 0 {
+		app = configured[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
-
-		access, err := checkLogAccess(r.Context(), pool, logID, user.ID)
+		l, err := core.GetLog.Call(core.WithUserID(r.Context(), user.ID), app, core.GetLogParams{LogID: logID})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
+			if errors.Is(err, core.ErrLogNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			} else {
+				internalError(w, r, err)
 			}
-			internalError(w, r, err)
 			return
-		}
-
-		var l logResponse
-		var shareToken []byte
-		err = pool.QueryRow(r.Context(),
-			`SELECT l.id, l.name, l.fields, l.share_token, l.created_at, l.updated_at,
-			        p.folder_id, p.position, p.pinned_to_home, p.home_position
-			 FROM logs l
-			 JOIN user_log_placements p ON p.log_id = l.id AND p.user_id = $1
-			 WHERE l.id = $2`,
-			user.ID, logID,
-		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		l.IsOwner = access.IsOwner
-		if access.IsOwner && shareToken != nil {
-			tokenHex := hex.EncodeToString(shareToken)
-			l.ShareToken = &tokenHex
-		}
-
-		if l.Fields == nil {
-			l.Fields = []fieldDefinition{}
 		}
 		writeJSON(w, http.StatusOK, l)
 	}
 }
 
-func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	if len(configured) > 0 {
+		app = configured[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -180,42 +159,18 @@ func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		req.Name = strings.TrimSpace(req.Name)
-		if len(req.Name) == 0 || len(req.Name) > 100 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be 1-100 characters"})
-			return
-		}
-
-		if req.Fields == nil {
-			req.Fields = []fieldDefinition{}
-		}
-		if err := validateFieldDefinitions(req.Fields); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-
-		var l logResponse
-		var shareToken []byte
-		err := pool.QueryRow(r.Context(),
-			`WITH updated AS (
-				UPDATE logs SET name = $1, fields = $2, updated_at = now()
-				WHERE id = $3 AND user_id = $4
-				RETURNING id, name, fields, share_token, created_at, updated_at
-			)
-			SELECT u.id, u.name, u.fields, u.share_token, u.created_at, u.updated_at,
-			       p.folder_id, p.position, p.pinned_to_home, p.home_position
-			FROM updated u
-			JOIN user_log_placements p ON p.log_id = u.id AND p.user_id = $4`,
-			req.Name, req.Fields, logID, user.ID,
-		).Scan(&l.ID, &l.Name, &l.Fields, &shareToken, &l.CreatedAt, &l.UpdatedAt, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition)
-
+		l, err := core.UpdateLog.Call(core.WithUserID(r.Context(), user.ID), app, core.UpdateLogParams{LogID: logID, Name: req.Name, Fields: req.Fields})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			var ve *core.ValidationError
+			if errors.As(err, &ve) {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": ve.Err.Error()})
+				return
+			}
+			if errors.Is(err, core.ErrLogNotFound) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 				return
 			}
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if errors.Is(err, core.ErrLogNameTaken) {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "a log with that name already exists"})
 				return
 			}
@@ -223,34 +178,26 @@ func handleUpdateLog(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		l.IsOwner = true
-		if shareToken != nil {
-			tokenHex := hex.EncodeToString(shareToken)
-			l.ShareToken = &tokenHex
-		}
-		if l.Fields == nil {
-			l.Fields = []fieldDefinition{}
-		}
 		writeJSON(w, http.StatusOK, l)
 	}
 }
 
-func handleDeleteLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeleteLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	if len(configured) > 0 {
+		app = configured[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
 
-		tag, err := pool.Exec(r.Context(),
-			`DELETE FROM logs WHERE id = $1 AND user_id = $2`,
-			logID, user.ID,
-		)
-
+		_, err := core.DeleteLog.Call(core.WithUserID(r.Context(), user.ID), app, core.DeleteLogParams{LogID: logID})
 		if err != nil {
+			if errors.Is(err, core.ErrLogNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+				return
+			}
 			internalError(w, r, err)
-			return
-		}
-		if tag.RowsAffected() == 0 {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 			return
 		}
 

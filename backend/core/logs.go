@@ -13,6 +13,7 @@ import (
 var (
 	ErrUnauthenticated = errors.New("not authenticated")
 	ErrLogNameTaken    = errors.New("a log with that name already exists")
+	ErrLogNotFound     = errors.New("log not found")
 )
 
 type Log struct {
@@ -33,6 +34,9 @@ type Log struct {
 // infrastructure packages and must enforce the supplied user's scope.
 type LogStore interface {
 	CreateLog(context.Context, string, string, []domain.FieldDefinition) (Log, error)
+	GetLog(context.Context, string, string) (Log, error)
+	UpdateLog(context.Context, string, string, string, []domain.FieldDefinition) (Log, error)
+	DeleteLog(context.Context, string, string) error
 	ListLogs(context.Context, string) ([]Log, error)
 }
 
@@ -58,6 +62,52 @@ var CreateLog = Define(ActionDef[CreateLogParams, Log]{Name: "create_log", Descr
 		return Log{}, e
 	}
 	return c.logs.CreateLog(ctx, id, p.Name, p.Fields)
+}})
+
+type GetLogParams struct {
+	LogID string `json:"log_id"`
+}
+
+var GetLog = Define(ActionDef[GetLogParams, Log]{Name: "get_log", Description: "Get a visible log.", Handler: func(ctx context.Context, c *Core, p GetLogParams) (Log, error) {
+	id, e := requiredUser(ctx)
+	if e != nil {
+		return Log{}, e
+	}
+	return c.logs.GetLog(ctx, id, p.LogID)
+}})
+
+type UpdateLogParams struct {
+	LogID  string                   `json:"log_id"`
+	Name   string                   `json:"name"`
+	Fields []domain.FieldDefinition `json:"fields"`
+}
+
+func (p *UpdateLogParams) Validate() error {
+	v := CreateLogParams{Name: p.Name, Fields: p.Fields}
+	e := v.Validate()
+	p.Name = v.Name
+	p.Fields = v.Fields
+	return e
+}
+
+var UpdateLog = Define(ActionDef[UpdateLogParams, Log]{Name: "update_log", Description: "Update an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p UpdateLogParams) (Log, error) {
+	id, e := requiredUser(ctx)
+	if e != nil {
+		return Log{}, e
+	}
+	return c.logs.UpdateLog(ctx, id, p.LogID, p.Name, p.Fields)
+}})
+
+type DeleteLogParams struct {
+	LogID string `json:"log_id"`
+}
+
+var DeleteLog = Define(ActionDef[DeleteLogParams, struct{}]{Name: "delete_log", Description: "Delete an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteLogParams) (struct{}, error) {
+	id, e := requiredUser(ctx)
+	if e == nil {
+		e = c.logs.DeleteLog(ctx, id, p.LogID)
+	}
+	return struct{}{}, e
 }})
 
 type ListLogsParams struct{}

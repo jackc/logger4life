@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/httplog/v3"
+	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/pgstore"
 	pgsqlarbiter "github.com/jackc/pgsqlarbiter-go"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,7 +30,7 @@ type listLogsInput struct{}
 
 // listLogsOutput mirrors the HTTP /api/logs response shape.
 type listLogsOutput struct {
-	Logs []logResponse `json:"logs" jsonschema:"the list of logs the authenticated user owns or has been shared on"`
+	Logs []core.Log `json:"logs" jsonschema:"the list of logs the authenticated user owns or has been shared on"`
 }
 
 type getSQLSchemaInput struct{}
@@ -83,7 +85,11 @@ func requireMCPUser(ctx context.Context) (*AuthUser, error) {
 	return user, nil
 }
 
-func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oauthProvider) *mcpServer {
+func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oauthProvider, configured ...*core.Core) *mcpServer {
+	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	if len(configured) > 0 {
+		app = configured[0]
+	}
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "logger4life",
 		Title:   "Logger4Life",
@@ -98,11 +104,11 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		if err != nil {
 			return nil, listLogsOutput{}, err
 		}
-		logs, err := listLogsForUser(ctx, pool, user.ID)
+		logs, err := core.ListLogs.Call(core.WithUserID(ctx, user.ID), app, core.ListLogsParams{})
 		if err != nil {
 			return nil, listLogsOutput{}, mcpToolError(ctx, err)
 		}
-		// listLogsForUser returns rows in user-organized (folder, position)
+		// The action returns rows in user-organized (folder, position)
 		// order for the SPA. The MCP contract promises alphabetical, so sort
 		// here rather than coupling the tool to UI organization.
 		sort.SliceStable(logs, func(i, j int) bool {

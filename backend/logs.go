@@ -1,7 +1,6 @@
 package backend
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -154,43 +153,6 @@ func handleCreateLog(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusCreated, l)
 	}
-}
-
-// listLogsForUser returns all logs the user owns or has been shared on,
-// ordered by their per-user placement (folder then position). Shared by
-// handleListLogs (HTTP) and the MCP list_logs tool.
-func listLogsForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]logResponse, error) {
-	rows, err := pool.Query(ctx,
-		`SELECT l.id, l.name, l.fields, l.created_at, l.updated_at,
-		        (l.user_id = $1) AS is_owner,
-		        p.folder_id, p.position, p.pinned_to_home, p.home_position
-		 FROM logs l
-		 JOIN user_log_placements p ON p.log_id = l.id AND p.user_id = $1
-		 WHERE l.user_id = $1
-		    OR EXISTS (SELECT 1 FROM log_shares ls WHERE ls.log_id = l.id AND ls.user_id = $1)
-		 ORDER BY p.folder_id NULLS FIRST, p.position`,
-		userID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	logs := []logResponse{}
-	for rows.Next() {
-		var l logResponse
-		if err := rows.Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt, &l.IsOwner, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition); err != nil {
-			return nil, err
-		}
-		if l.Fields == nil {
-			l.Fields = []fieldDefinition{}
-		}
-		logs = append(logs, l)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return logs, nil
 }
 
 func handleListLogs(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {

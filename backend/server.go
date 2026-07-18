@@ -106,8 +106,6 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	logger.Info("Database connected")
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Users: store, Sessions: store, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, Sharing: store})
-
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
 		wan, err = webauthn.New(&webauthn.Config{
@@ -119,6 +117,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("unable to initialize webauthn: %w", err)
 		}
 	}
+	app := core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, Sharing: store})
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -156,8 +155,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 	r.Post("/api/register", handleRegister(pool, cfg.AllowRegistration, app))
 	r.Post("/api/login", handleLogin(pool, app))
 	if wan != nil {
-		r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(pool, wan))
-		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan, app))
+		r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(app))
+		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(app))
 	}
 
 	sqlArbiter := newSQLArbiter()
@@ -195,11 +194,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Put("/api/me/email", handleChangeEmail(pool, app))
 		r.Put("/api/me/password", handleChangePassword(pool, app))
 		if wan != nil {
-			r.Get("/api/me/passkeys", handleListPasskeys(pool))
-			r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(pool))
-			r.Delete("/api/me/passkeys/{passkeyID}", handleDeletePasskey(pool))
-			r.Post("/api/me/passkeys/register/begin", handlePasskeyRegisterBegin(pool, wan))
-			r.Post("/api/me/passkeys/register/finish", handlePasskeyRegisterFinish(pool, wan))
+			r.Get("/api/me/passkeys", handleListPasskeys(app))
+			r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(app))
+			r.Delete("/api/me/passkeys/{passkeyID}", handleDeletePasskey(app))
+			r.Post("/api/me/passkeys/register/begin", handlePasskeyRegisterBegin(app))
+			r.Post("/api/me/passkeys/register/finish", handlePasskeyRegisterFinish(app))
 		}
 
 		// Logs

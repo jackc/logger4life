@@ -49,11 +49,11 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 ### 4. Passkeys
 
-- [ ] Define passkey and challenge store ports.
-- [ ] Add begin/finish registration and login actions.
-- [ ] Add list, rename, and delete passkey actions.
-- [ ] Keep WebAuthn HTTP request/response translation in the adapter.
-- [ ] Move credential and challenge persistence into store implementations.
+- [x] Define passkey and challenge store ports.
+- [x] Add begin/finish registration and login actions.
+- [x] Add list, rename, and delete passkey actions.
+- [x] Keep WebAuthn HTTP request/response translation in the adapter.
+- [x] Move credential and challenge persistence into store implementations.
 
 ### 5. User SQL execution
 

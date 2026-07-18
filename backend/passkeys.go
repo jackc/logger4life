@@ -1,404 +1,138 @@
 package backend
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// webAuthnUser implements the webauthn.User interface.
-type webAuthnUser struct {
-	id          []byte
-	name        string
-	credentials []webauthn.Credential
+func writePasskeyError(w http.ResponseWriter, r *http.Request, err error) {
+	var validationErr *core.ValidationError
+	switch {
+	case errors.As(err, &validationErr):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": validationErr.Err.Error()})
+	case errors.Is(err, core.ErrPasskeyNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": core.ErrPasskeyNotFound.Error()})
+	case errors.Is(err, core.ErrPasskeyAlreadyRegistered):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": core.ErrPasskeyAlreadyRegistered.Error()})
+	case errors.Is(err, core.ErrInvalidPasskeyChallenge), errors.Is(err, core.ErrPasskeyVerificationFailed):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	case errors.Is(err, core.ErrUnauthenticated):
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	case errors.Is(err, core.ErrPasskeysDisabled):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+	default:
+		internalError(w, r, err)
+	}
 }
 
-func (u *webAuthnUser) WebAuthnID() []byte                         { return u.id }
-func (u *webAuthnUser) WebAuthnName() string                       { return u.name }
-func (u *webAuthnUser) WebAuthnDisplayName() string                { return u.name }
-func (u *webAuthnUser) WebAuthnCredentials() []webauthn.Credential { return u.credentials }
-
-func loadWebAuthnUser(ctx context.Context, pool *pgxpool.Pool, userID string) (*webAuthnUser, error) {
-	uid, err := uuid.FromString(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	var username string
-	err = pool.QueryRow(ctx, `SELECT username FROM users WHERE id = $1`, uid).Scan(&username)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := pool.Query(ctx,
-		`SELECT credential_id, public_key, aaguid, sign_count, backup_eligible, backup_state FROM passkeys WHERE user_id = $1`,
-		uid,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var credentials []webauthn.Credential
-	for rows.Next() {
-		var credID, pubKey, aaguid []byte
-		var signCount int64
-		var backupEligible, backupState bool
-		if err := rows.Scan(&credID, &pubKey, &aaguid, &signCount, &backupEligible, &backupState); err != nil {
-			return nil, err
-		}
-		credentials = append(credentials, webauthn.Credential{
-			ID:        credID,
-			PublicKey: pubKey,
-			Flags: webauthn.CredentialFlags{
-				BackupEligible: backupEligible,
-				BackupState:    backupState,
-			},
-			Authenticator: webauthn.Authenticator{
-				AAGUID:    aaguid,
-				SignCount: uint32(signCount),
-			},
-		})
-	}
-
-	return &webAuthnUser{
-		id:          uid.Bytes(),
-		name:        username,
-		credentials: credentials,
-	}, nil
-}
-
-// Challenge storage helpers
-
-func storeChallenge(ctx context.Context, pool *pgxpool.Pool, userID *string, session *webauthn.SessionData, challengeType string) (string, error) {
-	// Clean up expired challenges opportunistically
-	pool.Exec(ctx, `DELETE FROM webauthn_challenges WHERE expires_at < now()`)
-
-	data, err := json.Marshal(session)
-	if err != nil {
-		return "", err
-	}
-
-	var id string
-	err = pool.QueryRow(ctx,
-		`INSERT INTO webauthn_challenges (user_id, session_data, type) VALUES ($1, $2, $3) RETURNING id`,
-		userID, data, challengeType,
-	).Scan(&id)
-	return id, err
-}
-
-func loadAndDeleteChallenge(ctx context.Context, pool *pgxpool.Pool, challengeID string, challengeType string) (*webauthn.SessionData, error) {
-	var data []byte
-	var expiresAt time.Time
-	err := pool.QueryRow(ctx,
-		`DELETE FROM webauthn_challenges WHERE id = $1 AND type = $2 RETURNING session_data, expires_at`,
-		challengeID, challengeType,
-	).Scan(&data, &expiresAt)
-	if err != nil {
-		return nil, err
-	}
-
-	if time.Now().After(expiresAt) {
-		return nil, pgx.ErrNoRows
-	}
-
-	var session webauthn.SessionData
-	if err := json.Unmarshal(data, &session); err != nil {
-		return nil, err
-	}
-	return &session, nil
-}
-
-// Registration handlers (authenticated)
-
-func handlePasskeyRegisterBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+// Registration handlers translate HTTP JSON and trusted authentication
+// context into passkey catalog actions. WebAuthn verification and persistence
+// orchestration remain inside core.
+func handlePasskeyRegisterBegin(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-
-		wanUser, err := loadWebAuthnUser(r.Context(), pool, user.ID)
+		result, err := core.BeginPasskeyRegistration.Call(actionContext(r), app, core.BeginPasskeyRegistrationParams{})
 		if err != nil {
-			internalError(w, r, err)
+			writePasskeyError(w, r, err)
 			return
 		}
-
-		creation, session, err := wan.BeginRegistration(wanUser,
-			webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
-			webauthn.WithConveyancePreference(protocol.PreferNoAttestation),
-			webauthn.WithExclusions(webauthn.Credentials(wanUser.credentials).CredentialDescriptors()),
-		)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		challengeID, err := storeChallenge(r.Context(), pool, &user.ID, session, "registration")
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]any{
-			"options":      creation,
-			"challenge_id": challengeID,
-		})
+		writeJSON(w, http.StatusOK, result)
 	}
 }
 
-func handlePasskeyRegisterFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+func handlePasskeyRegisterFinish(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-
-		var req struct {
-			ChallengeID string          `json:"challenge_id"`
-			Credential  json.RawMessage `json:"credential"`
-			Description string          `json:"description"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var params core.FinishPasskeyRegistrationParams
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-
-		req.Description = strings.TrimSpace(req.Description)
-		if len(req.Description) > 100 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "description must be at most 100 characters"})
-			return
-		}
-
-		session, err := loadAndDeleteChallenge(r.Context(), pool, req.ChallengeID, "registration")
+		result, err := core.FinishPasskeyRegistration.Call(actionContext(r), app, params)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or expired challenge"})
+			writePasskeyError(w, r, err)
 			return
 		}
-
-		wanUser, err := loadWebAuthnUser(r.Context(), pool, user.ID)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		parsedResponse, err := protocol.ParseCredentialCreationResponseBody(bytes.NewReader(req.Credential))
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid credential response"})
-			return
-		}
-
-		credential, err := wan.CreateCredential(wanUser, *session, parsedResponse)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "credential verification failed"})
-			return
-		}
-
-		var passkeyID string
-		var createdAt time.Time
-		err = pool.QueryRow(r.Context(),
-			`INSERT INTO passkeys (user_id, credential_id, public_key, aaguid, sign_count, backup_eligible, backup_state, description)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			 RETURNING id, created_at`,
-			user.ID, credential.ID, credential.PublicKey,
-			credential.Authenticator.AAGUID, credential.Authenticator.SignCount,
-			credential.Flags.BackupEligible, credential.Flags.BackupState,
-			req.Description,
-		).Scan(&passkeyID, &createdAt)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		writeJSON(w, http.StatusCreated, map[string]any{
-			"id":          passkeyID,
-			"description": req.Description,
-			"created_at":  createdAt,
-		})
+		writeJSON(w, http.StatusCreated, result)
 	}
 }
 
-// Login handlers (public)
-
-func handlePasskeyLoginBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+// Login handlers are public. A successful finish action returns the session
+// material needed by this adapter to set its transport-specific cookie.
+func handlePasskeyLoginBegin(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		assertion, session, err := wan.BeginDiscoverableLogin()
+		result, err := core.BeginPasskeyLogin.Call(r.Context(), app, core.BeginPasskeyLoginParams{})
 		if err != nil {
-			internalError(w, r, err)
+			writePasskeyError(w, r, err)
 			return
 		}
-
-		challengeID, err := storeChallenge(r.Context(), pool, nil, session, "login")
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]any{
-			"options":      assertion,
-			"challenge_id": challengeID,
-		})
+		writeJSON(w, http.StatusOK, result)
 	}
 }
 
-func handlePasskeyLoginFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn, configured ...*core.Core) http.HandlerFunc {
-	app := authCore(pool, configured)
+func handlePasskeyLoginFinish(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			ChallengeID string          `json:"challenge_id"`
-			Credential  json.RawMessage `json:"credential"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var params core.FinishPasskeyLoginParams
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-
-		session, err := loadAndDeleteChallenge(r.Context(), pool, req.ChallengeID, "login")
+		session, err := core.FinishPasskeyLogin.Call(r.Context(), app, params)
 		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired challenge"})
-			return
-		}
-
-		parsedResponse, err := protocol.ParseCredentialRequestResponseBody(bytes.NewReader(req.Credential))
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid credential response"})
-			return
-		}
-
-		handler := func(rawID, userHandle []byte) (webauthn.User, error) {
-			uid, err := uuid.FromBytes(userHandle)
-			if err != nil {
-				return nil, err
-			}
-			return loadWebAuthnUser(r.Context(), pool, uid.String())
-		}
-
-		_, credential, err := wan.ValidatePasskeyLogin(handler, *session, parsedResponse)
-		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "passkey verification failed"})
-			return
-		}
-
-		// Update sign count and backup state
-		pool.Exec(r.Context(),
-			`UPDATE passkeys SET sign_count = $1, backup_state = $2 WHERE credential_id = $3`,
-			credential.Authenticator.SignCount, credential.Flags.BackupState, credential.ID,
-		)
-
-		// Look up the user ID from the passkey
-		var userID string
-		err = pool.QueryRow(r.Context(),
-			`SELECT user_id FROM passkeys WHERE credential_id = $1`,
-			credential.ID,
-		).Scan(&userID)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		authSession, err := core.StartSession.Call(r.Context(), app, core.StartSessionParams{UserID: userID})
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		setSessionCookie(w, authSession.Token, authSession.ExpiresAt)
-		writeJSON(w, http.StatusOK, authSession.User)
-	}
-}
-
-// Management handlers (authenticated)
-
-type passkeyResponse struct {
-	ID          string    `json:"id"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-func handleListPasskeys(pool *pgxpool.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-
-		rows, err := pool.Query(r.Context(),
-			`SELECT id, description, created_at FROM passkeys WHERE user_id = $1 ORDER BY created_at`,
-			user.ID,
-		)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		defer rows.Close()
-
-		passkeys := []passkeyResponse{}
-		for rows.Next() {
-			var p passkeyResponse
-			if err := rows.Scan(&p.ID, &p.Description, &p.CreatedAt); err != nil {
-				internalError(w, r, err)
+			if errors.Is(err, core.ErrInvalidPasskeyChallenge) || errors.Is(err, core.ErrPasskeyVerificationFailed) {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 				return
 			}
-			passkeys = append(passkeys, p)
+			writePasskeyError(w, r, err)
+			return
 		}
+		setSessionCookie(w, session.Token, session.ExpiresAt)
+		writeJSON(w, http.StatusOK, session.User)
+	}
+}
 
+func handleListPasskeys(app *core.Core) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		passkeys, err := core.ListPasskeys.Call(actionContext(r), app, core.ListPasskeysParams{})
+		if err != nil {
+			writePasskeyError(w, r, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, passkeys)
 	}
 }
 
-func handleUpdatePasskey(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdatePasskey(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		passkeyID := chi.URLParam(r, "passkeyID")
-
-		var req struct {
+		var body struct {
 			Description string `json:"description"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-
-		req.Description = strings.TrimSpace(req.Description)
-		if len(req.Description) > 100 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "description must be at most 100 characters"})
-			return
-		}
-
-		var p passkeyResponse
-		err := pool.QueryRow(r.Context(),
-			`UPDATE passkeys SET description = $1 WHERE id = $2 AND user_id = $3
-			 RETURNING id, description, created_at`,
-			req.Description, passkeyID, user.ID,
-		).Scan(&p.ID, &p.Description, &p.CreatedAt)
+		passkey, err := core.RenamePasskey.Call(actionContext(r), app, core.RenamePasskeyParams{
+			PasskeyID: chi.URLParam(r, "passkeyID"), Description: body.Description,
+		})
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "passkey not found"})
+			writePasskeyError(w, r, err)
 			return
 		}
-
-		writeJSON(w, http.StatusOK, p)
+		writeJSON(w, http.StatusOK, passkey)
 	}
 }
 
-func handleDeletePasskey(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeletePasskey(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		passkeyID := chi.URLParam(r, "passkeyID")
-
-		result, err := pool.Exec(r.Context(),
-			`DELETE FROM passkeys WHERE id = $1 AND user_id = $2`,
-			passkeyID, user.ID,
-		)
+		_, err := core.DeletePasskey.Call(actionContext(r), app, core.DeletePasskeyParams{
+			PasskeyID: chi.URLParam(r, "passkeyID"),
+		})
 		if err != nil {
-			internalError(w, r, err)
+			writePasskeyError(w, r, err)
 			return
 		}
-		if result.RowsAffected() == 0 {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "passkey not found"})
-			return
-		}
-
 		writeJSON(w, http.StatusOK, map[string]string{"message": "passkey deleted"})
 	}
 }

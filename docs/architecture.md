@@ -30,6 +30,13 @@ session token generation, and registration's user/session transaction. The
 HTTP adapter owns cookie parsing and attributes, while `pgstore` owns all user
 and session SQL.
 
+Passkeys also cross this boundary through catalog actions. Core owns WebAuthn
+ceremony orchestration, challenge lifetime and one-time consumption, credential
+updates, and the credential/session login transaction. `PasskeyStore` and
+`PasskeyChallengeStore` keep all credential and challenge persistence in
+`pgstore`. The HTTP adapter only translates WebAuthn JSON, trusted user context,
+session cookies, and status codes.
+
 ## Where new code goes
 
 - Pure validation, calculation, and domain types: `backend/domain`.

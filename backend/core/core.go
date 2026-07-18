@@ -3,11 +3,18 @@
 // are adapters around it.
 package core
 
-import "context"
+import (
+	"context"
+
+	"github.com/go-webauthn/webauthn/webauthn"
+)
 
 type Core struct {
 	users        UserStore
 	sessions     SessionStore
+	passkeys     PasskeyStore
+	challenges   PasskeyChallengeStore
+	webAuthn     *webauthn.WebAuthn
 	tx           Transactor
 	logs         LogStore
 	entries      LogEntryStore
@@ -22,6 +29,9 @@ type Core struct {
 type Config struct {
 	Users        UserStore
 	Sessions     SessionStore
+	Passkeys     PasskeyStore
+	Challenges   PasskeyChallengeStore
+	WebAuthn     *webauthn.WebAuthn
 	Tx           Transactor
 	Logs         LogStore
 	Entries      LogEntryStore
@@ -38,7 +48,7 @@ func New(cfg Config) *Core {
 	if tx == nil {
 		tx = passthroughTx{}
 	}
-	return &Core{users: cfg.Users, sessions: cfg.Sessions, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, sharing: cfg.Sharing, middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, sharing: cfg.Sharing, middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 
 // Transactor is the driven port for transaction boundaries. Store calls made

@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
 	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -205,552 +204,124 @@ func handleDeleteLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerF
 	}
 }
 
-func handleCreateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
+func entryPlacementCore(pool *pgxpool.Pool, configured []*core.Core) *core.Core {
+	if len(configured) > 0 {
+		return configured[0]
+	}
+	store := pgstore.New(pool)
+	return core.New(core.Config{Entries: store, Placements: store})
+}
 
-		var req createLogEntryRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-			return
-		}
-		if req.Fields == nil {
-			req.Fields = map[string]any{}
-		}
-
-		access, err := checkLogAccess(r.Context(), pool, logID, user.ID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-
-		if err := validateFieldValues(access.Fields, req.Fields); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-
-		var entry logEntryResponse
-		err = pool.QueryRow(r.Context(),
-			`INSERT INTO log_entries (log_id, user_id, fields) VALUES ($1, $2, $3)
-			 RETURNING id, log_id, user_id, fields, occurred_at, created_at, updated_at`,
-			logID, user.ID, req.Fields,
-		).Scan(&entry.ID, &entry.LogID, &entry.UserID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
-
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		entry.Username = user.Username
-		if entry.Fields == nil {
-			entry.Fields = map[string]any{}
-		}
-		writeJSON(w, http.StatusCreated, entry)
+func writeLogOperationError(w http.ResponseWriter, r *http.Request, err error) {
+	var ve *core.ValidationError
+	switch {
+	case errors.As(err, &ve):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": ve.Err.Error()})
+	case errors.Is(err, core.ErrLogNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
+	case errors.Is(err, core.ErrLogEntryNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "entry not found"})
+	case errors.Is(err, core.ErrFolderNotFound):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "folder not found"})
+	case errors.Is(err, core.ErrLogNotPinned):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	default:
+		internalError(w, r, err)
 	}
 }
 
-func handleUpdateLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
+func handleCreateLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := entryPlacementCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
-		entryID := chi.URLParam(r, "entryID")
-
-		var req updateLogEntryRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		var body createLogEntryRequest
+		if !decodeAction(w, r, &body) {
 			return
 		}
-		if req.Fields == nil {
-			req.Fields = map[string]any{}
-		}
-		if req.OccurredAt.IsZero() {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "occurred_at is required"})
-			return
-		}
-
-		access, err := checkLogAccess(r.Context(), pool, logID, user.ID)
+		v, err := core.CreateLogEntry.Call(actionContext(r), app, core.CreateLogEntryParams{LogID: chi.URLParam(r, "logID"), Fields: body.Fields})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
-
-		if err := validateFieldValues(access.Fields, req.Fields); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-
-		var entry logEntryResponse
-		err = pool.QueryRow(r.Context(),
-			`UPDATE log_entries SET fields = $1, occurred_at = $2, updated_at = now()
-			 WHERE id = $3 AND log_id = $4
-			 RETURNING id, log_id, user_id, fields, occurred_at, created_at, updated_at`,
-			req.Fields, req.OccurredAt, entryID, logID,
-		).Scan(&entry.ID, &entry.LogID, &entry.UserID, &entry.Fields, &entry.OccurredAt, &entry.CreatedAt, &entry.UpdatedAt)
-
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "entry not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-
-		err = pool.QueryRow(r.Context(),
-			`SELECT username FROM users WHERE id = $1`, entry.UserID,
-		).Scan(&entry.Username)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		if entry.Fields == nil {
-			entry.Fields = map[string]any{}
-		}
-		writeJSON(w, http.StatusOK, entry)
+		writeJSON(w, http.StatusCreated, v)
 	}
 }
-
-func handleDeleteLogEntry(pool *pgxpool.Pool) http.HandlerFunc {
+func handleListLogEntries(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := entryPlacementCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
-		entryID := chi.URLParam(r, "entryID")
-
-		_, err := checkLogAccess(r.Context(), pool, logID, user.ID)
+		v, err := core.ListLogEntries.Call(actionContext(r), app, core.ListLogEntriesParams{LogID: chi.URLParam(r, "logID")})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
-
-		tag, err := pool.Exec(r.Context(),
-			`DELETE FROM log_entries WHERE id = $1 AND log_id = $2`,
-			entryID, logID,
-		)
-
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		if tag.RowsAffected() == 0 {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "entry not found"})
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
+		writeJSON(w, http.StatusOK, v)
 	}
 }
-
-func handleListLogEntries(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := entryPlacementCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
-
-		_, err := checkLogAccess(r.Context(), pool, logID, user.ID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
+		var body updateLogEntryRequest
+		if !decodeAction(w, r, &body) {
 			return
 		}
-
-		rows, err := pool.Query(r.Context(),
-			`SELECT le.id, le.log_id, le.user_id, u.username, le.fields, le.occurred_at, le.created_at, le.updated_at
-			 FROM log_entries le
-			 JOIN users u ON le.user_id = u.id
-			 WHERE le.log_id = $1
-			 ORDER BY le.occurred_at DESC`,
-			logID,
-		)
+		v, err := core.UpdateLogEntry.Call(actionContext(r), app, core.UpdateLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID"), Fields: body.Fields, OccurredAt: body.OccurredAt})
 		if err != nil {
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
-		defer rows.Close()
-
-		entries := []logEntryResponse{}
-		for rows.Next() {
-			var e logEntryResponse
-			if err := rows.Scan(&e.ID, &e.LogID, &e.UserID, &e.Username, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
-				internalError(w, r, err)
-				return
-			}
-			if e.Fields == nil {
-				e.Fields = map[string]any{}
-			}
-			entries = append(entries, e)
-		}
-
-		writeJSON(w, http.StatusOK, entries)
+		writeJSON(w, http.StatusOK, v)
 	}
 }
-
-// handleUpdateLogPlacement moves the caller's placement row for a log: changes
-// which folder it sits in and/or its position among siblings. The placement
-// is per-user — moving here does not affect any other user who can see the
-// same shared log.
-func handleUpdateLogPlacement(pool *pgxpool.Pool) http.HandlerFunc {
+func handleDeleteLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := entryPlacementCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
-
-		var req updateLogPlacementRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-			return
-		}
-		if req.Position < 0 {
-			req.Position = 0
-		}
-
-		if _, err := checkLogAccess(r.Context(), pool, logID, user.ID); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-
-		tx, err := pool.Begin(r.Context())
+		_, err := core.DeleteLogEntry.Call(actionContext(r), app, core.DeleteLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID")})
 		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		defer tx.Rollback(r.Context())
-
-		var oldFolder *string
-		var oldPosition int
-		err = tx.QueryRow(r.Context(),
-			`SELECT folder_id, position FROM user_log_placements
-			 WHERE user_id = $1 AND log_id = $2 FOR UPDATE`,
-			user.ID, logID,
-		).Scan(&oldFolder, &oldPosition)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-
-		if req.FolderID != nil {
-			if err := folderOwnedByUser(r.Context(), tx, *req.FolderID, user.ID); err != nil {
-				if errors.Is(err, pgx.ErrNoRows) {
-					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "folder not found"})
-					return
-				}
-				internalError(w, r, err)
-				return
-			}
-		}
-
-		sameFolder := (oldFolder == nil && req.FolderID == nil) ||
-			(oldFolder != nil && req.FolderID != nil && *oldFolder == *req.FolderID)
-
-		if sameFolder {
-			if req.Position > oldPosition {
-				var siblingCount int
-				if err := tx.QueryRow(r.Context(),
-					`SELECT count(*) FROM user_log_placements WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2`,
-					user.ID, oldFolder,
-				).Scan(&siblingCount); err != nil {
-					internalError(w, r, err)
-					return
-				}
-				if req.Position > siblingCount-1 {
-					req.Position = siblingCount - 1
-				}
-				if _, err := tx.Exec(r.Context(),
-					`UPDATE user_log_placements SET position = position - 1
-					 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2
-					   AND position > $3 AND position <= $4`,
-					user.ID, oldFolder, oldPosition, req.Position,
-				); err != nil {
-					internalError(w, r, err)
-					return
-				}
-			} else if req.Position < oldPosition {
-				if _, err := tx.Exec(r.Context(),
-					`UPDATE user_log_placements SET position = position + 1
-					 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2
-					   AND position >= $3 AND position < $4`,
-					user.ID, oldFolder, req.Position, oldPosition,
-				); err != nil {
-					internalError(w, r, err)
-					return
-				}
-			}
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements SET position = $1, updated_at = now()
-				 WHERE user_id = $2 AND log_id = $3`,
-				req.Position, user.ID, logID,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-		} else {
-			var destCount int
-			if err := tx.QueryRow(r.Context(),
-				`SELECT count(*) FROM user_log_placements WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2`,
-				user.ID, req.FolderID,
-			).Scan(&destCount); err != nil {
-				internalError(w, r, err)
-				return
-			}
-			if req.Position > destCount {
-				req.Position = destCount
-			}
-
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements SET position = position - 1
-				 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2 AND position > $3`,
-				user.ID, oldFolder, oldPosition,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements SET position = position + 1
-				 WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2 AND position >= $3`,
-				user.ID, req.FolderID, req.Position,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements SET folder_id = $1, position = $2, updated_at = now()
-				 WHERE user_id = $3 AND log_id = $4`,
-				req.FolderID, req.Position, user.ID, logID,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-		}
-
-		if err := tx.Commit(r.Context()); err != nil {
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-
-// handlePinLog toggles whether the log appears on the caller's quick-log
-// home page. Pinning a previously-unpinned log appends it to the end of the
-// home list. Unpinning leaves home_position untouched (no renumbering),
-// since the home page filters by pinned_to_home and gaps don't render.
-func handlePinLog(pool *pgxpool.Pool) http.HandlerFunc {
+func handleUpdateLogPlacement(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := entryPlacementCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
-
-		var req pinLogRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		var body updateLogPlacementRequest
+		if !decodeAction(w, r, &body) {
 			return
 		}
-
-		if _, err := checkLogAccess(r.Context(), pool, logID, user.ID); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-
-		tx, err := pool.Begin(r.Context())
+		_, err := core.UpdateLogPlacement.Call(actionContext(r), app, core.UpdateLogPlacementParams{LogID: chi.URLParam(r, "logID"), FolderID: body.FolderID, Position: body.Position})
 		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		defer tx.Rollback(r.Context())
-
-		var currentlyPinned bool
-		err = tx.QueryRow(r.Context(),
-			`SELECT pinned_to_home FROM user_log_placements
-			 WHERE user_id = $1 AND log_id = $2 FOR UPDATE`,
-			user.ID, logID,
-		).Scan(&currentlyPinned)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-
-		if req.Pinned == currentlyPinned {
-			if err := tx.Commit(r.Context()); err != nil {
-				internalError(w, r, err)
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		if req.Pinned {
-			// Pinning: append to end of pinned siblings.
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements
-				 SET pinned_to_home = true,
-				     home_position = COALESCE(
-				         (SELECT max(home_position) + 1
-				          FROM user_log_placements
-				          WHERE user_id = $1 AND pinned_to_home),
-				         0
-				     ),
-				     updated_at = now()
-				 WHERE user_id = $1 AND log_id = $2`,
-				user.ID, logID,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-		} else {
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements
-				 SET pinned_to_home = false, updated_at = now()
-				 WHERE user_id = $1 AND log_id = $2`,
-				user.ID, logID,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-		}
-
-		if err := tx.Commit(r.Context()); err != nil {
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-
-// handleUpdateLogHomePosition reorders a pinned log within the caller's home
-// page list. Only pinned siblings participate in renumbering; unpinned rows
-// retain whatever home_position they had.
-func handleUpdateLogHomePosition(pool *pgxpool.Pool) http.HandlerFunc {
+func handlePinLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := entryPlacementCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
-
-		var req updateHomePositionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		var body pinLogRequest
+		if !decodeAction(w, r, &body) {
 			return
 		}
-		if req.HomePosition < 0 {
-			req.HomePosition = 0
-		}
-
-		if _, err := checkLogAccess(r.Context(), pool, logID, user.ID); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-
-		tx, err := pool.Begin(r.Context())
+		_, err := core.PinLog.Call(actionContext(r), app, core.PinLogParams{LogID: chi.URLParam(r, "logID"), Pinned: body.Pinned})
 		if err != nil {
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
-		defer tx.Rollback(r.Context())
-
-		var pinned bool
-		var oldPosition int
-		err = tx.QueryRow(r.Context(),
-			`SELECT pinned_to_home, home_position FROM user_log_placements
-			 WHERE user_id = $1 AND log_id = $2 FOR UPDATE`,
-			user.ID, logID,
-		).Scan(&pinned, &oldPosition)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+func handleUpdateLogHomePosition(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := entryPlacementCore(pool, configured)
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body updateHomePositionRequest
+		if !decodeAction(w, r, &body) {
+			return
+		}
+		_, err := core.UpdateLogHomePosition.Call(actionContext(r), app, core.UpdateLogHomePositionParams{LogID: chi.URLParam(r, "logID"), HomePosition: body.HomePosition})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
-			return
-		}
-		if !pinned {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "log is not pinned to home"})
-			return
-		}
-
-		// Cap target to last position among pinned siblings.
-		var pinnedCount int
-		if err := tx.QueryRow(r.Context(),
-			`SELECT count(*) FROM user_log_placements WHERE user_id = $1 AND pinned_to_home`,
-			user.ID,
-		).Scan(&pinnedCount); err != nil {
-			internalError(w, r, err)
-			return
-		}
-		if req.HomePosition > pinnedCount-1 {
-			req.HomePosition = pinnedCount - 1
-		}
-		if req.HomePosition == oldPosition {
-			if err := tx.Commit(r.Context()); err != nil {
-				internalError(w, r, err)
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		if req.HomePosition > oldPosition {
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements SET home_position = home_position - 1
-				 WHERE user_id = $1 AND pinned_to_home
-				   AND home_position > $2 AND home_position <= $3`,
-				user.ID, oldPosition, req.HomePosition,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-		} else {
-			if _, err := tx.Exec(r.Context(),
-				`UPDATE user_log_placements SET home_position = home_position + 1
-				 WHERE user_id = $1 AND pinned_to_home
-				   AND home_position >= $2 AND home_position < $3`,
-				user.ID, req.HomePosition, oldPosition,
-			); err != nil {
-				internalError(w, r, err)
-				return
-			}
-		}
-		if _, err := tx.Exec(r.Context(),
-			`UPDATE user_log_placements SET home_position = $1, updated_at = now()
-			 WHERE user_id = $2 AND log_id = $3`,
-			req.HomePosition, user.ID, logID,
-		); err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		if err := tx.Commit(r.Context()); err != nil {
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

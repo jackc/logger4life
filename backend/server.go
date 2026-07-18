@@ -106,7 +106,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	logger.Info("Database connected")
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Logs: store, Folders: store, SavedQueries: store, SQLSchema: store})
+	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store})
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
@@ -208,9 +208,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Get("/api/logs/{logID}", handleGetLog(pool, app))
 		r.Put("/api/logs/{logID}", handleUpdateLog(pool, app))
 		r.Delete("/api/logs/{logID}", handleDeleteLog(pool, app))
-		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(pool))
-		r.Put("/api/logs/{logID}/pin", handlePinLog(pool))
-		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(pool))
+		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(pool, app))
+		r.Put("/api/logs/{logID}/pin", handlePinLog(pool, app))
+		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(pool, app))
 
 		// Folders
 		r.Post("/api/folders", handleCreateFolder(pool, app))
@@ -220,10 +220,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Delete("/api/folders/{folderID}", handleDeleteFolder(pool, app))
 
 		// Log entries
-		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))
-		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool))
-		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool))
-		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(pool))
+		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool, app))
+		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool, app))
+		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool, app))
+		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(pool, app))
 
 		// Sharing
 		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(pool))

@@ -86,7 +86,7 @@ func requireMCPUser(ctx context.Context) (*AuthUser, error) {
 
 func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oauthProvider, configured ...*core.Core) *mcpServer {
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Logs: store, SavedQueries: store, SQLSchema: store})
+	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, SavedQueries: store, SQLSchema: store})
 	if len(configured) > 0 {
 		app = configured[0]
 	}

@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,23 +20,6 @@ type renameFolderRequest struct {
 type moveFolderRequest struct {
 	ParentFolderID *string `json:"parent_folder_id"`
 	Position       int     `json:"position"`
-}
-
-// Kept while log placement is migrated to its core action; it permits the
-// legacy handler to share ownership checks across pool and transaction.
-type pgxQuerier interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}
-
-func folderOwnedByUser(ctx context.Context, q pgxQuerier, folderID, userID string) error {
-	var owner string
-	if err := q.QueryRow(ctx, `SELECT user_id FROM folders WHERE id = $1`, folderID).Scan(&owner); err != nil {
-		return err
-	}
-	if owner != userID {
-		return pgx.ErrNoRows
-	}
-	return nil
 }
 
 func folderCore(pool *pgxpool.Pool, configured []*core.Core) *core.Core {

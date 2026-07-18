@@ -15,15 +15,13 @@ npx playwright install --with-deps chromium
 tern migrate
 PGDATABASE=logger4life_test tern migrate
 
-# Run any additional setup scripts included in the shared/devcontainer directory. This is to allow for per developer or
+# Run any additional setup scripts included on the shared volume. This is to allow for per developer or
 # per-environment customizations. These scripts are not checked into source control.
-if [ -x "../shared/devcontainer/install" ]; then
-  ../shared/devcontainer/install
+if [ -x "/persist/shared/devcontainer/install" ]; then
+  /persist/shared/devcontainer/install
 fi
 
-# Create a symlink to the shared .scratch directory for temporary files if it exists.
-if [ -x "../shared/.scratch" ]; then
-  if [ ! -e .scratch ] && [ ! -L .scratch ]; then
-    ln -s ../shared/.scratch
-  fi
+# Create a symlink to the shared scratch directory (on the persistent shared volume) for temporary files.
+if [ ! -e .scratch ] && [ ! -L .scratch ]; then
+  ln -s /persist/shared/scratch .scratch
 fi

@@ -313,14 +313,18 @@ func listSQLSchemaViews(ctx context.Context, pool *pgxpool.Pool) ([]*sqlSchemaVi
 	return views, nil
 }
 
-func handleGetSQLSchema(pool *pgxpool.Pool) http.HandlerFunc {
+func handleGetSQLSchema(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
+	app := core.New(core.Config{SQLSchema: pgstore.New(pool)})
+	if len(configured) > 0 {
+		app = configured[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		views, err := listSQLSchemaViews(r.Context(), pool)
+		result, err := core.GetSQLSchema.Call(r.Context(), app, core.GetSQLSchemaParams{})
 		if err != nil {
 			internalError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"views": views})
+		writeJSON(w, http.StatusOK, result)
 	}
 }
 

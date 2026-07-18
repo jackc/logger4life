@@ -35,7 +35,7 @@ type listLogsOutput struct {
 type getSQLSchemaInput struct{}
 
 type getSQLSchemaOutput struct {
-	Views []*sqlSchemaView `json:"views" jsonschema:"views the user can query in the sql_query schema, with their columns and comments"`
+	Views []*core.SQLSchemaView `json:"views" jsonschema:"views the user can query in the sql_query schema, with their columns and comments"`
 }
 
 type listSavedQueriesInput struct{}
@@ -85,7 +85,8 @@ func requireMCPUser(ctx context.Context) (*AuthUser, error) {
 }
 
 func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oauthProvider, configured ...*core.Core) *mcpServer {
-	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	store := pgstore.New(pool)
+	app := core.New(core.Config{Logs: store, SavedQueries: store, SQLSchema: store})
 	if len(configured) > 0 {
 		app = configured[0]
 	}
@@ -123,11 +124,11 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		if _, err := requireMCPUser(ctx); err != nil {
 			return nil, getSQLSchemaOutput{}, err
 		}
-		views, err := listSQLSchemaViews(ctx, pool)
+		result, err := core.GetSQLSchema.Call(ctx, app, core.GetSQLSchemaParams{})
 		if err != nil {
 			return nil, getSQLSchemaOutput{}, mcpToolError(ctx, err)
 		}
-		return nil, getSQLSchemaOutput{Views: views}, nil
+		return nil, getSQLSchemaOutput{Views: result.Views}, nil
 	})
 
 	mcp.AddTool(srv, &mcp.Tool{

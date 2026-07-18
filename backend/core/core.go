@@ -9,6 +9,7 @@ type Core struct {
 	logs         LogStore
 	folders      FolderStore
 	savedQueries SavedQueryStore
+	sqlSchema    SQLSchemaStore
 	middleware   []Middleware
 }
 
@@ -16,11 +17,12 @@ type Config struct {
 	Logs         LogStore
 	Folders      FolderStore
 	SavedQueries SavedQueryStore
+	SQLSchema    SQLSchemaStore
 	Middleware   []Middleware
 }
 
 func New(cfg Config) *Core {
-	return &Core{logs: cfg.Logs, folders: cfg.Folders, savedQueries: cfg.SavedQueries, middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{logs: cfg.Logs, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 func (c *Core) run(ctx context.Context, inv Invocation, h Handler) (any, error) {
 	for i := len(c.middleware) - 1; i >= 0; i-- {

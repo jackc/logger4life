@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,11 +47,13 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxp
 
 	oauth := newOAuthProvider(pool, srv.URL)
 	mcpSrv := newMCPServer(pool, newSQLArbiter(), oauth)
+	store := pgstore.New(pool)
+	app := core.New(core.Config{Users: store, Sessions: store, Tx: store})
 
 	r := chi.NewRouter()
-	r.Use(loadSession(pool))
-	r.Post("/api/register", handleRegister(pool, true))
-	r.Post("/api/login", handleLogin(pool))
+	r.Use(loadSession(app))
+	r.Post("/api/register", handleRegister(pool, true, app))
+	r.Post("/api/login", handleLogin(pool, app))
 	r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 	r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
 	r.Post("/oauth/register", oauth.handleDynamicClientRegistration())

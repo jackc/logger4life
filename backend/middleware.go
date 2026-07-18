@@ -2,23 +2,21 @@ package backend
 
 import (
 	"context"
-	"encoding/hex"
+	"errors"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/logger4life/backend/core"
 )
 
 type contextKey string
 
 const userContextKey contextKey = "user"
 
-type AuthUser struct {
-	ID       string
-	Username string
-	Email    *string
-}
+type AuthUser = core.User
 
-func loadSession(pool *pgxpool.Pool) func(http.Handler) http.Handler {
+// loadSession keeps cookie parsing in HTTP, then delegates token validation
+// and session persistence to the authenticate_session core action.
+func loadSession(app *core.Core) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(sessionCookieName)
@@ -27,29 +25,17 @@ func loadSession(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 				return
 			}
 
-			tokenBytes, err := hex.DecodeString(cookie.Value)
+			user, err := core.AuthenticateSession.Call(r.Context(), app, core.AuthenticateSessionParams{Token: cookie.Value})
 			if err != nil {
-				clearSessionCookie(w)
+				if errors.Is(err, core.ErrInvalidSession) {
+					clearSessionCookie(w)
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			var user AuthUser
-			err = pool.QueryRow(r.Context(),
-				`SELECT u.id, u.username, u.email
-				 FROM sessions s
-				 JOIN users u ON s.user_id = u.id
-				 WHERE s.token = $1 AND s.expires_at > now()`,
-				tokenBytes,
-			).Scan(&user.ID, &user.Username, &user.Email)
-
-			if err != nil {
-				clearSessionCookie(w)
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), userContextKey, &user)
+			ctx := core.WithUserID(r.Context(), user.ID)
+			ctx = context.WithValue(ctx, userContextKey, &user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

@@ -106,7 +106,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	logger.Info("Database connected")
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, Sharing: store})
+	app := core.New(core.Config{Users: store, Sessions: store, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, Sharing: store})
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
@@ -130,7 +130,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 			next.ServeHTTP(w, r)
 		})
 	})
-	r.Use(loadSession(pool))
+	r.Use(loadSession(app))
 	r.Use(httplog.RequestLogger(logger, &httplog.Options{
 		Level:         cfg.SlogLevel(),
 		RecoverPanics: true,
@@ -153,11 +153,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Public routes
 	r.Get("/api/hello", handleHello(pool))
 	r.Get("/api/settings", handleSettings(cfg))
-	r.Post("/api/register", handleRegister(pool, cfg.AllowRegistration))
-	r.Post("/api/login", handleLogin(pool))
+	r.Post("/api/register", handleRegister(pool, cfg.AllowRegistration, app))
+	r.Post("/api/login", handleLogin(pool, app))
 	if wan != nil {
 		r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(pool, wan))
-		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan))
+		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan, app))
 	}
 
 	sqlArbiter := newSQLArbiter()
@@ -190,10 +190,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(requireAuth)
-		r.Post("/api/logout", handleLogout(pool))
-		r.Get("/api/me", handleMe)
-		r.Put("/api/me/email", handleChangeEmail(pool))
-		r.Put("/api/me/password", handleChangePassword(pool))
+		r.Post("/api/logout", handleLogout(pool, app))
+		r.Get("/api/me", handleMe(app))
+		r.Put("/api/me/email", handleChangeEmail(pool, app))
+		r.Put("/api/me/password", handleChangePassword(pool, app))
 		if wan != nil {
 			r.Get("/api/me/passkeys", handleListPasskeys(pool))
 			r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(pool))

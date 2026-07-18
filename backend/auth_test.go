@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,20 +47,22 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		RPOrigins:     []string{"http://localhost"},
 	})
 	require.NoError(t, err)
+	store := pgstore.New(pool)
+	app := core.New(core.Config{Users: store, Sessions: store, Tx: store})
 
 	r := chi.NewRouter()
-	r.Use(loadSession(pool))
+	r.Use(loadSession(app))
 	r.Get("/api/settings", handleSettings(Config{AllowRegistration: allowRegistration, WebAuthnRPID: "localhost", WebAuthnOrigin: "http://localhost"}))
-	r.Post("/api/register", handleRegister(pool, allowRegistration))
-	r.Post("/api/login", handleLogin(pool))
+	r.Post("/api/register", handleRegister(pool, allowRegistration, app))
+	r.Post("/api/login", handleLogin(pool, app))
 	r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(pool, wan))
-	r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan))
+	r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(pool, wan, app))
 	r.Group(func(r chi.Router) {
 		r.Use(requireAuth)
-		r.Post("/api/logout", handleLogout(pool))
-		r.Get("/api/me", handleMe)
-		r.Put("/api/me/email", handleChangeEmail(pool))
-		r.Put("/api/me/password", handleChangePassword(pool))
+		r.Post("/api/logout", handleLogout(pool, app))
+		r.Get("/api/me", handleMe(app))
+		r.Put("/api/me/email", handleChangeEmail(pool, app))
+		r.Put("/api/me/password", handleChangePassword(pool, app))
 		r.Get("/api/me/passkeys", handleListPasskeys(pool))
 		r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(pool))
 		r.Delete("/api/me/passkeys/{passkeyID}", handleDeletePasskey(pool))

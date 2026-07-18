@@ -12,6 +12,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofrs/uuid/v5"
+	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -245,7 +246,8 @@ func handlePasskeyLoginBegin(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.Ha
 	}
 }
 
-func handlePasskeyLoginFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.HandlerFunc {
+func handlePasskeyLoginFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn, configured ...*core.Core) http.HandlerFunc {
+	app := authCore(pool, configured)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ChallengeID string          `json:"challenge_id"`
@@ -299,24 +301,13 @@ func handlePasskeyLoginFinish(pool *pgxpool.Pool, wan *webauthn.WebAuthn) http.H
 			return
 		}
 
-		token, err := createSession(r.Context(), pool, userID)
+		authSession, err := core.StartSession.Call(r.Context(), app, core.StartSessionParams{UserID: userID})
 		if err != nil {
 			internalError(w, r, err)
 			return
 		}
-		setSessionCookie(w, token)
-
-		var resp userResponse
-		err = pool.QueryRow(r.Context(),
-			`SELECT id, username, email FROM users WHERE id = $1`,
-			userID,
-		).Scan(&resp.ID, &resp.Username, &resp.Email)
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, resp)
+		setSessionCookie(w, authSession.Token, authSession.ExpiresAt)
+		writeJSON(w, http.StatusOK, authSession.User)
 	}
 }
 

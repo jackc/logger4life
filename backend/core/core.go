@@ -6,6 +6,9 @@ package core
 import "context"
 
 type Core struct {
+	users        UserStore
+	sessions     SessionStore
+	tx           Transactor
 	logs         LogStore
 	entries      LogEntryStore
 	placements   LogPlacementStore
@@ -17,6 +20,9 @@ type Core struct {
 }
 
 type Config struct {
+	Users        UserStore
+	Sessions     SessionStore
+	Tx           Transactor
 	Logs         LogStore
 	Entries      LogEntryStore
 	Placements   LogPlacementStore
@@ -28,7 +34,23 @@ type Config struct {
 }
 
 func New(cfg Config) *Core {
-	return &Core{logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, sharing: cfg.Sharing, middleware: append([]Middleware(nil), cfg.Middleware...)}
+	tx := cfg.Tx
+	if tx == nil {
+		tx = passthroughTx{}
+	}
+	return &Core{users: cfg.Users, sessions: cfg.Sessions, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, sharing: cfg.Sharing, middleware: append([]Middleware(nil), cfg.Middleware...)}
+}
+
+// Transactor is the driven port for transaction boundaries. Store calls made
+// with the context passed to fn participate in the same transaction.
+type Transactor interface {
+	InTx(context.Context, func(context.Context) error) error
+}
+
+type passthroughTx struct{}
+
+func (passthroughTx) InTx(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 func (c *Core) run(ctx context.Context, inv Invocation, h Handler) (any, error) {
 	for i := len(c.middleware) - 1; i >= 0; i-- {

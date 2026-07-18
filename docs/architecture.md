@@ -23,6 +23,13 @@ authenticate and translate transport data, put trusted identity into the
 core context, invoke an action, and translate its result. They do not own
 business rules or SQL.
 
+Authentication follows the same boundary. `core.User` is the serializable
+identity and never contains a password hash; hashes only cross `UserStore`
+method boundaries. Core actions own password policy, bcrypt orchestration,
+session token generation, and registration's user/session transaction. The
+HTTP adapter owns cookie parsing and attributes, while `pgstore` owns all user
+and session SQL.
+
 ## Where new code goes
 
 - Pure validation, calculation, and domain types: `backend/domain`.

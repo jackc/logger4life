@@ -38,14 +38,14 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 ### 3. Authentication and sessions
 
-- [ ] Define core user and session types without exposing password hashes.
-- [ ] Add user and session store ports.
-- [ ] Add register, password-login, session-authentication, logout, profile,
+- [x] Define core user and session types without exposing password hashes.
+- [x] Add user and session store ports.
+- [x] Add register, password-login, session-authentication, logout, profile,
   email-change, and password-change actions.
-- [ ] Move password policy and credential orchestration into core actions.
-- [ ] Keep cookie parsing and writing in the HTTP adapter.
-- [ ] Move session database access out of authentication middleware.
-- [ ] Add a transactor port for multi-write registration/session actions.
+- [x] Move password policy and credential orchestration into core actions.
+- [x] Keep cookie parsing and writing in the HTTP adapter.
+- [x] Move session database access out of authentication middleware.
+- [x] Add a transactor port for multi-write registration/session actions.
 
 ### 4. Passkeys
 

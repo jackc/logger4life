@@ -105,7 +105,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to query database: %w", err)
 	}
 	logger.Info("Database connected")
-	app := core.New(core.Config{Logs: pgstore.New(pool)})
+	store := pgstore.New(pool)
+	app := core.New(core.Config{Logs: store, Folders: store})
 
 	var wan *webauthn.WebAuthn
 	if cfg.PasskeysEnabled() {
@@ -212,11 +213,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(pool))
 
 		// Folders
-		r.Post("/api/folders", handleCreateFolder(pool))
-		r.Get("/api/folders", handleListFolders(pool))
-		r.Put("/api/folders/{folderID}", handleRenameFolder(pool))
-		r.Put("/api/folders/{folderID}/move", handleMoveFolder(pool))
-		r.Delete("/api/folders/{folderID}", handleDeleteFolder(pool))
+		r.Post("/api/folders", handleCreateFolder(pool, app))
+		r.Get("/api/folders", handleListFolders(pool, app))
+		r.Put("/api/folders/{folderID}", handleRenameFolder(pool, app))
+		r.Put("/api/folders/{folderID}/move", handleMoveFolder(pool, app))
+		r.Delete("/api/folders/{folderID}", handleDeleteFolder(pool, app))
 
 		// Log entries
 		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool))

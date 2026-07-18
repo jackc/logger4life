@@ -7,16 +7,18 @@ import "context"
 
 type Core struct {
 	logs       LogStore
+	folders    FolderStore
 	middleware []Middleware
 }
 
 type Config struct {
 	Logs       LogStore
+	Folders    FolderStore
 	Middleware []Middleware
 }
 
 func New(cfg Config) *Core {
-	return &Core{logs: cfg.Logs, middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{logs: cfg.Logs, folders: cfg.Folders, middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 func (c *Core) run(ctx context.Context, inv Invocation, h Handler) (any, error) {
 	for i := len(c.middleware) - 1; i >= 0; i-- {

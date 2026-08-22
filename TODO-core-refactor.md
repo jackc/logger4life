@@ -98,11 +98,11 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 ## Testing
 
-- [ ] Add core unit tests using narrow fake ports for each action group.
+- [x] Add core unit tests using narrow fake ports for each action group.
 - [ ] Add shared store conformance tests for each persistence port.
 - [x] Preserve the existing HTTP and browser tests as adapter and end-to-end
   coverage.
-- [ ] Test sentinel error translation independently from PostgreSQL errors.
+- [x] Test sentinel error translation independently from PostgreSQL errors.
 - [ ] Test middleware execution for typed and dynamic action invocation.
 - [ ] Run `go test ./...` and `git diff --check` after every migration slice.
 

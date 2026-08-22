@@ -103,30 +103,6 @@ func authSession(user User, session Session) AuthSession {
 	return AuthSession{User: user, Token: hex.EncodeToString(session.Token), ExpiresAt: session.ExpiresAt}
 }
 
-// StartSession is used by trusted authentication adapters after a non-password
-// credential (currently a passkey) has already been verified.
-type StartSessionParams struct {
-	UserID string `json:"user_id"`
-}
-
-var StartSession = Define(ActionDef[StartSessionParams, AuthSession]{
-	Name: "start_session", Description: "Start a session after a trusted credential check.", Mutating: true,
-	Handler: func(ctx context.Context, c *Core, p StartSessionParams) (AuthSession, error) {
-		user, err := c.users.GetUserByID(ctx, p.UserID)
-		if err != nil {
-			return AuthSession{}, err
-		}
-		session, err := newSession(user.ID)
-		if err != nil {
-			return AuthSession{}, err
-		}
-		if err := c.sessions.CreateSession(ctx, session); err != nil {
-			return AuthSession{}, err
-		}
-		return authSession(user, session), nil
-	},
-})
-
 type RegisterUserParams struct {
 	Username string  `json:"username"`
 	Email    *string `json:"email,omitempty"`

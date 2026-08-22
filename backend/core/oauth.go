@@ -158,7 +158,7 @@ type RegisterOAuthClientParams struct {
 }
 
 var RegisterOAuthClient = Define(ActionDef[RegisterOAuthClientParams, OAuthClient]{
-	Name: "register_oauth_client", Description: "Register an OAuth client (RFC 7591 dynamic client registration).", Mutating: true,
+	Name: "register_oauth_client", Public: true, Description: "Register an OAuth client (RFC 7591 dynamic client registration).", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p RegisterOAuthClientParams) (OAuthClient, error) {
 		if len(p.RedirectURIs) == 0 {
 			return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uris is required")
@@ -247,7 +247,7 @@ func (c *Core) validateAuthorization(ctx context.Context, p OAuthAuthorizationPa
 }
 
 var PrepareOAuthAuthorization = Define(ActionDef[OAuthAuthorizationParams, OAuthAuthorizationRequest]{
-	Name: "prepare_oauth_authorization", Description: "Validate an OAuth authorization request and describe the client seeking consent.",
+	Name: "prepare_oauth_authorization", Public: true, Description: "Validate an OAuth authorization request and describe the client seeking consent.",
 	Handler: func(ctx context.Context, c *Core, p OAuthAuthorizationParams) (OAuthAuthorizationRequest, error) {
 		return c.validateAuthorization(ctx, p)
 	},
@@ -330,7 +330,7 @@ type ExchangeOAuthCodeParams struct {
 }
 
 var ExchangeOAuthCode = Define(ActionDef[ExchangeOAuthCodeParams, OAuthTokens]{
-	Name: "exchange_oauth_code", Description: "Exchange an authorization code plus PKCE verifier for a token pair.", Mutating: true,
+	Name: "exchange_oauth_code", Public: true, Description: "Exchange an authorization code plus PKCE verifier for a token pair.", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p ExchangeOAuthCodeParams) (OAuthTokens, error) {
 		if p.ClientID == "" || p.Code == "" || p.CodeVerifier == "" {
 			return OAuthTokens{}, inlineOAuthError("invalid_request", "client_id, code, and code_verifier are required")
@@ -378,7 +378,7 @@ type RefreshOAuthTokenParams struct {
 }
 
 var RefreshOAuthToken = Define(ActionDef[RefreshOAuthTokenParams, OAuthTokens]{
-	Name: "refresh_oauth_token", Description: "Rotate a refresh token into a new token pair.", Mutating: true,
+	Name: "refresh_oauth_token", Public: true, Description: "Rotate a refresh token into a new token pair.", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p RefreshOAuthTokenParams) (OAuthTokens, error) {
 		if p.ClientID == "" || p.RefreshToken == "" {
 			return OAuthTokens{}, inlineOAuthError("invalid_request", "client_id and refresh_token are required")
@@ -412,7 +412,7 @@ type RevokeOAuthTokenParams struct {
 }
 
 var RevokeOAuthToken = Define(ActionDef[RevokeOAuthTokenParams, struct{}]{
-	Name: "revoke_oauth_token", Description: "Revoke an access or refresh token (RFC 7009).", Mutating: true,
+	Name: "revoke_oauth_token", Public: true, Description: "Revoke an access or refresh token (RFC 7009).", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p RevokeOAuthTokenParams) (struct{}, error) {
 		if p.Token == "" {
 			return struct{}{}, nil
@@ -439,7 +439,7 @@ type AuthenticateOAuthTokenParams struct {
 }
 
 var AuthenticateOAuthToken = Define(ActionDef[AuthenticateOAuthTokenParams, User]{
-	Name: "authenticate_oauth_token", Description: "Resolve an OAuth access token to its user.",
+	Name: "authenticate_oauth_token", Public: true, Description: "Resolve an OAuth access token to its user.",
 	Handler: func(ctx context.Context, c *Core, p AuthenticateOAuthTokenParams) (User, error) {
 		if p.Token == "" {
 			return User{}, ErrOAuthInvalidToken

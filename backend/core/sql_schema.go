@@ -20,7 +20,7 @@ type SQLSchema struct {
 	Views []*SQLSchemaView `json:"views"`
 }
 
-var GetSQLSchema = Define(ActionDef[GetSQLSchemaParams, SQLSchema]{Name: "get_sql_schema", Description: "Describe the read-only SQL schema.", Handler: func(ctx context.Context, c *Core, _ GetSQLSchemaParams) (SQLSchema, error) {
+var GetSQLSchema = Define(ActionDef[GetSQLSchemaParams, SQLSchema]{Name: "get_sql_schema", Public: true, Description: "Describe the read-only SQL schema.", Handler: func(ctx context.Context, c *Core, _ GetSQLSchemaParams) (SQLSchema, error) {
 	v, e := c.sqlSchema.ListSQLSchemaViews(ctx)
 	return SQLSchema{Views: v}, e
 }})

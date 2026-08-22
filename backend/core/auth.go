@@ -119,7 +119,7 @@ func (p *RegisterUserParams) Validate() error {
 }
 
 var RegisterUser = Define(ActionDef[RegisterUserParams, AuthSession]{
-	Name: "register_user", Description: "Register a user and start a session.", Mutating: true,
+	Name: "register_user", Public: true, Description: "Register a user and start a session.", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p RegisterUserParams) (AuthSession, error) {
 		hash, err := bcrypt.GenerateFromPassword([]byte(p.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -152,7 +152,7 @@ type LoginWithPasswordParams struct {
 }
 
 var LoginWithPassword = Define(ActionDef[LoginWithPasswordParams, AuthSession]{
-	Name: "login_with_password", Description: "Log in with a username and password.", Mutating: true,
+	Name: "login_with_password", Public: true, Description: "Log in with a username and password.", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p LoginWithPasswordParams) (AuthSession, error) {
 		user, hash, err := c.users.GetUserByUsername(ctx, p.Username)
 		if errors.Is(err, ErrUserNotFound) {
@@ -180,7 +180,7 @@ type AuthenticateSessionParams struct {
 }
 
 var AuthenticateSession = Define(ActionDef[AuthenticateSessionParams, User]{
-	Name: "authenticate_session", Description: "Resolve a session token to its user.",
+	Name: "authenticate_session", Public: true, Description: "Resolve a session token to its user.",
 	Handler: func(ctx context.Context, c *Core, p AuthenticateSessionParams) (User, error) {
 		token, err := hex.DecodeString(p.Token)
 		if err != nil || len(token) == 0 {
@@ -195,7 +195,7 @@ type LogoutParams struct {
 }
 
 var Logout = Define(ActionDef[LogoutParams, struct{}]{
-	Name: "logout", Description: "Delete a session.", Mutating: true,
+	Name: "logout", Public: true, Description: "Delete a session.", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p LogoutParams) (struct{}, error) {
 		token, err := hex.DecodeString(p.Token)
 		if err != nil || len(token) == 0 {

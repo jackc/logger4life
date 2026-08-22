@@ -63,7 +63,29 @@ one `pgstore.Store` and one `core.Core`, and injects that core into every HTTP
 and MCP adapter; no handler constructs its own. Health and hello are
 infrastructure liveness probes rather than catalog operations — they read no
 application state — so `Run` supplies a `HealthCheck` function and the handlers
-hold neither SQL nor a connection pool.
+hold neither SQL nor a connection pool. `GET /api/settings` is exempt for the
+same reason: it reports what this process was configured with, so there is no
+stored state for an action to own.
+
+Every other HTTP handler and every MCP tool reaches persistent state only by
+calling a catalog action, which is what makes the catalog the inventory of
+what this application can do rather than a partial view of it.
+
+Authorization is declared by actions and enforced twice. An action states
+whether it is `Public` — reachable before the caller is anyone — and the
+`RequireUser` middleware the composition root installs turns an anonymous
+caller away from everything else. The actions still establish the caller for
+themselves, so the middleware is a second line rather than the only one: what
+it adds is that a new action is closed by default, and that an anonymous
+caller is refused before hearing anything about the parameters it sent, since
+middleware wraps parameter validation rather than following it.
+
+Auditing is middleware for the opposite reason: it is the one concern that has
+to cover every action, and an action that forgot to record itself would be the
+one worth having a record of. It logs mutating actions only — reads are the
+bulk of traffic and the request log already covers them — and records the
+action and the caller rather than the parameters, which carry the very data
+the log exists to describe.
 
 Transaction boundaries are declared by actions, not imposed on them. An action
 that spans several writes wraps them in `c.tx.InTx`; every `pgstore` method

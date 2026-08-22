@@ -88,7 +88,12 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
   joins an ambient transaction instead of silently taking its own connection.
   Middleware deliberately left out — actions declare their own boundaries with
   `c.tx.InTx`, which keeps reads and single-write actions out of transactions.
-- [ ] Add authorization and audit middleware where appropriate.
+- [x] Add authorization and audit middleware where appropriate. Authorization:
+  actions declare `Public` and `core.RequireUser` refuses an anonymous caller
+  for everything else, so a new action is closed by default and is refused
+  before parameter validation can answer it. Audit: mutating actions are
+  logged with the caller in `backend/server/audit.go`. Both are installed by
+  the composition root.
 - [x] Decide whether health and hello database checks remain adapter-level
   infrastructure operations. Decision: yes — they read no application state,
   so the composition root supplies a `HealthCheck` and the handlers hold no
@@ -104,17 +109,20 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
   coverage.
 - [x] Test sentinel error translation independently from PostgreSQL errors.
 - [x] Test middleware execution for typed and dynamic action invocation.
-- [ ] Run `go test ./...` and `git diff --check` after every migration slice.
+- [x] Run `go test ./...` and `git diff --check` after every migration slice.
 
 ## Completion criteria
 
-- [ ] Every operation that reads or changes persistent application state is a
+- [x] Every operation that reads or changes persistent application state is a
   catalog action, except explicitly documented infrastructure exemptions.
+  Verified: `pgstore` and `pgxpool` appear only in the composition root, and
+  the only handlers that call no action are health, hello, and settings, all
+  three documented in `docs/architecture.md`.
 - [x] HTTP and MCP adapters contain no business rules or application SQL.
 - [x] Pure calculations and validation live in domain packages.
-- [ ] All effects are represented by core-owned driven-port interfaces.
+- [x] All effects are represented by core-owned driven-port interfaces.
 - [x] PostgreSQL-specific types and errors do not escape `backend/pgstore` or
   another explicitly designated infrastructure package.
-- [ ] The action catalog is the authoritative inventory of application
-  capabilities.
-- [ ] The full Go and browser test suites pass.
+- [x] The action catalog is the authoritative inventory of application
+  capabilities. Every HTTP handler and all five MCP tools call one.
+- [x] The full Go and browser test suites pass.

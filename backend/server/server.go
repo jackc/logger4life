@@ -58,7 +58,10 @@ func Run(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("unable to initialize webauthn: %w", err)
 		}
 	}
-	app := core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, Sharing: store, OAuth: store, OAuthIssuer: cfg.MCPCanonicalURL})
+	app := core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, Sharing: store, OAuth: store, OAuthIssuer: cfg.MCPCanonicalURL,
+		// RequireUser is outermost so an anonymous caller is turned away
+		// before the audit trail records an attempt it never let through.
+		Middleware: []core.Middleware{core.RequireUser(), auditMiddleware(logger)}})
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)

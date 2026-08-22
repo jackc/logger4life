@@ -32,6 +32,7 @@ type AnyAction interface {
 	Name() string
 	Description() string
 	Mutating() bool
+	Public() bool
 	NewParams() any
 	Invoke(context.Context, *Core, any) (any, error)
 }
@@ -40,7 +41,12 @@ type ActionDef[P, R any] struct {
 	Name        string
 	Description string
 	Mutating    bool
-	Handler     func(context.Context, *Core, P) (R, error)
+	// Public marks an action a caller may invoke before being anyone —
+	// registering, logging in, and the OAuth and passkey exchanges that
+	// establish who the caller is. It defaults to false so that an action
+	// added without a thought about it is closed rather than open.
+	Public  bool
+	Handler func(context.Context, *Core, P) (R, error)
 }
 
 type Action[P, R any] struct{ def ActionDef[P, R] }
@@ -78,6 +84,7 @@ func Catalog() []AnyAction {
 func (a *Action[P, R]) Name() string        { return a.def.Name }
 func (a *Action[P, R]) Description() string { return a.def.Description }
 func (a *Action[P, R]) Mutating() bool      { return a.def.Mutating }
+func (a *Action[P, R]) Public() bool        { return a.def.Public }
 func (a *Action[P, R]) NewParams() any      { return new(P) }
 func (a *Action[P, R]) Call(ctx context.Context, c *Core, p P) (R, error) {
 	var zero R

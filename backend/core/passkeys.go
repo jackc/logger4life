@@ -300,7 +300,7 @@ type PasskeyLoginOptions struct {
 }
 
 var BeginPasskeyLogin = Define(ActionDef[BeginPasskeyLoginParams, PasskeyLoginOptions]{
-	Name: "begin_passkey_login", Description: "Begin a discoverable passkey login.", Mutating: true,
+	Name: "begin_passkey_login", Public: true, Description: "Begin a discoverable passkey login.", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, _ BeginPasskeyLoginParams) (PasskeyLoginOptions, error) {
 		wan, err := requireWebAuthn(c)
 		if err != nil {
@@ -337,7 +337,7 @@ func (p FinishPasskeyLoginParams) Validate() error {
 }
 
 var FinishPasskeyLogin = Define(ActionDef[FinishPasskeyLoginParams, AuthSession]{
-	Name: "finish_passkey_login", Description: "Verify a passkey response and create a session.", Mutating: true,
+	Name: "finish_passkey_login", Public: true, Description: "Verify a passkey response and create a session.", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p FinishPasskeyLoginParams) (AuthSession, error) {
 		wan, err := requireWebAuthn(c)
 		if err != nil {

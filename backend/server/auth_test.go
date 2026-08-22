@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -52,6 +53,9 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan,
 		Tx: store, Logs: store, Entries: store, Placements: store, Folders: store,
 		SavedQueries: store, SQLSchema: store, UserSQL: store, Sharing: store,
+		// The same stack the composition root installs, so these tests
+		// exercise the configuration that actually ships.
+		Middleware: []core.Middleware{core.RequireUser(), auditMiddleware(slog.New(slog.DiscardHandler))},
 	})
 
 	r := chi.NewRouter()

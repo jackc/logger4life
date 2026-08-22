@@ -1,5 +1,4 @@
 [env]
-_.path = ["{{config_root}}/bin"]
 
 # Database configuration
 PGDATABASE = "logger4life_dev"

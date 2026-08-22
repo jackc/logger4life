@@ -1,5 +1,4 @@
 {
-  "go.goroot": "/persist/shared/mise/data/installs/go/1.26.4",
   "debug.javascript.defaultRuntimeExecutable": {
     "pwa-node": "/persist/shared/mise/data/shims/node"
   },

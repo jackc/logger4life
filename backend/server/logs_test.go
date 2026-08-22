@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1781,4 +1782,54 @@ func TestMalformedIDsAreRejectedNotFatal(t *testing.T) {
 		}
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "%s %s", c.method, c.url)
 	}
+}
+
+// Removing someone from a shared log used to hide it from their list without
+// taking away their access: every single-log read scoped itself to the
+// placement row, and that row deliberately survives a removal so a rejoin can
+// restore the folder the log was filed under. The log stayed readable and
+// writable by ID.
+func TestRemoveShare_RevokesAccessNotJustTheListing(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	aliceCookies := registerUser(t, srv.URL, "alice")
+	bobCookies := registerUser(t, srv.URL, "bob")
+
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Shared"}, aliceCookies)
+	logID := log["id"].(string)
+	_, shareBody := postJSON(srv.URL+"/api/logs/"+logID+"/share-token", map[string]any{}, aliceCookies)
+	token := shareBody["share_token"].(string)
+
+	resp, _ := postJSON(srv.URL+"/api/join/"+token, map[string]any{}, bobCookies)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	resp, entry := postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, bobCookies)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	entryID := entry["id"].(string)
+
+	_, shares := getJSONArray(srv.URL+"/api/logs/"+logID+"/shares", aliceCookies)
+	require.Len(t, shares, 1)
+	resp, _ = deleteJSON(srv.URL+"/api/logs/"+logID+"/shares/"+shares[0]["id"].(string), aliceCookies)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	// Bob is out. Every route that names the log directly must say so.
+	resp, _ = getJSON(srv.URL+"/api/logs/"+logID, bobCookies)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "GET log")
+	resp, _ = getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", bobCookies)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "GET entries")
+	resp, _ = postJSON(srv.URL+"/api/logs/"+logID+"/entries", map[string]any{}, bobCookies)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "POST entry")
+	resp, _ = putJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, map[string]any{
+		"fields":      map[string]any{},
+		"occurred_at": time.Now().Format(time.RFC3339),
+	}, bobCookies)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "PUT entry")
+	resp, _ = deleteJSON(srv.URL+"/api/logs/"+logID+"/entries/"+entryID, bobCookies)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "DELETE entry")
+
+	// Alice keeps the log and the entry Bob wrote while he was a member.
+	resp, _ = getJSON(srv.URL+"/api/logs/"+logID, aliceCookies)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	_, entries := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", aliceCookies)
+	assert.Len(t, entries, 1)
 }

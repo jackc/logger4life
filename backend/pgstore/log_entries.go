@@ -12,7 +12,7 @@ import (
 
 func (s *Store) LogFieldDefinitions(ctx context.Context, userID, logID string) ([]domain.FieldDefinition, error) {
 	var defs []domain.FieldDefinition
-	e := s.conn(ctx).QueryRow(ctx, `SELECT l.fields FROM logs l JOIN user_log_placements p ON p.log_id=l.id AND p.user_id=$1 WHERE l.id=$2`, userID, logID).Scan(&defs)
+	e := s.conn(ctx).QueryRow(ctx, `SELECT l.fields FROM logs l JOIN user_log_placements p ON p.log_id=l.id AND p.user_id=$1 WHERE l.id=$2 AND `+visibleToUser, userID, logID).Scan(&defs)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, core.ErrLogNotFound
 	}

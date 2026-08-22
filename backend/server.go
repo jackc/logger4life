@@ -152,8 +152,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Public routes
 	r.Get("/api/hello", handleHello(pool))
 	r.Get("/api/settings", handleSettings(cfg))
-	r.Post("/api/register", handleRegister(pool, cfg.AllowRegistration, app))
-	r.Post("/api/login", handleLogin(pool, app))
+	r.Post("/api/register", handleRegister(app, cfg.AllowRegistration))
+	r.Post("/api/login", handleLogin(app))
 	if wan != nil {
 		r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(app))
 		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(app))
@@ -164,7 +164,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// 8707 audience binding for issued access tokens).
 	if cfg.MCPEnabled() {
 		oauth := newOAuthProvider(app, cfg.MCPCanonicalURL)
-		mcpSrv := newMCPServer(pool, oauth, app)
+		mcpSrv := newMCPServer(app, oauth)
 
 		r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 		r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
@@ -187,10 +187,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(requireAuth)
-		r.Post("/api/logout", handleLogout(pool, app))
+		r.Post("/api/logout", handleLogout(app))
 		r.Get("/api/me", handleMe(app))
-		r.Put("/api/me/email", handleChangeEmail(pool, app))
-		r.Put("/api/me/password", handleChangePassword(pool, app))
+		r.Put("/api/me/email", handleChangeEmail(app))
+		r.Put("/api/me/password", handleChangePassword(app))
 		if wan != nil {
 			r.Get("/api/me/passkeys", handleListPasskeys(app))
 			r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(app))
@@ -200,43 +200,43 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 
 		// Logs
-		r.Post("/api/logs", handleCreateLog(pool, app))
-		r.Get("/api/logs", handleListLogs(pool, app))
-		r.Get("/api/logs/{logID}", handleGetLog(pool, app))
-		r.Put("/api/logs/{logID}", handleUpdateLog(pool, app))
-		r.Delete("/api/logs/{logID}", handleDeleteLog(pool, app))
-		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(pool, app))
-		r.Put("/api/logs/{logID}/pin", handlePinLog(pool, app))
-		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(pool, app))
+		r.Post("/api/logs", handleCreateLog(app))
+		r.Get("/api/logs", handleListLogs(app))
+		r.Get("/api/logs/{logID}", handleGetLog(app))
+		r.Put("/api/logs/{logID}", handleUpdateLog(app))
+		r.Delete("/api/logs/{logID}", handleDeleteLog(app))
+		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(app))
+		r.Put("/api/logs/{logID}/pin", handlePinLog(app))
+		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(app))
 
 		// Folders
-		r.Post("/api/folders", handleCreateFolder(pool, app))
-		r.Get("/api/folders", handleListFolders(pool, app))
-		r.Put("/api/folders/{folderID}", handleRenameFolder(pool, app))
-		r.Put("/api/folders/{folderID}/move", handleMoveFolder(pool, app))
-		r.Delete("/api/folders/{folderID}", handleDeleteFolder(pool, app))
+		r.Post("/api/folders", handleCreateFolder(app))
+		r.Get("/api/folders", handleListFolders(app))
+		r.Put("/api/folders/{folderID}", handleRenameFolder(app))
+		r.Put("/api/folders/{folderID}/move", handleMoveFolder(app))
+		r.Delete("/api/folders/{folderID}", handleDeleteFolder(app))
 
 		// Log entries
-		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(pool, app))
-		r.Get("/api/logs/{logID}/entries", handleListLogEntries(pool, app))
-		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(pool, app))
-		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(pool, app))
+		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(app))
+		r.Get("/api/logs/{logID}/entries", handleListLogEntries(app))
+		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(app))
+		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(app))
 
 		// Sharing
-		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(pool, app))
-		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(pool, app))
-		r.Get("/api/logs/{logID}/shares", handleListShares(pool, app))
-		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(pool, app))
-		r.Get("/api/join/{token}", handleGetShareInfo(pool, app))
-		r.Post("/api/join/{token}", handleJoinLog(pool, app))
+		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(app))
+		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(app))
+		r.Get("/api/logs/{logID}/shares", handleListShares(app))
+		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(app))
+		r.Get("/api/join/{token}", handleGetShareInfo(app))
+		r.Post("/api/join/{token}", handleJoinLog(app))
 
 		// SQL query feature
 		r.Post("/api/sql/execute", handleExecuteSQL(app))
-		r.Get("/api/sql/schema", handleGetSQLSchema(pool, app))
-		r.Get("/api/sql/saved", handleListSavedQueries(pool, app))
-		r.Post("/api/sql/saved", handleCreateSavedQuery(pool, app))
-		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(pool, app))
-		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(pool, app))
+		r.Get("/api/sql/schema", handleGetSQLSchema(app))
+		r.Get("/api/sql/saved", handleListSavedQueries(app))
+		r.Post("/api/sql/saved", handleCreateSavedQuery(app))
+		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(app))
+		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(app))
 	})
 
 	logger.Info("Starting server", "address", cfg.ListenAddress(), "registration", cfg.AllowRegistration)

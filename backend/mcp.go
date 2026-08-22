@@ -10,8 +10,6 @@ import (
 
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -83,12 +81,7 @@ func requireMCPUser(ctx context.Context) (*AuthUser, error) {
 	return user, nil
 }
 
-func newMCPServer(pool *pgxpool.Pool, oauth *oauthProvider, configured ...*core.Core) *mcpServer {
-	store := pgstore.New(pool)
-	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, SavedQueries: store, SQLSchema: store, UserSQL: store})
-	if len(configured) > 0 {
-		app = configured[0]
-	}
+func newMCPServer(app *core.Core, oauth *oauthProvider) *mcpServer {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "logger4life",
 		Title:   "Logger4Life",

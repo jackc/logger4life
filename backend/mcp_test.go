@@ -61,7 +61,7 @@ func TestMCPSQLToolsUseSharedCoreAction(t *testing.T) {
 		}},
 		Middleware: []core.Middleware{middleware},
 	})
-	mcpServer := newMCPServer(nil, nil, app)
+	mcpServer := newMCPServer(app, nil)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	serverCtx := context.WithValue(context.Background(), userContextKey, &AuthUser{ID: "user-1", Username: "alice"})
 	serverSession, err := mcpServer.server.Connect(serverCtx, serverTransport, nil)

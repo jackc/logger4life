@@ -8,19 +8,10 @@ import (
 
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const sessionCookieName = "session_token"
-
-func authCore(pool *pgxpool.Pool, configured []*core.Core) *core.Core {
-	if len(configured) > 0 {
-		return configured[0]
-	}
-	store := pgstore.New(pool)
-	return core.New(core.Config{Users: store, Sessions: store, Tx: store})
-}
 
 func handleHello(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -53,8 +44,7 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-func handleRegister(pool *pgxpool.Pool, allowRegistration bool, configured ...*core.Core) http.HandlerFunc {
-	app := authCore(pool, configured)
+func handleRegister(app *core.Core, allowRegistration bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !allowRegistration {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "registration is currently disabled"})
@@ -75,8 +65,7 @@ func handleRegister(pool *pgxpool.Pool, allowRegistration bool, configured ...*c
 	}
 }
 
-func handleLogin(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := authCore(pool, configured)
+func handleLogin(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.LoginWithPasswordParams
 		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
@@ -93,8 +82,7 @@ func handleLogin(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc 
 	}
 }
 
-func handleLogout(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := authCore(pool, configured)
+func handleLogout(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
 			if _, err := core.Logout.Call(r.Context(), app, core.LogoutParams{Token: cookie.Value}); err != nil {
@@ -145,8 +133,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-func handleChangeEmail(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := authCore(pool, configured)
+func handleChangeEmail(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.ChangeEmailParams
 		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
@@ -162,8 +149,7 @@ func handleChangeEmail(pool *pgxpool.Pool, configured ...*core.Core) http.Handle
 	}
 }
 
-func handleChangePassword(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := authCore(pool, configured)
+func handleChangePassword(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.ChangePasswordParams
 		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {

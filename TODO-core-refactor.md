@@ -79,9 +79,9 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 - [ ] Move the HTTP adapter from the root `backend` package into
   `backend/server`, matching the reference layout.
-- [ ] Remove compatibility SQL helpers after their tests use core/store APIs:
+- [x] Remove compatibility SQL helpers after their tests use core/store APIs:
   `listSQLSchemaViews`, saved-query helpers, and folder ownership helpers.
-- [ ] Ensure the composition root constructs one store and one `core.Core` and
+- [x] Ensure the composition root constructs one store and one `core.Core` and
   injects them into every adapter.
 - [ ] Add transaction middleware/ports for actions spanning multiple writes.
 - [ ] Add authorization and audit middleware where appropriate.

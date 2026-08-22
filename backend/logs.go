@@ -9,8 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
-	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type fieldDefinition = domain.FieldDefinition
@@ -72,11 +70,7 @@ func validateFieldValues(definitions []fieldDefinition, values map[string]any) e
 	return domain.ValidateFieldValues(definitions, values)
 }
 
-func handleCreateLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := core.New(core.Config{Logs: pgstore.New(pool)})
-	if len(configured) > 0 {
-		app = configured[0]
-	}
+func handleCreateLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -105,11 +99,7 @@ func handleCreateLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerF
 	}
 }
 
-func handleListLogs(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := core.New(core.Config{Logs: pgstore.New(pool)})
-	if len(configured) > 0 {
-		app = configured[0]
-	}
+func handleListLogs(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		ctx := core.WithUserID(r.Context(), user.ID)
@@ -122,11 +112,7 @@ func handleListLogs(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFu
 	}
 }
 
-func handleGetLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := core.New(core.Config{Logs: pgstore.New(pool)})
-	if len(configured) > 0 {
-		app = configured[0]
-	}
+func handleGetLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -143,11 +129,7 @@ func handleGetLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc
 	}
 }
 
-func handleUpdateLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := core.New(core.Config{Logs: pgstore.New(pool)})
-	if len(configured) > 0 {
-		app = configured[0]
-	}
+func handleUpdateLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -181,11 +163,7 @@ func handleUpdateLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerF
 	}
 }
 
-func handleDeleteLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := core.New(core.Config{Logs: pgstore.New(pool)})
-	if len(configured) > 0 {
-		app = configured[0]
-	}
+func handleDeleteLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		logID := chi.URLParam(r, "logID")
@@ -202,14 +180,6 @@ func handleDeleteLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerF
 
 		w.WriteHeader(http.StatusNoContent)
 	}
-}
-
-func entryPlacementCore(pool *pgxpool.Pool, configured []*core.Core) *core.Core {
-	if len(configured) > 0 {
-		return configured[0]
-	}
-	store := pgstore.New(pool)
-	return core.New(core.Config{Entries: store, Placements: store})
 }
 
 func writeLogOperationError(w http.ResponseWriter, r *http.Request, err error) {
@@ -230,8 +200,7 @@ func writeLogOperationError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-func handleCreateLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := entryPlacementCore(pool, configured)
+func handleCreateLogEntry(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body createLogEntryRequest
 		if !decodeAction(w, r, &body) {
@@ -245,8 +214,7 @@ func handleCreateLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.Han
 		writeJSON(w, http.StatusCreated, v)
 	}
 }
-func handleListLogEntries(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := entryPlacementCore(pool, configured)
+func handleListLogEntries(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, err := core.ListLogEntries.Call(actionContext(r), app, core.ListLogEntriesParams{LogID: chi.URLParam(r, "logID")})
 		if err != nil {
@@ -256,8 +224,7 @@ func handleListLogEntries(pool *pgxpool.Pool, configured ...*core.Core) http.Han
 		writeJSON(w, http.StatusOK, v)
 	}
 }
-func handleUpdateLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := entryPlacementCore(pool, configured)
+func handleUpdateLogEntry(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body updateLogEntryRequest
 		if !decodeAction(w, r, &body) {
@@ -271,8 +238,7 @@ func handleUpdateLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.Han
 		writeJSON(w, http.StatusOK, v)
 	}
 }
-func handleDeleteLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := entryPlacementCore(pool, configured)
+func handleDeleteLogEntry(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, err := core.DeleteLogEntry.Call(actionContext(r), app, core.DeleteLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID")})
 		if err != nil {
@@ -282,8 +248,7 @@ func handleDeleteLogEntry(pool *pgxpool.Pool, configured ...*core.Core) http.Han
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-func handleUpdateLogPlacement(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := entryPlacementCore(pool, configured)
+func handleUpdateLogPlacement(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body updateLogPlacementRequest
 		if !decodeAction(w, r, &body) {
@@ -297,8 +262,7 @@ func handleUpdateLogPlacement(pool *pgxpool.Pool, configured ...*core.Core) http
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-func handlePinLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := entryPlacementCore(pool, configured)
+func handlePinLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body pinLogRequest
 		if !decodeAction(w, r, &body) {
@@ -312,8 +276,7 @@ func handlePinLog(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-func handleUpdateLogHomePosition(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := entryPlacementCore(pool, configured)
+func handleUpdateLogHomePosition(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body updateHomePositionRequest
 		if !decodeAction(w, r, &body) {

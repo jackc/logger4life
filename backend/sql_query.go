@@ -1,22 +1,12 @@
 package backend
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-const (
-	sqlQueryMaxLength    = 10000
-	savedQueryNameMaxLen = 100
 )
 
 func handleExecuteSQL(app *core.Core) http.HandlerFunc {
@@ -50,81 +40,7 @@ func writeUserSQLError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Schema description
-// ---------------------------------------------------------------------------
-
-type sqlSchemaColumn struct {
-	Name     string  `json:"name"`
-	DataType string  `json:"data_type"`
-	Comment  *string `json:"comment"`
-}
-
-type sqlSchemaView struct {
-	Name    string            `json:"name"`
-	Comment *string           `json:"comment"`
-	Columns []sqlSchemaColumn `json:"columns"`
-}
-
-func listSQLSchemaViews(ctx context.Context, pool *pgxpool.Pool) ([]*sqlSchemaView, error) {
-	rows, err := pool.Query(ctx, `
-		SELECT
-			c.relname,
-			obj_description(c.oid, 'pg_class'),
-			a.attname,
-			format_type(a.atttypid, a.atttypmod),
-			col_description(a.attrelid, a.attnum)
-		FROM pg_class c
-		JOIN pg_namespace n ON n.oid = c.relnamespace
-		JOIN pg_attribute a ON a.attrelid = c.oid
-		WHERE n.nspname = 'sql_query'
-		  AND c.relkind = 'v'
-		  AND a.attnum > 0
-		  AND NOT a.attisdropped
-		ORDER BY c.relname, a.attnum
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	viewIndex := map[string]*sqlSchemaView{}
-	views := []*sqlSchemaView{}
-
-	for rows.Next() {
-		var (
-			viewName    string
-			viewComment *string
-			colName     string
-			dataType    string
-			colComment  *string
-		)
-		if err := rows.Scan(&viewName, &viewComment, &colName, &dataType, &colComment); err != nil {
-			return nil, err
-		}
-		v, ok := viewIndex[viewName]
-		if !ok {
-			v = &sqlSchemaView{Name: viewName, Comment: viewComment, Columns: []sqlSchemaColumn{}}
-			viewIndex[viewName] = v
-			views = append(views, v)
-		}
-		v.Columns = append(v.Columns, sqlSchemaColumn{
-			Name:     colName,
-			DataType: dataType,
-			Comment:  colComment,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return views, nil
-}
-
-func handleGetSQLSchema(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := core.New(core.Config{SQLSchema: pgstore.New(pool)})
-	if len(configured) > 0 {
-		app = configured[0]
-	}
+func handleGetSQLSchema(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		result, err := core.GetSQLSchema.Call(r.Context(), app, core.GetSQLSchemaParams{})
 		if err != nil {
@@ -144,70 +60,6 @@ type savedQueryRequest struct {
 	QueryText string `json:"query_text"`
 }
 
-type savedQueryResponse struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	QueryText string    `json:"query_text"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-func validateSavedQueryRequest(req *savedQueryRequest) error {
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" || len(req.Name) > savedQueryNameMaxLen {
-		return errors.New("name must be 1-100 characters")
-	}
-	if strings.TrimSpace(req.QueryText) == "" {
-		return errors.New("query_text is required")
-	}
-	if len(req.QueryText) > sqlQueryMaxLength {
-		return errors.New("query_text is too long")
-	}
-	return nil
-}
-
-func listSavedQueriesForUser(ctx context.Context, pool *pgxpool.Pool, userID string) ([]savedQueryResponse, error) {
-	rows, err := pool.Query(ctx,
-		`SELECT id, name, query_text, created_at, updated_at
-		 FROM saved_sql_queries WHERE user_id = $1
-		 ORDER BY lower(name)`,
-		userID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	out := []savedQueryResponse{}
-	for rows.Next() {
-		var q savedQueryResponse
-		if err := rows.Scan(&q.ID, &q.Name, &q.QueryText, &q.CreatedAt, &q.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, q)
-	}
-	return out, rows.Err()
-}
-
-// getSavedQueryByName returns the user's saved query with the given name.
-// Returns pgx.ErrNoRows if not found.
-func getSavedQueryByName(ctx context.Context, pool *pgxpool.Pool, userID, name string) (savedQueryResponse, error) {
-	var q savedQueryResponse
-	err := pool.QueryRow(ctx,
-		`SELECT id, name, query_text, created_at, updated_at
-		 FROM saved_sql_queries
-		 WHERE user_id = $1 AND name = $2`,
-		userID, name,
-	).Scan(&q.ID, &q.Name, &q.QueryText, &q.CreatedAt, &q.UpdatedAt)
-	return q, err
-}
-
-func savedQueryCore(pool *pgxpool.Pool, configured []*core.Core) *core.Core {
-	if len(configured) > 0 {
-		return configured[0]
-	}
-	return core.New(core.Config{SavedQueries: pgstore.New(pool)})
-}
 func writeSavedQueryError(w http.ResponseWriter, r *http.Request, e error) {
 	var ve *core.ValidationError
 	switch {
@@ -222,8 +74,7 @@ func writeSavedQueryError(w http.ResponseWriter, r *http.Request, e error) {
 	}
 }
 
-func handleListSavedQueries(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := savedQueryCore(pool, configured)
+func handleListSavedQueries(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		out, err := core.ListSavedQueries.Call(core.WithUserID(r.Context(), user.ID), app, core.ListSavedQueriesParams{})
@@ -235,8 +86,7 @@ func handleListSavedQueries(pool *pgxpool.Pool, configured ...*core.Core) http.H
 	}
 }
 
-func handleCreateSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := savedQueryCore(pool, configured)
+func handleCreateSavedQuery(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 
@@ -255,8 +105,7 @@ func handleCreateSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.H
 	}
 }
 
-func handleUpdateSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := savedQueryCore(pool, configured)
+func handleUpdateSavedQuery(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		queryID := chi.URLParam(r, "id")
@@ -276,8 +125,7 @@ func handleUpdateSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.H
 	}
 }
 
-func handleDeleteSavedQuery(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := savedQueryCore(pool, configured)
+func handleDeleteSavedQuery(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
 		queryID := chi.URLParam(r, "id")

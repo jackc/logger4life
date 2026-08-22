@@ -8,8 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type folderResponse = core.Folder
@@ -22,12 +20,6 @@ type moveFolderRequest struct {
 	Position       int     `json:"position"`
 }
 
-func folderCore(pool *pgxpool.Pool, configured []*core.Core) *core.Core {
-	if len(configured) > 0 {
-		return configured[0]
-	}
-	return core.New(core.Config{Folders: pgstore.New(pool)})
-}
 func actionContext(r *http.Request) context.Context {
 	return core.WithUserID(r.Context(), userFromContext(r.Context()).ID)
 }
@@ -54,8 +46,7 @@ func writeFolderError(w http.ResponseWriter, r *http.Request, e error) {
 	}
 }
 
-func handleCreateFolder(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := folderCore(pool, configured)
+func handleCreateFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var p core.CreateFolderParams
 		if !decodeAction(w, r, &p) {
@@ -69,8 +60,7 @@ func handleCreateFolder(pool *pgxpool.Pool, configured ...*core.Core) http.Handl
 		writeJSON(w, http.StatusCreated, f)
 	}
 }
-func handleListFolders(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := folderCore(pool, configured)
+func handleListFolders(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, e := core.ListFolders.Call(actionContext(r), app, core.ListFoldersParams{})
 		if e != nil {
@@ -80,8 +70,7 @@ func handleListFolders(pool *pgxpool.Pool, configured ...*core.Core) http.Handle
 		writeJSON(w, http.StatusOK, v)
 	}
 }
-func handleRenameFolder(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := folderCore(pool, configured)
+func handleRenameFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body renameFolderRequest
 		if !decodeAction(w, r, &body) {
@@ -95,8 +84,7 @@ func handleRenameFolder(pool *pgxpool.Pool, configured ...*core.Core) http.Handl
 		writeJSON(w, http.StatusOK, v)
 	}
 }
-func handleMoveFolder(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := folderCore(pool, configured)
+func handleMoveFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body moveFolderRequest
 		if !decodeAction(w, r, &body) {
@@ -110,8 +98,7 @@ func handleMoveFolder(pool *pgxpool.Pool, configured ...*core.Core) http.Handler
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-func handleDeleteFolder(pool *pgxpool.Pool, configured ...*core.Core) http.HandlerFunc {
-	app := folderCore(pool, configured)
+func handleDeleteFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, e := core.DeleteFolder.Call(actionContext(r), app, core.DeleteFolderParams{FolderID: chi.URLParam(r, "folderID")})
 		if e != nil {

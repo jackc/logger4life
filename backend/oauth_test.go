@@ -53,12 +53,12 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxp
 		UserSQL: store, Sharing: store, OAuth: store, OAuthIssuer: srv.URL,
 	})
 	oauth := newOAuthProvider(app, srv.URL)
-	mcpSrv := newMCPServer(pool, oauth, app)
+	mcpSrv := newMCPServer(app, oauth)
 
 	r := chi.NewRouter()
 	r.Use(loadSession(app))
-	r.Post("/api/register", handleRegister(pool, true, app))
-	r.Post("/api/login", handleLogin(pool, app))
+	r.Post("/api/register", handleRegister(app, true))
+	r.Post("/api/login", handleLogin(app))
 	r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 	r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
 	r.Post("/oauth/register", oauth.handleDynamicClientRegistration())

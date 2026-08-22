@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -479,7 +479,7 @@ func TestSavedQueries_ValidationErrors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy getSavedQueryByName compatibility helper
+// Name lookup (used by the MCP run_saved_query tool)
 // ---------------------------------------------------------------------------
 
 func TestGetSavedQueryByName(t *testing.T) {
@@ -500,23 +500,28 @@ func TestGetSavedQueryByName(t *testing.T) {
 	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
 	require.NoError(t, err)
 	defer pool.Close()
+	app := core.New(core.Config{SavedQueries: pgstore.New(pool)})
 
-	q, err := getSavedQueryByName(context.Background(), pool, userID, "log count")
+	q, err := core.GetSavedQuery.Call(core.WithUserID(context.Background(), userID), app,
+		core.GetSavedQueryParams{Name: "log count"})
 	require.NoError(t, err)
 	assert.Equal(t, wantID, q.ID)
 	assert.Equal(t, "log count", q.Name)
 	assert.Equal(t, "SELECT count(*) FROM logs", q.QueryText)
 
-	_, err = getSavedQueryByName(context.Background(), pool, userID, "nope")
+	// A missing row must surface as the core sentinel, not a pgx error.
+	_, err = core.GetSavedQuery.Call(core.WithUserID(context.Background(), userID), app,
+		core.GetSavedQueryParams{Name: "nope"})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, pgx.ErrNoRows), "expected pgx.ErrNoRows, got %v", err)
+	assert.True(t, errors.Is(err, core.ErrSavedQueryNotFound), "expected ErrSavedQueryNotFound, got %v", err)
 
 	// Different user with the same query name must not be visible.
 	otherCookies := registerUser(t, srv.URL, "bob")
 	meResp2, meBody2 := getJSON(srv.URL+"/api/me", otherCookies)
 	require.Equal(t, http.StatusOK, meResp2.StatusCode)
 	bobID := meBody2["id"].(string)
-	_, err = getSavedQueryByName(context.Background(), pool, bobID, "log count")
+	_, err = core.GetSavedQuery.Call(core.WithUserID(context.Background(), bobID), app,
+		core.GetSavedQueryParams{Name: "log count"})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, pgx.ErrNoRows))
+	assert.True(t, errors.Is(err, core.ErrSavedQueryNotFound))
 }

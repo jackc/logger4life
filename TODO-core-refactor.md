@@ -103,7 +103,7 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 - [x] Preserve the existing HTTP and browser tests as adapter and end-to-end
   coverage.
 - [x] Test sentinel error translation independently from PostgreSQL errors.
-- [ ] Test middleware execution for typed and dynamic action invocation.
+- [x] Test middleware execution for typed and dynamic action invocation.
 - [ ] Run `go test ./...` and `git diff --check` after every migration slice.
 
 ## Completion criteria

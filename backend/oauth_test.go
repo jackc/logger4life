@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/domain"
 	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -45,10 +46,14 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxp
 	srv.Start() // starts on a real port; URL is now known
 	t.Cleanup(srv.Close)
 
-	oauth := newOAuthProvider(pool, srv.URL)
-	mcpSrv := newMCPServer(pool, oauth)
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Users: store, Sessions: store, Tx: store})
+	app := core.New(core.Config{
+		Users: store, Sessions: store, Tx: store, Logs: store, Entries: store,
+		Placements: store, Folders: store, SavedQueries: store, SQLSchema: store,
+		UserSQL: store, Sharing: store, OAuth: store, OAuthIssuer: srv.URL,
+	})
+	oauth := newOAuthProvider(app, srv.URL)
+	mcpSrv := newMCPServer(pool, oauth, app)
 
 	r := chi.NewRouter()
 	r.Use(loadSession(app))
@@ -169,10 +174,10 @@ func TestMCPRejectsInvalidToken(t *testing.T) {
 
 func TestVerifyPKCE(t *testing.T) {
 	verifier, challenge := pkceParams(t)
-	assert.True(t, verifyPKCE(challenge, "S256", verifier))
-	assert.False(t, verifyPKCE(challenge, "S256", "wrong-verifier-but-still-long-enough-43-chars-yes"))
-	assert.False(t, verifyPKCE(challenge, "plain", verifier))
-	assert.False(t, verifyPKCE(challenge, "S256", "too-short"))
+	assert.True(t, domain.VerifyPKCE(challenge, "S256", verifier))
+	assert.False(t, domain.VerifyPKCE(challenge, "S256", "wrong-verifier-but-still-long-enough-43-chars-yes"))
+	assert.False(t, domain.VerifyPKCE(challenge, "plain", verifier))
+	assert.False(t, domain.VerifyPKCE(challenge, "S256", "too-short"))
 }
 
 func TestSameCanonicalURL(t *testing.T) {
@@ -187,8 +192,8 @@ func TestSameCanonicalURL(t *testing.T) {
 		{"http://example.com", "https://example.com", false},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.want, sameCanonicalURL(c.a, c.b),
-			"sameCanonicalURL(%q, %q)", c.a, c.b)
+		assert.Equal(t, c.want, domain.SameCanonicalURL(c.a, c.b),
+			"SameCanonicalURL(%q, %q)", c.a, c.b)
 	}
 }
 

@@ -5,6 +5,7 @@ package core
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 )
@@ -24,6 +25,8 @@ type Core struct {
 	sqlSchema    SQLSchemaStore
 	userSQL      UserSQLExecutor
 	sharing      SharingStore
+	oauth        OAuthStore
+	oauthIssuer  string
 	middleware   []Middleware
 }
 
@@ -42,7 +45,11 @@ type Config struct {
 	SQLSchema    SQLSchemaStore
 	UserSQL      UserSQLExecutor
 	Sharing      SharingStore
-	Middleware   []Middleware
+	OAuth        OAuthStore
+	// OAuthIssuer is this server's canonical URL. It is the OAuth issuer and
+	// the RFC 8707 audience every access token is bound to.
+	OAuthIssuer string
+	Middleware  []Middleware
 }
 
 func New(cfg Config) *Core {
@@ -50,7 +57,7 @@ func New(cfg Config) *Core {
 	if tx == nil {
 		tx = passthroughTx{}
 	}
-	return &Core{users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sharing: cfg.Sharing, middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sharing: cfg.Sharing, oauth: cfg.OAuth, oauthIssuer: strings.TrimRight(cfg.OAuthIssuer, "/"), middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 
 // Transactor is the driven port for transaction boundaries. Store calls made

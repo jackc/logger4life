@@ -67,12 +67,13 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 ### 6. OAuth
 
-- [ ] Decide and document whether OAuth protocol storage is infrastructure
-  exempt from the action catalog or part of the catalog boundary.
-- [ ] If included, define OAuth store ports and actions for client, code,
+- [x] Decide and document whether OAuth protocol storage is infrastructure
+  exempt from the action catalog or part of the catalog boundary. Decision:
+  part of the catalog boundary, documented in `docs/architecture.md`.
+- [x] If included, define OAuth store ports and actions for client, code,
   token, consent, and revocation operations.
-- [ ] Keep OAuth protocol HTTP translation in the server adapter.
-- [ ] Move remaining OAuth SQL out of the root backend package.
+- [x] Keep OAuth protocol HTTP translation in the server adapter.
+- [x] Move remaining OAuth SQL out of the root backend package.
 
 ## Architectural cleanup
 

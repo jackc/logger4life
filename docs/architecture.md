@@ -44,6 +44,20 @@ context, PostgreSQL execution, timeouts, and row/result-size limits. Only typed,
 curated query failures may cross back to HTTP or MCP. Raw parser, database,
 pool, and network errors remain infrastructure details.
 
+OAuth 2.1 is part of the catalog boundary, not an infrastructure exemption.
+Clients, authorization codes, and token families are persistent application
+state that gates access to user data, and the rules protecting them — PKCE
+verification, exact redirect-URI matching, single-use codes, RFC 8707
+audience binding, and refresh-token family revocation on reuse — are business
+rules rather than transport translation. They therefore live in core actions
+with an `OAuthStore` driven port, alongside sessions and passkeys. `pgstore`
+owns the atomic consume-and-invalidate statements that make replay and reuse
+detection work. The HTTP adapter keeps only OAuth protocol translation:
+metadata documents, form parsing, the consent page, redirects, bearer
+challenges, and the mapping of `core.OAuthError` onto RFC 6749 error
+responses. Plaintext tokens never reach a store; core hashes them first, and
+`OAuthError` carries only descriptions that are safe to return to a client.
+
 ## Where new code goes
 
 - Pure validation, calculation, and domain types: `backend/domain`.

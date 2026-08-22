@@ -145,7 +145,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 | `log_shares` | id (UUIDv7), log_id, user_id | Unique (log_id, user_id) |
 
 ### Testing
-- **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `setupTestRouter()` creates a test server against `logger4life_test` DB and cleans up between tests.
+- **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `backend/pgstore/` holds store conformance tests. Run them with `rake test:backend`, not bare `go test ./...` — the server and pgstore packages share `logger4life_test` and must not run concurrently (`-p 1`). `setupTestRouter()` creates a test server against `logger4life_test` DB and cleans up between tests.
 - **Browser**: **Playwright** (Chromium only) in `tests/` — `auth.spec.js`, `home.spec.js`, `logs.spec.js`. Playwright auto-starts both Vite dev server and Go backend.
 
 ### Build Artifacts

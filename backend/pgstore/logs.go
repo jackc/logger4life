@@ -12,25 +12,20 @@ import (
 )
 
 func (s *Store) CreateLog(ctx context.Context, userID, name string, fields []domain.FieldDefinition) (core.Log, error) {
-	tx, e := s.pool.Begin(ctx)
-	if e != nil {
-		return core.Log{}, e
-	}
-	defer tx.Rollback(ctx)
 	var l core.Log
-	e = tx.QueryRow(ctx, `INSERT INTO logs(user_id,name,fields) VALUES($1,$2,$3) RETURNING id,name,fields,created_at,updated_at`, userID, name, fields).Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt)
-	if e != nil {
-		var pe *pgconn.PgError
-		if errors.As(e, &pe) && pe.Code == "23505" {
-			return core.Log{}, core.ErrLogNameTaken
+	e := s.InTx(ctx, func(ctx context.Context) error {
+		tx := s.conn(ctx)
+		e := tx.QueryRow(ctx, `INSERT INTO logs(user_id,name,fields) VALUES($1,$2,$3) RETURNING id,name,fields,created_at,updated_at`, userID, name, fields).Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt)
+		if e != nil {
+			var pe *pgconn.PgError
+			if errors.As(e, &pe) && pe.Code == "23505" {
+				return core.ErrLogNameTaken
+			}
+			return e
 		}
-		return core.Log{}, e
-	}
-	e = tx.QueryRow(ctx, `INSERT INTO user_log_placements(user_id,log_id,folder_id,position,pinned_to_home,home_position) SELECT $1,$2,NULL,COALESCE(max(position) FILTER(WHERE folder_id IS NULL)+1,0),true,COALESCE(max(home_position) FILTER(WHERE pinned_to_home)+1,0) FROM user_log_placements WHERE user_id=$1 RETURNING position,pinned_to_home,home_position`, userID, l.ID).Scan(&l.Position, &l.PinnedToHome, &l.HomePosition)
+		return tx.QueryRow(ctx, `INSERT INTO user_log_placements(user_id,log_id,folder_id,position,pinned_to_home,home_position) SELECT $1,$2,NULL,COALESCE(max(position) FILTER(WHERE folder_id IS NULL)+1,0),true,COALESCE(max(home_position) FILTER(WHERE pinned_to_home)+1,0) FROM user_log_placements WHERE user_id=$1 RETURNING position,pinned_to_home,home_position`, userID, l.ID).Scan(&l.Position, &l.PinnedToHome, &l.HomePosition)
+	})
 	if e != nil {
-		return core.Log{}, e
-	}
-	if e = tx.Commit(ctx); e != nil {
 		return core.Log{}, e
 	}
 	l.IsOwner = true
@@ -43,7 +38,7 @@ func (s *Store) CreateLog(ctx context.Context, userID, name string, fields []dom
 func (s *Store) GetLog(ctx context.Context, userID, logID string) (core.Log, error) {
 	var l core.Log
 	var token []byte
-	e := s.pool.QueryRow(ctx, `SELECT l.id,l.name,l.fields,l.user_id=$1,l.share_token,p.folder_id,p.position,p.pinned_to_home,p.home_position,l.created_at,l.updated_at FROM logs l JOIN user_log_placements p ON p.log_id=l.id AND p.user_id=$1 WHERE l.id=$2`, userID, logID).Scan(&l.ID, &l.Name, &l.Fields, &l.IsOwner, &token, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition, &l.CreatedAt, &l.UpdatedAt)
+	e := s.conn(ctx).QueryRow(ctx, `SELECT l.id,l.name,l.fields,l.user_id=$1,l.share_token,p.folder_id,p.position,p.pinned_to_home,p.home_position,l.created_at,l.updated_at FROM logs l JOIN user_log_placements p ON p.log_id=l.id AND p.user_id=$1 WHERE l.id=$2`, userID, logID).Scan(&l.ID, &l.Name, &l.Fields, &l.IsOwner, &token, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition, &l.CreatedAt, &l.UpdatedAt)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return core.Log{}, core.ErrLogNotFound
 	}
@@ -62,7 +57,7 @@ func (s *Store) GetLog(ctx context.Context, userID, logID string) (core.Log, err
 func (s *Store) UpdateLog(ctx context.Context, userID, logID, name string, fields []domain.FieldDefinition) (core.Log, error) {
 	var l core.Log
 	var token []byte
-	e := s.pool.QueryRow(ctx, `WITH updated AS (UPDATE logs SET name=$1,fields=$2,updated_at=now() WHERE id=$3 AND user_id=$4 RETURNING id,name,fields,share_token,created_at,updated_at) SELECT u.id,u.name,u.fields,u.share_token,p.folder_id,p.position,p.pinned_to_home,p.home_position,u.created_at,u.updated_at FROM updated u JOIN user_log_placements p ON p.log_id=u.id AND p.user_id=$4`, name, fields, logID, userID).Scan(&l.ID, &l.Name, &l.Fields, &token, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition, &l.CreatedAt, &l.UpdatedAt)
+	e := s.conn(ctx).QueryRow(ctx, `WITH updated AS (UPDATE logs SET name=$1,fields=$2,updated_at=now() WHERE id=$3 AND user_id=$4 RETURNING id,name,fields,share_token,created_at,updated_at) SELECT u.id,u.name,u.fields,u.share_token,p.folder_id,p.position,p.pinned_to_home,p.home_position,u.created_at,u.updated_at FROM updated u JOIN user_log_placements p ON p.log_id=u.id AND p.user_id=$4`, name, fields, logID, userID).Scan(&l.ID, &l.Name, &l.Fields, &token, &l.FolderID, &l.Position, &l.PinnedToHome, &l.HomePosition, &l.CreatedAt, &l.UpdatedAt)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return core.Log{}, core.ErrLogNotFound
 	}
@@ -81,7 +76,7 @@ func (s *Store) UpdateLog(ctx context.Context, userID, logID, name string, field
 	return l, nil
 }
 func (s *Store) DeleteLog(ctx context.Context, userID, logID string) error {
-	tag, e := s.pool.Exec(ctx, `DELETE FROM logs WHERE id=$1 AND user_id=$2`, logID, userID)
+	tag, e := s.conn(ctx).Exec(ctx, `DELETE FROM logs WHERE id=$1 AND user_id=$2`, logID, userID)
 	if e == nil && tag.RowsAffected() == 0 {
 		return core.ErrLogNotFound
 	}
@@ -89,7 +84,7 @@ func (s *Store) DeleteLog(ctx context.Context, userID, logID string) error {
 }
 
 func (s *Store) ListLogs(ctx context.Context, userID string) ([]core.Log, error) {
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.conn(ctx).Query(ctx, `
 		SELECT l.id, l.name, l.fields, l.user_id = $1,
 		       p.folder_id, p.position, p.pinned_to_home, p.home_position,
 		       l.created_at, l.updated_at

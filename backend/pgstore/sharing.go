@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Store) CreateShareToken(ctx context.Context, userID, logID string, token []byte) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE logs SET share_token=$1 WHERE id=$2 AND user_id=$3`, token, logID, userID)
+	tag, err := s.conn(ctx).Exec(ctx, `UPDATE logs SET share_token=$1 WHERE id=$2 AND user_id=$3`, token, logID, userID)
 	if err == nil && tag.RowsAffected() == 0 {
 		return core.ErrLogNotFound
 	}
@@ -17,7 +17,7 @@ func (s *Store) CreateShareToken(ctx context.Context, userID, logID string, toke
 }
 
 func (s *Store) DeleteShareToken(ctx context.Context, userID, logID string) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE logs SET share_token=NULL WHERE id=$1 AND user_id=$2`, logID, userID)
+	tag, err := s.conn(ctx).Exec(ctx, `UPDATE logs SET share_token=NULL WHERE id=$1 AND user_id=$2`, logID, userID)
 	if err == nil && tag.RowsAffected() == 0 {
 		return core.ErrLogNotFound
 	}
@@ -37,10 +37,10 @@ func ownedLog(ctx context.Context, q queryRower, userID, logID string) error {
 }
 
 func (s *Store) ListSharedUsers(ctx context.Context, userID, logID string) ([]core.SharedUser, error) {
-	if err := ownedLog(ctx, s.pool, userID, logID); err != nil {
+	if err := ownedLog(ctx, s.conn(ctx), userID, logID); err != nil {
 		return nil, err
 	}
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.conn(ctx).Query(ctx, `
 		SELECT ls.id,u.username,ls.created_at
 		FROM log_shares ls
 		JOIN users u ON u.id=ls.user_id
@@ -62,10 +62,10 @@ func (s *Store) ListSharedUsers(ctx context.Context, userID, logID string) ([]co
 }
 
 func (s *Store) RemoveSharedUser(ctx context.Context, userID, logID, shareID string) error {
-	if err := ownedLog(ctx, s.pool, userID, logID); err != nil {
+	if err := ownedLog(ctx, s.conn(ctx), userID, logID); err != nil {
 		return err
 	}
-	tag, err := s.pool.Exec(ctx, `DELETE FROM log_shares WHERE id=$1 AND log_id=$2`, shareID, logID)
+	tag, err := s.conn(ctx).Exec(ctx, `DELETE FROM log_shares WHERE id=$1 AND log_id=$2`, shareID, logID)
 	if err == nil && tag.RowsAffected() == 0 {
 		return core.ErrShareNotFound
 	}
@@ -74,7 +74,7 @@ func (s *Store) RemoveSharedUser(ctx context.Context, userID, logID, shareID str
 
 func (s *Store) GetShareInfo(ctx context.Context, userID string, token []byte) (core.ShareInfo, error) {
 	var info core.ShareInfo
-	err := s.pool.QueryRow(ctx, `
+	err := s.conn(ctx).QueryRow(ctx, `
 		SELECT l.id,l.name,u.username,l.user_id=$1,
 		       EXISTS(SELECT 1 FROM log_shares ls WHERE ls.log_id=l.id AND ls.user_id=$1)
 		FROM logs l
@@ -93,42 +93,38 @@ func (s *Store) GetShareInfo(ctx context.Context, userID string, token []byte) (
 }
 
 func (s *Store) JoinSharedLog(ctx context.Context, userID string, token []byte) (core.JoinSharedLogResult, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return core.JoinSharedLogResult{}, err
-	}
-	defer tx.Rollback(ctx)
-
 	var result core.JoinSharedLogResult
-	var ownerID string
-	err = tx.QueryRow(ctx, `SELECT id,name,user_id FROM logs WHERE share_token=$1 FOR SHARE`, token).Scan(&result.LogID, &result.LogName, &ownerID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return core.JoinSharedLogResult{}, core.ErrInvalidShareLink
-	}
-	if err != nil {
-		return core.JoinSharedLogResult{}, err
-	}
-	if ownerID == userID {
-		return core.JoinSharedLogResult{}, core.ErrAlreadyOwnLog
-	}
+	err := s.InTx(ctx, func(ctx context.Context) error {
+		tx := s.conn(ctx)
 
-	var shareID string
-	err = tx.QueryRow(ctx, `
+		var ownerID string
+		err := tx.QueryRow(ctx, `SELECT id,name,user_id FROM logs WHERE share_token=$1 FOR SHARE`, token).Scan(&result.LogID, &result.LogName, &ownerID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return core.ErrInvalidShareLink
+		}
+		if err != nil {
+			return err
+		}
+		if ownerID == userID {
+			return core.ErrAlreadyOwnLog
+		}
+
+		var shareID string
+		err = tx.QueryRow(ctx, `
 		INSERT INTO log_shares(log_id,user_id) VALUES($1,$2)
 		ON CONFLICT (log_id,user_id) DO NOTHING
 		RETURNING id`, result.LogID, userID).Scan(&shareID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		result.AlreadyMember = true
-		if err := tx.Commit(ctx); err != nil {
-			return core.JoinSharedLogResult{}, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Already a member: nothing to insert, and the placement below
+			// would be a no-op too.
+			result.AlreadyMember = true
+			return nil
 		}
-		return result, nil
-	}
-	if err != nil {
-		return core.JoinSharedLogResult{}, err
-	}
+		if err != nil {
+			return err
+		}
 
-	_, err = tx.Exec(ctx, `
+		_, err = tx.Exec(ctx, `
 		INSERT INTO user_log_placements(user_id,log_id,folder_id,position,pinned_to_home,home_position)
 		SELECT $1,$2,NULL,
 		       COALESCE(max(position) FILTER (WHERE folder_id IS NULL)+1,0),
@@ -136,10 +132,9 @@ func (s *Store) JoinSharedLog(ctx context.Context, userID string, token []byte) 
 		       COALESCE(max(home_position) FILTER (WHERE pinned_to_home)+1,0)
 		FROM user_log_placements WHERE user_id=$1
 		ON CONFLICT (user_id,log_id) DO NOTHING`, userID, result.LogID)
+		return err
+	})
 	if err != nil {
-		return core.JoinSharedLogResult{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return core.JoinSharedLogResult{}, err
 	}
 	return result, nil

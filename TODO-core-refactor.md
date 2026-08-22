@@ -83,7 +83,11 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
   `listSQLSchemaViews`, saved-query helpers, and folder ownership helpers.
 - [x] Ensure the composition root constructs one store and one `core.Core` and
   injects them into every adapter.
-- [ ] Add transaction middleware/ports for actions spanning multiple writes.
+- [x] Add transaction middleware/ports for actions spanning multiple writes.
+  Ports done: every store call now runs through `conn(ctx)` or `InTx`, so it
+  joins an ambient transaction instead of silently taking its own connection.
+  Middleware deliberately left out — actions declare their own boundaries with
+  `c.tx.InTx`, which keeps reads and single-write actions out of transactions.
 - [ ] Add authorization and audit middleware where appropriate.
 - [x] Decide whether health and hello database checks remain adapter-level
   infrastructure operations. Decision: yes — they read no application state,

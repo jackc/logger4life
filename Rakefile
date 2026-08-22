@@ -109,7 +109,9 @@ task "test:prepare" => ["tmp/test", "tmp/test/.databases-prepared"]
 
 desc "Run Go tests"
 task "test:backend" => ["test:prepare"] do
-  sh "go test ./..."
+  # -p 1: the server and pgstore packages share logger4life_test, and each
+  # truncates tables between tests, so their packages must not run at once.
+  sh "go test -p 1 ./..."
 end
 
 desc "Run Playwright browser tests"

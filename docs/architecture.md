@@ -65,6 +65,14 @@ infrastructure liveness probes rather than catalog operations — they read no
 application state — so `Run` supplies a `HealthCheck` function and the handlers
 hold neither SQL nor a connection pool.
 
+Transaction boundaries are declared by actions, not imposed on them. An action
+that spans several writes wraps them in `c.tx.InTx`; every `pgstore` method
+reaches its connection through `conn(ctx)` or `InTx`, so calls made with that
+context join the transaction rather than opening their own. There is no
+automatic per-action transaction middleware, which keeps reads and single-write
+actions out of transactions they do not need.
+`TestStoreHonorsAmbientTransaction` covers the guarantee the ports must keep.
+
 `TestArchitecturalBoundaries` in the root `backend` package enforces these
 rules mechanically. It walks every Go file and fails when one imports outside
 its layer: PostgreSQL packages are confined to `backend/pgstore` and the

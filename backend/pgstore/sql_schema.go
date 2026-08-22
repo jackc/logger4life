@@ -6,7 +6,7 @@ import (
 )
 
 func (s *Store) ListSQLSchemaViews(ctx context.Context) ([]*core.SQLSchemaView, error) {
-	rows, e := s.pool.Query(ctx, `SELECT c.relname,obj_description(c.oid,'pg_class'),a.attname,format_type(a.atttypid,a.atttypmod),col_description(a.attrelid,a.attnum) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid WHERE n.nspname='sql_query' AND c.relkind='v' AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attnum`)
+	rows, e := s.conn(ctx).Query(ctx, `SELECT c.relname,obj_description(c.oid,'pg_class'),a.attname,format_type(a.atttypid,a.atttypmod),col_description(a.attrelid,a.attnum) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid WHERE n.nspname='sql_query' AND c.relkind='v' AND a.attnum>0 AND NOT a.attisdropped ORDER BY c.relname,a.attnum`)
 	if e != nil {
 		return nil, e
 	}

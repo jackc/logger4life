@@ -77,7 +77,7 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 ## Architectural cleanup
 
-- [ ] Move the HTTP adapter from the root `backend` package into
+- [x] Move the HTTP adapter from the root `backend` package into
   `backend/server`, matching the reference layout.
 - [x] Remove compatibility SQL helpers after their tests use core/store APIs:
   `listSQLSchemaViews`, saved-query helpers, and folder ownership helpers.
@@ -85,16 +85,18 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
   injects them into every adapter.
 - [ ] Add transaction middleware/ports for actions spanning multiple writes.
 - [ ] Add authorization and audit middleware where appropriate.
-- [ ] Decide whether health and hello database checks remain adapter-level
-  infrastructure operations.
-- [ ] Add an architectural test or linter that rejects SQL and PostgreSQL
+- [x] Decide whether health and hello database checks remain adapter-level
+  infrastructure operations. Decision: yes — they read no application state,
+  so the composition root supplies a `HealthCheck` and the handlers hold no
+  SQL or pool.
+- [x] Add an architectural test or linter that rejects SQL and PostgreSQL
   imports outside approved infrastructure packages.
 
 ## Testing
 
 - [ ] Add core unit tests using narrow fake ports for each action group.
 - [ ] Add shared store conformance tests for each persistence port.
-- [ ] Preserve the existing HTTP and browser tests as adapter and end-to-end
+- [x] Preserve the existing HTTP and browser tests as adapter and end-to-end
   coverage.
 - [ ] Test sentinel error translation independently from PostgreSQL errors.
 - [ ] Test middleware execution for typed and dynamic action invocation.
@@ -104,10 +106,10 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 - [ ] Every operation that reads or changes persistent application state is a
   catalog action, except explicitly documented infrastructure exemptions.
-- [ ] HTTP and MCP adapters contain no business rules or application SQL.
-- [ ] Pure calculations and validation live in domain packages.
+- [x] HTTP and MCP adapters contain no business rules or application SQL.
+- [x] Pure calculations and validation live in domain packages.
 - [ ] All effects are represented by core-owned driven-port interfaces.
-- [ ] PostgreSQL-specific types and errors do not escape `backend/pgstore` or
+- [x] PostgreSQL-specific types and errors do not escape `backend/pgstore` or
   another explicitly designated infrastructure package.
 - [ ] The action catalog is the authoritative inventory of application
   capabilities.

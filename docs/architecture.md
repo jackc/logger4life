@@ -58,13 +58,30 @@ challenges, and the mapping of `core.OAuthError` onto RFC 6749 error
 responses. Plaintext tokens never reach a store; core hashes them first, and
 `OAuthError` carries only descriptions that are safe to return to a client.
 
+`backend/server` is the composition root. `server.Run` opens the pool, builds
+one `pgstore.Store` and one `core.Core`, and injects that core into every HTTP
+and MCP adapter; no handler constructs its own. Health and hello are
+infrastructure liveness probes rather than catalog operations — they read no
+application state — so `Run` supplies a `HealthCheck` function and the handlers
+hold neither SQL nor a connection pool.
+
+`TestArchitecturalBoundaries` in the root `backend` package enforces these
+rules mechanically. It walks every Go file and fails when one imports outside
+its layer: PostgreSQL packages are confined to `backend/pgstore` and the
+composition root, and `backend/core` and `backend/domain` may not import
+transport or persistence at all. SQL cannot be executed without a PostgreSQL
+import, so restricting the import is what keeps application SQL inside
+infrastructure.
+
 ## Where new code goes
 
 - Pure validation, calculation, and domain types: `backend/domain`.
 - Load/compute/save orchestration and action definitions: `backend/core`.
 - SQL and persistence mechanics: `backend/pgstore`.
-- HTTP cookies, status codes, request paths, and response writing: the HTTP
-  adapter (currently the root `backend` package).
+- HTTP cookies, status codes, request paths, and response writing:
+  `backend/server`.
+- Cobra commands and flag plumbing: the root `backend` package, which owns the
+  CLI and calls `server.Run`.
 
 The `list_logs` path is the initial complete vertical slice. Existing paths
 are migrated incrementally without changing their public API.

@@ -1,4 +1,4 @@
-package backend
+package server
 
 import (
 	"encoding/json"
@@ -8,19 +8,17 @@ import (
 
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const sessionCookieName = "session_token"
 
-func handleHello(pool *pgxpool.Pool) http.HandlerFunc {
+func handleHello(health HealthCheck) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var msg string
-		if err := pool.QueryRow(r.Context(), "select 'Hello, World!'").Scan(&msg); err != nil {
+		if err := health(r.Context()); err != nil {
 			internalError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"message": msg})
+		writeJSON(w, http.StatusOK, map[string]string{"message": "Hello, World!"})
 	}
 }
 

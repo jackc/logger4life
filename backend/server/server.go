@@ -1,11 +1,10 @@
-package backend
+package server
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -14,78 +13,18 @@ import (
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/spf13/cobra"
 )
 
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Start the HTTP server",
-	RunE:  runServer,
-}
+// HealthCheck reports whether the database answers queries. Health and hello
+// are infrastructure liveness probes, not catalog operations: they read no
+// application state, so the composition root supplies this function and the
+// handlers hold no SQL or connection pool.
+type HealthCheck func(ctx context.Context) error
 
-var (
-	flagDatabaseURL       string
-	flagBindAddress       string
-	flagPort              string
-	flagAllowRegistration bool
-	flagWebAuthnRPID      string
-	flagWebAuthnOrigin    string
-	flagLogLevel          string
-	flagLogFormat         string
-	flagMCPCanonicalURL   string
-	flagSecureCookies     bool
-)
-
-func init() {
-	rootCmd.AddCommand(serverCmd)
-	serverCmd.Flags().StringVar(&flagDatabaseURL, "database-url", "", "database connection URL")
-	serverCmd.Flags().StringVar(&flagBindAddress, "bind-address", "", "address to bind to (default 127.0.0.1)")
-	serverCmd.Flags().StringVar(&flagPort, "port", "", "port to listen on (default 4000)")
-	serverCmd.Flags().BoolVar(&flagAllowRegistration, "allow-registration", false, "allow new user registration")
-	serverCmd.Flags().StringVar(&flagWebAuthnRPID, "webauthn-rp-id", "", "WebAuthn relying party ID")
-	serverCmd.Flags().StringVar(&flagWebAuthnOrigin, "webauthn-origin", "", "WebAuthn origin URL")
-	serverCmd.Flags().StringVar(&flagLogLevel, "log-level", "", "log level (debug, info, warn, error)")
-	serverCmd.Flags().StringVar(&flagLogFormat, "log-format", "", "log format (json, text, journal)")
-	serverCmd.Flags().StringVar(&flagMCPCanonicalURL, "mcp-canonical-url", "", "public canonical URL of this server; enables MCP+OAuth routes when set")
-	serverCmd.Flags().BoolVar(&flagSecureCookies, "secure-cookies", false, "set the Secure attribute on session cookies (required behind HTTPS)")
-}
-
-func runServer(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-
-	cfg := ConfigFromEnv()
-
-	if cmd.Flags().Changed("database-url") {
-		cfg.DatabaseURL = flagDatabaseURL
-	}
-	if cmd.Flags().Changed("bind-address") {
-		cfg.BindAddress = flagBindAddress
-	}
-	if cmd.Flags().Changed("port") {
-		cfg.Port = flagPort
-	}
-	if cmd.Flags().Changed("allow-registration") {
-		cfg.AllowRegistration = flagAllowRegistration
-	}
-	if cmd.Flags().Changed("webauthn-rp-id") {
-		cfg.WebAuthnRPID = flagWebAuthnRPID
-	}
-	if cmd.Flags().Changed("webauthn-origin") {
-		cfg.WebAuthnOrigin = flagWebAuthnOrigin
-	}
-	if cmd.Flags().Changed("log-level") {
-		cfg.LogLevel = flagLogLevel
-	}
-	if cmd.Flags().Changed("log-format") {
-		cfg.LogFormat = flagLogFormat
-	}
-	if cmd.Flags().Changed("mcp-canonical-url") {
-		cfg.MCPCanonicalURL = strings.TrimRight(flagMCPCanonicalURL, "/")
-	}
-	if cmd.Flags().Changed("secure-cookies") {
-		cfg.SecureCookies = flagSecureCookies
-	}
-
+// Run connects the database, wires core to its ports, and serves the HTTP
+// API until the process exits. The composition root lives here: one store and
+// one core.Core, injected into every adapter.
+func Run(ctx context.Context, cfg Config) error {
 	secureCookies = cfg.SecureCookies
 
 	handler, err := cfg.SlogHandler()
@@ -100,8 +39,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	defer pool.Close()
 
-	err = pool.QueryRow(ctx, "select 1").Scan(new(int))
-	if err != nil {
+	health := func(ctx context.Context) error {
+		return pool.QueryRow(ctx, "select 1").Scan(new(int))
+	}
+	if err := health(ctx); err != nil {
 		return fmt.Errorf("unable to query database: %w", err)
 	}
 	logger.Info("Database connected")
@@ -147,10 +88,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}))
 
 	// Health check
-	r.Get("/health", handleHealth(pool))
+	r.Get("/health", handleHealth(health))
 
 	// Public routes
-	r.Get("/api/hello", handleHello(pool))
+	r.Get("/api/hello", handleHello(health))
 	r.Get("/api/settings", handleSettings(cfg))
 	r.Post("/api/register", handleRegister(app, cfg.AllowRegistration))
 	r.Post("/api/login", handleLogin(app))
@@ -243,10 +184,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	return http.ListenAndServe(cfg.ListenAddress(), r)
 }
 
-func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
+func handleHealth(health HealthCheck) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := pool.QueryRow(r.Context(), "select 1").Scan(new(int))
-		if err != nil {
+		if err := health(r.Context()); err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 				"status": "error",
 			})

@@ -35,6 +35,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 
 ### Backend (Go) — `backend/`
 - **CLI**: Cobra-based with subcommands (e.g., `server`). Entry point: `main.go` → `backend.Execute()` → `backend/root.go`
+- **Layering**: `backend/domain` (pure rules) ← `backend/core` (action catalog and driven ports) ← `backend/pgstore` (PostgreSQL) and `backend/server` (HTTP/MCP adapters). See `docs/architecture.md`; `TestArchitecturalBoundaries` enforces the import rules.
 - **HTTP**: Chi v5 router on port 4000 with structured request logging via `httplog/v3`. API routes under `/api/`.
 - **Database**: pgx v5 with connection pooling (`pgxpool`). Connects to PostgreSQL.
 - **Config**: Environment variables and CLI flags. Precedence: defaults < env vars < CLI flags. Env vars: `DATABASE_URL`, `BIND_ADDRESS`, `PORT`, `ALLOW_REGISTRATION`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`, `LOG_LEVEL`, `LOG_FORMAT`, `MCP_CANONICAL_URL`, `SECURE_COOKIES`. CLI flags: `--database-url`, `--bind-address`, `--port`, `--allow-registration`, `--webauthn-rp-id`, `--webauthn-origin`, `--log-level`, `--log-format`, `--mcp-canonical-url`, `--secure-cookies`. Set `SECURE_COOKIES=true` in any HTTPS deployment so the session cookie gets the `Secure` attribute.
@@ -45,13 +46,23 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 #### Backend Source Files
 | File | Purpose |
 |------|---------|
-| `server.go` | HTTP server setup, Chi router, route registration, settings endpoint |
-| `config.go` | Config struct, default config, env var loader |
-| `auth.go` | Register, login, logout handlers; session/cookie management |
-| `logs.go` | Log and log entry CRUD; field definition/value validation |
-| `sharing.go` | Share token generation, join flow, share management, access control |
-| `middleware.go` | `loadSession` (cookie→user context) and `requireAuth` middleware |
-| `root.go` | Cobra root command definition |
+| `backend/root.go` | Cobra root command definition |
+| `backend/server_cmd.go` | `server` subcommand: flags, config resolution, calls `server.Run` |
+| `backend/architecture_test.go` | Enforces the layering import rules |
+| `backend/server/server.go` | Composition root: pool, store, core, Chi router, route registration |
+| `backend/server/config.go` | Config struct, default config, env var loader |
+| `backend/server/auth.go` | Register, login, logout handlers; session/cookie management |
+| `backend/server/logs.go` | Log and log entry HTTP handlers |
+| `backend/server/folders.go` | Folder HTTP handlers |
+| `backend/server/sharing.go` | Share link and membership HTTP handlers |
+| `backend/server/passkeys.go` | WebAuthn request/response translation |
+| `backend/server/sql_query.go` | User SQL and saved-query HTTP handlers |
+| `backend/server/oauth.go` | OAuth 2.1 protocol translation (metadata, consent, redirects) |
+| `backend/server/mcp.go` | MCP tool definitions and bearer-token middleware |
+| `backend/server/middleware.go` | `loadSession` (cookie→user context) and `requireAuth` middleware |
+| `backend/core/` | Action catalog, driven ports, sentinel errors |
+| `backend/domain/` | Pure business types, validation, and protocol rules |
+| `backend/pgstore/` | PostgreSQL implementations of every core port |
 
 #### Authentication & Authorization
 - Session-based auth via HTTP-only `session_token` cookie (hex-encoded, 32-byte random token)
@@ -59,7 +70,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 - Passwords hashed with bcrypt
 - `loadSession` middleware loads user into request context on every request
 - `requireAuth` middleware gates protected endpoints
-- `checkLogAccess()` in `sharing.go` verifies the requesting user is either the log owner or a shared member
+- Log access is enforced in `backend/pgstore` by scoping every query to the caller's `user_log_placements` row, which exists for owners and shared members alike
 
 #### API Routes
 
@@ -89,7 +100,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 #### Custom Fields
 - Logs support up to 20 field definitions, each with name, type (`text`, `number`, `boolean`), and required flag
 - Field definitions stored as JSONB in `logs.fields`; entry values stored as JSONB in `log_entries.fields`
-- Validation in `validateFieldDefinitions()` and `validateFieldValues()` (in `logs.go`)
+- Validation in `domain.ValidateFieldDefinitions()` and `domain.ValidateFieldValues()` (in `backend/domain/logs.go`)
 
 #### Sharing Model
 - Owner generates a 32-byte share token stored on the log
@@ -134,7 +145,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 | `log_shares` | id (UUIDv7), log_id, user_id | Unique (log_id, user_id) |
 
 ### Testing
-- **Backend**: Go tests with **testify** in `backend/auth_test.go` and `backend/logs_test.go`. `setupTestRouter()` creates a test server against `logger4life_test` DB and cleans up between tests.
+- **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `setupTestRouter()` creates a test server against `logger4life_test` DB and cleans up between tests.
 - **Browser**: **Playwright** (Chromium only) in `tests/` — `auth.spec.js`, `home.spec.js`, `logs.spec.js`. Playwright auto-starts both Vite dev server and Go backend.
 
 ### Build Artifacts

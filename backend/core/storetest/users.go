@@ -73,7 +73,7 @@ func RunUserStore(t *testing.T, ports Ports) {
 	})
 
 	t.Run("reports a missing user rather than an empty one", func(t *testing.T) {
-		if _, _, err := ports.GetUserByUsername(ctx, UserPrefix+"absent"); !errors.Is(err, core.ErrUserNotFound) {
+		if _, _, err := ports.GetUserByUsername(ctx, Prefix+"absent"); !errors.Is(err, core.ErrUserNotFound) {
 			t.Errorf("GetUserByUsername error = %v, want ErrUserNotFound", err)
 		}
 		if _, err := ports.GetUserByID(ctx, UnknownID); !errors.Is(err, core.ErrUserNotFound) {

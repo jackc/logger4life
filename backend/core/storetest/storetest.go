@@ -19,10 +19,12 @@ package storetest
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"sync/atomic"
 	"testing"
 
+	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
 )
@@ -40,29 +42,53 @@ type Ports interface {
 	core.FolderStore
 	core.SavedQueryStore
 	core.SharingStore
+	core.PasskeyStore
+	core.PasskeyChallengeStore
+	core.OAuthStore
+	core.SQLSchemaStore
+	core.UserSQLExecutor
 }
 
-// UserPrefix begins the username of every user the suite creates. A harness
-// clears rows under this prefix before and after a run; the suite itself
-// issues no SQL, so isolating it from a shared database is the harness's job.
-const UserPrefix = "storetest_"
+// Prefix begins the name of everything the suite creates that it names
+// itself: usernames, and OAuth client IDs. A harness clears rows under this
+// prefix before and after a run; the suite itself issues no SQL, so isolating
+// it from a shared database is the harness's job.
+const Prefix = "storetest_"
 
 // UnknownID is well formed and names nothing. Ports must answer it with their
 // not-found sentinel.
 const UnknownID = "00000000-0000-4000-8000-0000000000ff"
 
-var userSeq atomic.Uint64
+// testUUID turns a readable label into a stable, well-formed identifier, for
+// the rows whose ID the caller supplies rather than the store minting it.
+func testUUID(label string) string {
+	sum := sha256.Sum256([]byte(label))
+	id, err := uuid.FromBytes(sum[:16])
+	if err != nil {
+		panic(err)
+	}
+	return id.String()
+}
+
+var userSeq, clientSeq atomic.Uint64
 
 // newUser creates a fixture user with a name unique to this process, so
 // subtests that share a database cannot collide on the username index.
 func newUser(t *testing.T, ports Ports) core.User {
 	t.Helper()
-	name := fmt.Sprintf("%s%d", UserPrefix, userSeq.Add(1))
+	name := fmt.Sprintf("%s%d", Prefix, userSeq.Add(1))
 	user, err := ports.CreateUser(context.Background(), name, nil, "fixture-hash")
 	if err != nil {
 		t.Fatalf("creating fixture user %s: %v", name, err)
 	}
 	return user
+}
+
+// newClientID mints an OAuth client ID unique to this process. Unlike the
+// other rows the suite writes, an OAuth client hangs off no user, so nothing
+// cascades it away between runs.
+func newClientID() string {
+	return fmt.Sprintf("%s%d", Prefix, clientSeq.Add(1))
 }
 
 // newLog creates a fixture log owned by user.
@@ -85,4 +111,9 @@ func Run(t *testing.T, ports Ports) {
 	t.Run("LogPlacementStore", func(t *testing.T) { RunLogPlacementStore(t, ports) })
 	t.Run("SavedQueryStore", func(t *testing.T) { RunSavedQueryStore(t, ports) })
 	t.Run("SharingStore", func(t *testing.T) { RunSharingStore(t, ports) })
+	t.Run("PasskeyStore", func(t *testing.T) { RunPasskeyStore(t, ports) })
+	t.Run("PasskeyChallengeStore", func(t *testing.T) { RunPasskeyChallengeStore(t, ports) })
+	t.Run("OAuthStore", func(t *testing.T) { RunOAuthStore(t, ports) })
+	t.Run("SQLSchemaStore", func(t *testing.T) { RunSQLSchemaStore(t, ports) })
+	t.Run("UserSQLExecutor", func(t *testing.T) { RunUserSQLExecutor(t, ports) })
 }

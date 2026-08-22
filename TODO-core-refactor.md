@@ -99,7 +99,7 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 ## Testing
 
 - [x] Add core unit tests using narrow fake ports for each action group.
-- [ ] Add shared store conformance tests for each persistence port.
+- [x] Add shared store conformance tests for each persistence port.
 - [x] Preserve the existing HTTP and browser tests as adapter and end-to-end
   coverage.
 - [x] Test sentinel error translation independently from PostgreSQL errors.

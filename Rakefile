@@ -109,8 +109,10 @@ task "test:prepare" => ["tmp/test", "tmp/test/.databases-prepared"]
 
 desc "Run Go tests"
 task "test:backend" => ["test:prepare"] do
-  # -p 1: the server and pgstore packages share logger4life_test, and each
-  # truncates tables between tests, so their packages must not run at once.
+  # -p 1: the server and pgstore packages share logger4life_test and clear
+  # tables around their own tests, so they must not run at once. The browser
+  # suite uses that database too and leaves its rows behind, so tests here
+  # scope their assertions to the rows they write rather than table counts.
   sh "go test -p 1 ./..."
 end
 

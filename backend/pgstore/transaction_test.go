@@ -9,18 +9,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Names this test writes under. logger4life_test is shared with the server
+// package and with the Playwright suite, which does not clean up after itself,
+// so every assertion and the cleanup are scoped to these names rather than to
+// whole-table counts.
+const (
+	txProbeUser   = "tx_probe_user"
+	txProbeLog    = "tx_probe_log"
+	txProbeFolder = "tx_probe_folder"
+)
+
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
 	if err != nil {
 		t.Fatal(err)
 	}
+	cleanup := func() {
+		// Everything this test writes hangs off the user by ON DELETE CASCADE.
+		pool.Exec(context.Background(), "DELETE FROM users WHERE username = $1", txProbeUser)
+	}
+	cleanup()
 	t.Cleanup(func() {
-		ctx := context.Background()
-		pool.Exec(ctx, "DELETE FROM user_log_placements")
-		pool.Exec(ctx, "DELETE FROM folders")
-		pool.Exec(ctx, "DELETE FROM logs")
-		pool.Exec(ctx, "DELETE FROM users")
+		cleanup()
 		pool.Close()
 	})
 	return New(pool)
@@ -44,16 +55,23 @@ func TestStoreHonorsAmbientTransaction(t *testing.T) {
 	ctx := context.Background()
 	fields := []domain.FieldDefinition{{Name: "Dose", Type: "number"}}
 
+	write := func(ctx context.Context) (string, error) {
+		user, err := store.CreateUser(ctx, txProbeUser, nil, "hash")
+		if err != nil {
+			return "", err
+		}
+		if _, err := store.CreateLog(ctx, user.ID, txProbeLog, fields); err != nil {
+			return "", err
+		}
+		if _, err := store.CreateFolder(ctx, user.ID, txProbeFolder, nil); err != nil {
+			return "", err
+		}
+		return user.ID, nil
+	}
+
 	rollback := errors.New("rolled back on purpose")
 	err := store.InTx(ctx, func(ctx context.Context) error {
-		user, err := store.CreateUser(ctx, "tx_user", nil, "hash")
-		if err != nil {
-			return err
-		}
-		if _, err := store.CreateLog(ctx, user.ID, "Vitamins", fields); err != nil {
-			return err
-		}
-		if _, err := store.CreateFolder(ctx, user.ID, "Health", nil); err != nil {
+		if _, err := write(ctx); err != nil {
 			return err
 		}
 		return rollback
@@ -65,13 +83,14 @@ func TestStoreHonorsAmbientTransaction(t *testing.T) {
 	for _, c := range []struct {
 		what string
 		sql  string
+		arg  string
 	}{
-		{"users", `SELECT count(*) FROM users WHERE username = 'tx_user'`},
-		{"logs", `SELECT count(*) FROM logs WHERE name = 'Vitamins'`},
-		{"folders", `SELECT count(*) FROM folders WHERE name = 'Health'`},
-		{"placements", `SELECT count(*) FROM user_log_placements`},
+		{"users", `SELECT count(*) FROM users WHERE username = $1`, txProbeUser},
+		{"logs", `SELECT count(*) FROM logs WHERE name = $1`, txProbeLog},
+		{"folders", `SELECT count(*) FROM folders WHERE name = $1`, txProbeFolder},
+		{"placements", `SELECT count(*) FROM user_log_placements p JOIN logs l ON l.id = p.log_id WHERE l.name = $1`, txProbeLog},
 	} {
-		if n := countRows(t, store, c.sql); n != 0 {
+		if n := countRows(t, store, c.sql, c.arg); n != 0 {
 			t.Errorf("%s rows after rollback = %d, want 0", c.what, n)
 		}
 	}
@@ -79,15 +98,8 @@ func TestStoreHonorsAmbientTransaction(t *testing.T) {
 	// The same unit committing must persist every write.
 	var userID string
 	if err := store.InTx(ctx, func(ctx context.Context) error {
-		user, err := store.CreateUser(ctx, "tx_user", nil, "hash")
-		if err != nil {
-			return err
-		}
-		userID = user.ID
-		if _, err := store.CreateLog(ctx, user.ID, "Vitamins", fields); err != nil {
-			return err
-		}
-		_, err = store.CreateFolder(ctx, user.ID, "Health", nil)
+		var err error
+		userID, err = write(ctx)
 		return err
 	}); err != nil {
 		t.Fatal(err)

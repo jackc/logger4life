@@ -57,6 +57,7 @@ test('quick log entry for log without fields', async ({ page }) => {
 	// Create a log
 	await page.fill('input[name="log-name"]', 'Water');
 	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Water' })).toBeVisible();
 
 	await page.goto('/');
 	await page.click('[data-testid="log-card"] button:has-text("Log It")');
@@ -72,6 +73,7 @@ test('quick log entry for log with fields', async ({ page }) => {
 	await page.fill('input[placeholder="Field name"]', 'count');
 	await page.check('input[type="checkbox"]');
 	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Pushups' })).toBeVisible();
 
 	await page.goto('/');
 	const card = page.locator('[data-testid="log-card"]');
@@ -87,6 +89,7 @@ test('view entries link navigates to log detail', async ({ page }) => {
 
 	await page.fill('input[name="log-name"]', 'Water');
 	await page.click('button:has-text("Create Log")');
+	await expect(page.getByRole('link', { name: 'Water' })).toBeVisible();
 
 	await page.goto('/');
 	await page.click('a:has-text("View entries")');

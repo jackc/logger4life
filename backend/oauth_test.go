@@ -46,7 +46,7 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxp
 	t.Cleanup(srv.Close)
 
 	oauth := newOAuthProvider(pool, srv.URL)
-	mcpSrv := newMCPServer(pool, newSQLArbiter(), oauth)
+	mcpSrv := newMCPServer(pool, oauth)
 	store := pgstore.New(pool)
 	app := core.New(core.Config{Users: store, Sessions: store, Tx: store})
 

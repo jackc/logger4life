@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -251,6 +253,45 @@ func TestSQLExecute_TruncatesAt1000Rows(t *testing.T) {
 	assert.Equal(t, float64(1000), body["row_count"])
 }
 
+func TestSQLExecute_TruncatesAtResultByteLimit(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := sqlExec(t, srv.URL,
+		"SELECT CASE WHEN g = 1 THEN 'kept' ELSE repeat('x', 1048576) END AS value FROM generate_series(1, 2) g ORDER BY g",
+		cookies,
+	)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "%v", body)
+	assert.Equal(t, true, body["truncated"])
+	assert.Equal(t, float64(1), body["row_count"])
+	rows := body["rows"].([]any)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "kept", rows[0].([]any)[0])
+}
+
+func TestSQLExecute_RedactsPostgresErrorDetails(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := sqlExec(t, srv.URL, "SELECT 'secret-value'::integer", cookies)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "%v", body)
+	message := body["error"].(string)
+	assert.Equal(t, "query failed (SQLSTATE 22P02)", message)
+	assert.NotContains(t, message, "secret-value")
+}
+
+func TestSQLExecute_CollapsesParserDetails(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+	cookies := registerUser(t, srv.URL, "alice")
+
+	resp, body := sqlExec(t, srv.URL, "SELECT (", cookies)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "%v", body)
+	assert.Equal(t, "invalid SQL query", body["error"])
+}
+
 func TestSQLExecute_StatementTimeout(t *testing.T) {
 	srv := setupTestRouter(t)
 	defer srv.Close()
@@ -261,6 +302,27 @@ func TestSQLExecute_StatementTimeout(t *testing.T) {
 		"SELECT count(*) FROM generate_series(1, 1000000000) g", cookies)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "%v", body)
 	assert.Contains(t, strings.ToLower(body["error"].(string)), "timed out")
+}
+
+type failingUserSQLExecutor struct{ err error }
+
+func (e failingUserSQLExecutor) ExecuteUserSQL(context.Context, string, string) (core.UserSQLResult, error) {
+	return core.UserSQLResult{}, e.err
+}
+
+func TestSQLExecute_DoesNotExposeInternalPortErrors(t *testing.T) {
+	secret := "database host is secret.internal"
+	app := core.New(core.Config{UserSQL: failingUserSQLExecutor{err: errors.New(secret)}})
+	handler := handleExecuteSQL(app)
+	req := httptest.NewRequest(http.MethodPost, "/api/sql/execute", strings.NewReader(`{"query":"SELECT 1"}`))
+	user := &AuthUser{ID: "user-1", Username: "alice"}
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, user))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "internal error")
+	assert.NotContains(t, recorder.Body.String(), secret)
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +479,7 @@ func TestSavedQueries_ValidationErrors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// getSavedQueryByName (used by the run_saved_query MCP tool)
+// Legacy getSavedQueryByName compatibility helper
 // ---------------------------------------------------------------------------
 
 func TestGetSavedQueryByName(t *testing.T) {

@@ -117,7 +117,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("unable to initialize webauthn: %w", err)
 		}
 	}
-	app := core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, Sharing: store})
+	app := core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, Sharing: store})
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -159,14 +159,12 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(app))
 	}
 
-	sqlArbiter := newSQLArbiter()
-
 	// OAuth + MCP. Mounted only when a canonical URL is configured (because
 	// the canonical URL is needed both as the OAuth issuer and as the RFC
 	// 8707 audience binding for issued access tokens).
 	if cfg.MCPEnabled() {
 		oauth := newOAuthProvider(pool, cfg.MCPCanonicalURL)
-		mcpSrv := newMCPServer(pool, sqlArbiter, oauth, app)
+		mcpSrv := newMCPServer(pool, oauth, app)
 
 		r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 		r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
@@ -233,7 +231,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		r.Post("/api/join/{token}", handleJoinLog(pool, app))
 
 		// SQL query feature
-		r.Post("/api/sql/execute", handleExecuteSQL(pool, sqlArbiter))
+		r.Post("/api/sql/execute", handleExecuteSQL(app))
 		r.Get("/api/sql/schema", handleGetSQLSchema(pool, app))
 		r.Get("/api/sql/saved", handleListSavedQueries(pool, app))
 		r.Post("/api/sql/saved", handleCreateSavedQuery(pool, app))

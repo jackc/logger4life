@@ -48,7 +48,7 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 	})
 	require.NoError(t, err)
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store})
+	app := core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, UserSQL: store})
 
 	r := chi.NewRouter()
 	r.Use(loadSession(app))
@@ -92,8 +92,7 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		r.Get("/api/join/{token}", handleGetShareInfo(pool))
 		r.Post("/api/join/{token}", handleJoinLog(pool))
 
-		sqlArbiter := newSQLArbiter()
-		r.Post("/api/sql/execute", handleExecuteSQL(pool, sqlArbiter))
+		r.Post("/api/sql/execute", handleExecuteSQL(app))
 		r.Get("/api/sql/schema", handleGetSQLSchema(pool))
 		r.Get("/api/sql/saved", handleListSavedQueries(pool))
 		r.Post("/api/sql/saved", handleCreateSavedQuery(pool))

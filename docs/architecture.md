@@ -37,6 +37,13 @@ updates, and the credential/session login transaction. `PasskeyStore` and
 `pgstore`. The HTTP adapter only translates WebAuthn JSON, trusted user context,
 session cookies, and status codes.
 
+User-authored SQL is represented by the `execute_user_sql` catalog action and
+the `UserSQLExecutor` driven port. Core owns authentication and input limits;
+`pgstore` owns the arbiter, restricted-role read-only transaction, per-user view
+context, PostgreSQL execution, timeouts, and row/result-size limits. Only typed,
+curated query failures may cross back to HTTP or MCP. Raw parser, database,
+pool, and network errors remain infrastructure details.
+
 ## Where new code goes
 
 - Pure validation, calculation, and domain types: `backend/domain`.

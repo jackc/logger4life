@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -12,235 +11,43 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/pgstore"
-	pgsqlarbiter "github.com/jackc/pgsqlarbiter-go"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	sqlQueryStatementTimeout = "5s"
-	sqlQueryIdleTimeout      = "10s"
-	sqlQueryMaxRows          = 1000
-	sqlQueryMaxLength        = 10000
-	savedQueryNameMaxLen     = 100
+	sqlQueryMaxLength    = 10000
+	savedQueryNameMaxLen = 100
 )
 
-func newSQLArbiter() *pgsqlarbiter.Arbiter {
-	return &pgsqlarbiter.Arbiter{
-		AllowedStatementTypes: []pgsqlarbiter.StatementType{pgsqlarbiter.StatementSelect},
-		AllowedTables:         []string{"logs", "log_entries"},
-	}
-}
-
-type sqlExecuteRequest struct {
-	Query string `json:"query"`
-}
-
-type sqlColumn struct {
-	Name     string `json:"name"`
-	DataType string `json:"data_type"`
-}
-
-type sqlExecuteResponse struct {
-	Columns   []sqlColumn `json:"columns"`
-	Rows      [][]*string `json:"rows"`
-	RowCount  int         `json:"row_count"`
-	Truncated bool        `json:"truncated"`
-	ElapsedMs int64       `json:"elapsed_ms"`
-}
-
-// userSQLError is a query-execution failure caused by the user's input
-// (bad SQL, arbiter rejection, timeout, etc.). The Message is safe to
-// surface to the caller; non-userSQLError errors are internal and should
-// be logged but never echoed verbatim.
-type userSQLError struct {
-	Message string
-}
-
-func (e *userSQLError) Error() string { return e.Message }
-
-func newUserSQLError(msg string) *userSQLError { return &userSQLError{Message: msg} }
-
-// executeUserSQL runs the given query as the calling user against the
-// sql_query schema views, returning columns and rows. It enforces the
-// arbiter, the read-only restricted role, per-user view filtering, and
-// the row cap. Returns *userSQLError for user-facing failures (400-class)
-// and a plain error for internal failures (500-class).
-func executeUserSQL(ctx context.Context, pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, userID, query string) (sqlExecuteResponse, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return sqlExecuteResponse{}, newUserSQLError("query is required")
-	}
-	if len(query) > sqlQueryMaxLength {
-		return sqlExecuteResponse{}, newUserSQLError("query is too long")
-	}
-
-	verdict, err := arbiter.Judge(query)
-	if err != nil {
-		return sqlExecuteResponse{}, newUserSQLError(err.Error())
-	}
-	if !verdict.Allowed {
-		return sqlExecuteResponse{}, newUserSQLError(describeVerdict(verdict))
-	}
-
-	conn, err := pool.Acquire(ctx)
-	if err != nil {
-		return sqlExecuteResponse{}, err
-	}
-	defer conn.Release()
-
-	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.ReadCommitted,
-		AccessMode: pgx.ReadOnly,
-	})
-	if err != nil {
-		return sqlExecuteResponse{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	// Configure session as the privileged role, then drop into the restricted
-	// role. set_config(..., true) is transaction-local, equivalent to SET LOCAL.
-	setup := []string{
-		"SET LOCAL statement_timeout = '" + sqlQueryStatementTimeout + "'",
-		"SET LOCAL idle_in_transaction_session_timeout = '" + sqlQueryIdleTimeout + "'",
-	}
-	for _, stmt := range setup {
-		if _, err := tx.Exec(ctx, stmt); err != nil {
-			return sqlExecuteResponse{}, err
-		}
-	}
-	if _, err := tx.Exec(ctx, "SELECT set_config('app.current_user_id', $1, true)", userID); err != nil {
-		return sqlExecuteResponse{}, err
-	}
-	if _, err := tx.Exec(ctx, "SET LOCAL ROLE logger4life_sql_user"); err != nil {
-		return sqlExecuteResponse{}, err
-	}
-	if _, err := tx.Exec(ctx, "SET LOCAL search_path TO sql_query"); err != nil {
-		return sqlExecuteResponse{}, err
-	}
-
-	start := time.Now()
-
-	// pgx.QueryExecModeExec uses the extended protocol (which forbids
-	// multi-statement queries) and skips the prepared-statement cache.
-	// A single-element QueryResultFormats applies that format to every column.
-	rows, err := tx.Query(ctx, query,
-		pgx.QueryExecModeExec,
-		pgx.QueryResultFormats{pgx.TextFormatCode},
-	)
-	if err != nil {
-		return sqlExecuteResponse{}, newUserSQLError(describePgError(err))
-	}
-	defer rows.Close()
-
-	fields := rows.FieldDescriptions()
-	typeMap := conn.Conn().TypeMap()
-	columns := make([]sqlColumn, len(fields))
-	for i, f := range fields {
-		columns[i] = sqlColumn{
-			Name:     string(f.Name),
-			DataType: typeNameForOID(typeMap, f.DataTypeOID),
-		}
-	}
-
-	resultRows := make([][]*string, 0)
-	truncated := false
-	for rows.Next() {
-		if len(resultRows) >= sqlQueryMaxRows {
-			truncated = true
-			break
-		}
-		raw := rows.RawValues()
-		row := make([]*string, len(raw))
-		for i, b := range raw {
-			if b == nil {
-				row[i] = nil
-				continue
-			}
-			s := string(b)
-			row[i] = &s
-		}
-		resultRows = append(resultRows, row)
-	}
-	if err := rows.Err(); err != nil {
-		return sqlExecuteResponse{}, newUserSQLError(describePgError(err))
-	}
-
-	return sqlExecuteResponse{
-		Columns:   columns,
-		Rows:      resultRows,
-		RowCount:  len(resultRows),
-		Truncated: truncated,
-		ElapsedMs: time.Since(start).Milliseconds(),
-	}, nil
-}
-
-func handleExecuteSQL(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter) http.HandlerFunc {
+func handleExecuteSQL(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-
-		var req sqlExecuteRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var params core.ExecuteUserSQLParams
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-
-		result, err := executeUserSQL(r.Context(), pool, arbiter, user.ID, req.Query)
+		result, err := core.ExecuteUserSQL.Call(actionContext(r), app, params)
 		if err != nil {
-			var userErr *userSQLError
-			if errors.As(err, &userErr) {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": userErr.Message})
-				return
-			}
-			internalError(w, r, err)
+			writeUserSQLError(w, r, err)
 			return
 		}
-
 		writeJSON(w, http.StatusOK, result)
 	}
 }
 
-func describeVerdict(v *pgsqlarbiter.Verdict) string {
-	parts := []string{}
-	if v.DisallowedStatementType {
-		parts = append(parts, "only SELECT statements are allowed")
+func writeUserSQLError(w http.ResponseWriter, r *http.Request, err error) {
+	var validationErr *core.ValidationError
+	var queryFailure *core.UserSQLFailure
+	switch {
+	case errors.As(err, &validationErr):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": validationErr.Err.Error()})
+	case errors.As(err, &queryFailure):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": queryFailure.Error()})
+	case errors.Is(err, core.ErrUnauthenticated):
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	default:
+		internalError(w, r, err)
 	}
-	if len(v.DisallowedTables) > 0 {
-		parts = append(parts, "tables not allowed: "+strings.Join(v.DisallowedTables, ", "))
-	}
-	if len(v.DisallowedFunctions) > 0 {
-		parts = append(parts, "functions not allowed: "+strings.Join(v.DisallowedFunctions, ", "))
-	}
-	if len(parts) == 0 {
-		return "query rejected"
-	}
-	return strings.Join(parts, "; ")
-}
-
-func describePgError(err error) string {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		switch pgErr.Code {
-		case "57014":
-			return "query timed out"
-		case "25006":
-			return "writes are not allowed in this query"
-		}
-		// The raw Postgres message can leak details about underlying tables,
-		// internal schema, etc. Fall back to a generic message that still gives
-		// the user enough context to look up the SQLSTATE if they want to.
-		return fmt.Sprintf("query failed (SQLSTATE %s)", pgErr.Code)
-	}
-	return "query failed"
-}
-
-func typeNameForOID(typeMap *pgtype.Map, oid uint32) string {
-	if t, ok := typeMap.TypeForOID(oid); ok {
-		return t.Name
-	}
-	return fmt.Sprintf("oid %d", oid)
 }
 
 // ---------------------------------------------------------------------------

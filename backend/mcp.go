@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/pgstore"
-	pgsqlarbiter "github.com/jackc/pgsqlarbiter-go"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -52,20 +51,20 @@ type runSQLInput struct {
 	Query string `json:"query" jsonschema:"a read-only SELECT against the sql_query schema views (logs, log_entries)"`
 }
 
-// runSQLOutput mirrors sqlExecuteResponse so the schema is identical to the
-// /api/sql/execute response shape.
-type runSQLOutput = sqlExecuteResponse
+// runSQLOutput is the same core result returned by /api/sql/execute.
+type runSQLOutput = core.UserSQLResult
 
-// mcpToolError converts a downstream helper error into the right MCP-facing
-// error. *userSQLError messages are safe to surface to the caller and pass
-// through unchanged; every other error is attached to the request log via
-// httplog.SetError and replaced with a generic "internal error" so we don't
-// leak DB / pool / IO details to the MCP client. Mirrors the internalError
-// convention used by the HTTP handlers.
+// mcpToolError exposes only core validation and explicitly safe query
+// failures. Every other error is logged and replaced so database, pool, and
+// IO details cannot reach the MCP client.
 func mcpToolError(ctx context.Context, err error) error {
-	var userErr *userSQLError
-	if errors.As(err, &userErr) {
-		return err
+	var validationErr *core.ValidationError
+	if errors.As(err, &validationErr) {
+		return errors.New(validationErr.Err.Error())
+	}
+	var queryFailure *core.UserSQLFailure
+	if errors.As(err, &queryFailure) {
+		return errors.New(queryFailure.Error())
 	}
 	httplog.SetError(ctx, err)
 	return errors.New("internal error")
@@ -84,9 +83,9 @@ func requireMCPUser(ctx context.Context) (*AuthUser, error) {
 	return user, nil
 }
 
-func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oauthProvider, configured ...*core.Core) *mcpServer {
+func newMCPServer(pool *pgxpool.Pool, oauth *oauthProvider, configured ...*core.Core) *mcpServer {
 	store := pgstore.New(pool)
-	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, SavedQueries: store, SQLSchema: store})
+	app := core.New(core.Config{Logs: store, Entries: store, Placements: store, SavedQueries: store, SQLSchema: store, UserSQL: store})
 	if len(configured) > 0 {
 		app = configured[0]
 	}
@@ -139,7 +138,7 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 		if err != nil {
 			return nil, runSQLOutput{}, err
 		}
-		result, err := executeUserSQL(ctx, pool, arbiter, user.ID, in.Query)
+		result, err := core.ExecuteUserSQL.Call(core.WithUserID(ctx, user.ID), app, core.ExecuteUserSQLParams{Query: in.Query})
 		if err != nil {
 			return nil, runSQLOutput{}, mcpToolError(ctx, err)
 		}
@@ -180,7 +179,7 @@ func newMCPServer(pool *pgxpool.Pool, arbiter *pgsqlarbiter.Arbiter, oauth *oaut
 			}
 			return nil, runSQLOutput{}, mcpToolError(ctx, err)
 		}
-		result, err := executeUserSQL(ctx, pool, arbiter, user.ID, saved.QueryText)
+		result, err := core.ExecuteUserSQL.Call(core.WithUserID(ctx, user.ID), app, core.ExecuteUserSQLParams{Query: saved.QueryText})
 		if err != nil {
 			return nil, runSQLOutput{}, mcpToolError(ctx, err)
 		}

@@ -22,6 +22,7 @@ type Core struct {
 	folders      FolderStore
 	savedQueries SavedQueryStore
 	sqlSchema    SQLSchemaStore
+	userSQL      UserSQLExecutor
 	sharing      SharingStore
 	middleware   []Middleware
 }
@@ -39,6 +40,7 @@ type Config struct {
 	Folders      FolderStore
 	SavedQueries SavedQueryStore
 	SQLSchema    SQLSchemaStore
+	UserSQL      UserSQLExecutor
 	Sharing      SharingStore
 	Middleware   []Middleware
 }
@@ -48,7 +50,7 @@ func New(cfg Config) *Core {
 	if tx == nil {
 		tx = passthroughTx{}
 	}
-	return &Core{users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, sharing: cfg.Sharing, middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sharing: cfg.Sharing, middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 
 // Transactor is the driven port for transaction boundaries. Store calls made

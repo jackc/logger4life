@@ -57,12 +57,12 @@ ports, and action catalog architecture modeled after `.scratch/fam`.
 
 ### 5. User SQL execution
 
-- [ ] Define query parameter/result types in core or a pure SQL-query domain
+- [x] Define query parameter/result types in core or a pure SQL-query domain
   package.
-- [ ] Add a driven port for executing constrained user queries.
-- [ ] Add an action for SQL execution shared by HTTP and MCP.
-- [ ] Keep arbiter enforcement and PostgreSQL execution in infrastructure.
-- [ ] Translate safe query failures into core errors without leaking database
+- [x] Add a driven port for executing constrained user queries.
+- [x] Add an action for SQL execution shared by HTTP and MCP.
+- [x] Keep arbiter enforcement and PostgreSQL execution in infrastructure.
+- [x] Translate safe query failures into core errors without leaking database
   details.
 
 ### 6. OAuth

@@ -1,4 +1,3 @@
-// Package pgstore implements core's driven ports with PostgreSQL.
 package pgstore
 
 import (
@@ -10,12 +9,7 @@ import (
 	"github.com/jackc/logger4life/backend/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type Store struct{ pool *pgxpool.Pool }
-
-func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 
 func (s *Store) CreateLog(ctx context.Context, userID, name string, fields []domain.FieldDefinition) (core.Log, error) {
 	tx, e := s.pool.Begin(ctx)

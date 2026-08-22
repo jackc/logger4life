@@ -52,6 +52,9 @@ type CreateFolderParams struct {
 }
 
 func (p *CreateFolderParams) Validate() error {
+	if e := validOptionalID("parent_folder_id", p.ParentFolderID); e != nil {
+		return e
+	}
 	p.Name = strings.TrimSpace(p.Name)
 	return validFolderName(p.Name)
 }
@@ -80,6 +83,9 @@ type RenameFolderParams struct {
 }
 
 func (p *RenameFolderParams) Validate() error {
+	if e := validID("folder_id", p.FolderID); e != nil {
+		return e
+	}
 	p.Name = strings.TrimSpace(p.Name)
 	return validFolderName(p.Name)
 }
@@ -99,6 +105,12 @@ type MoveFolderParams struct {
 }
 
 func (p *MoveFolderParams) Validate() error {
+	if e := validID("folder_id", p.FolderID); e != nil {
+		return e
+	}
+	if e := validOptionalID("parent_folder_id", p.ParentFolderID); e != nil {
+		return e
+	}
 	if p.Position < 0 {
 		p.Position = 0
 	}
@@ -116,6 +128,8 @@ var MoveFolder = Define(ActionDef[MoveFolderParams, struct{}]{Name: "move_folder
 type DeleteFolderParams struct {
 	FolderID string `json:"folder_id"`
 }
+
+func (p *DeleteFolderParams) Validate() error { return validID("folder_id", p.FolderID) }
 
 var DeleteFolder = Define(ActionDef[DeleteFolderParams, struct{}]{Name: "delete_folder", Description: "Delete an empty folder.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteFolderParams) (struct{}, error) {
 	id, e := requiredUser(ctx)

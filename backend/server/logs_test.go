@@ -1739,3 +1739,46 @@ func TestJoinLog_RejoinAfterShareRemoval(t *testing.T) {
 	_, body := getJSON(srv.URL+"/api/logs/"+logID, bobCookies)
 	assert.Equal(t, folderID, body["folder_id"])
 }
+
+// A path segment that is not a UUID names nothing. It used to reach
+// PostgreSQL, which rejected the cast and turned a bad request into a 500 with
+// a database error in the log.
+func TestMalformedIDsAreRejectedNotFatal(t *testing.T) {
+	srv := setupTestRouter(t)
+	defer srv.Close()
+
+	cookies := registerUser(t, srv.URL, "malformed")
+	resp, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Vitamins"}, cookies)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	logID := log["id"].(string)
+
+	cases := []struct {
+		method string
+		url    string
+		body   map[string]any
+	}{
+		{"GET", "/api/logs/not-a-uuid", nil},
+		{"PUT", "/api/logs/not-a-uuid", map[string]any{"name": "Renamed"}},
+		{"DELETE", "/api/logs/not-a-uuid", nil},
+		{"GET", "/api/logs/not-a-uuid/entries", nil},
+		{"POST", "/api/logs/not-a-uuid/entries", map[string]any{}},
+		{"DELETE", "/api/logs/" + logID + "/entries/not-a-uuid", nil},
+		{"PUT", "/api/logs/not-a-uuid/placement", map[string]any{"position": 0}},
+		{"POST", "/api/logs/not-a-uuid/share-token", nil},
+		{"GET", "/api/logs/not-a-uuid/shares", nil},
+	}
+	for _, c := range cases {
+		var resp *http.Response
+		switch c.method {
+		case "GET":
+			resp, _ = getJSON(srv.URL+c.url, cookies)
+		case "PUT":
+			resp, _ = putJSON(srv.URL+c.url, c.body, cookies)
+		case "POST":
+			resp, _ = postJSON(srv.URL+c.url, c.body, cookies)
+		case "DELETE":
+			resp, _ = deleteJSON(srv.URL+c.url, cookies)
+		}
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "%s %s", c.method, c.url)
+	}
+}

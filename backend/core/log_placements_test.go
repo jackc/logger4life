@@ -42,29 +42,29 @@ func TestPlacementActionsTranslateParamsIntoDomainChanges(t *testing.T) {
 	store := &fakePlacementStore{}
 	app := New(Config{Placements: store})
 	ctx := WithUserID(context.Background(), "user-1")
-	folder := "folder-1"
+	folder := testID("folder-1")
 
-	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: "log-1", FolderID: &folder, Position: 2}); err != nil {
+	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: testID("log-1"), FolderID: &folder, Position: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if store.scopeUserID != "user-1" || store.logID != "log-1" {
+	if store.scopeUserID != "user-1" || store.logID != testID("log-1") {
 		t.Fatalf("UpdateLogPlacement scope = (%q, %q)", store.scopeUserID, store.logID)
 	}
 	if store.placement.FolderID != &folder || store.placement.Position != 2 {
 		t.Fatalf("placement change = %#v", store.placement)
 	}
 
-	if _, err := PinLog.Call(ctx, app, PinLogParams{LogID: "log-2", Pinned: true}); err != nil {
+	if _, err := PinLog.Call(ctx, app, PinLogParams{LogID: testID("log-2"), Pinned: true}); err != nil {
 		t.Fatal(err)
 	}
-	if store.logID != "log-2" || !store.pin.Pinned {
+	if store.logID != testID("log-2") || !store.pin.Pinned {
 		t.Fatalf("pin change = %#v for %q", store.pin, store.logID)
 	}
 
-	if _, err := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: "log-3", HomePosition: 4}); err != nil {
+	if _, err := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: testID("log-3"), HomePosition: 4}); err != nil {
 		t.Fatal(err)
 	}
-	if store.logID != "log-3" || store.order.HomePosition != 4 {
+	if store.logID != testID("log-3") || store.order.HomePosition != 4 {
 		t.Fatalf("home order change = %#v for %q", store.order, store.logID)
 	}
 }
@@ -76,7 +76,7 @@ func TestUpdateLogPlacementKeepsRootFolderNil(t *testing.T) {
 	app := New(Config{Placements: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: "log-1"}); err != nil {
+	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: testID("log-1")}); err != nil {
 		t.Fatal(err)
 	}
 	if store.placement.FolderID != nil {
@@ -89,13 +89,13 @@ func TestPlacementActionsClampNegativePositions(t *testing.T) {
 	app := New(Config{Placements: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: "log-1", Position: -3}); err != nil {
+	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: testID("log-1"), Position: -3}); err != nil {
 		t.Fatal(err)
 	}
 	if store.placement.Position != 0 {
 		t.Fatalf("placement position = %d, want 0", store.placement.Position)
 	}
-	if _, err := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: "log-1", HomePosition: -3}); err != nil {
+	if _, err := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: testID("log-1"), HomePosition: -3}); err != nil {
 		t.Fatal(err)
 	}
 	if store.order.HomePosition != 0 {
@@ -113,12 +113,12 @@ func TestPlacementActionsRequireAuthenticationBeforeCallingStore(t *testing.T) {
 		call func() error
 	}{
 		{"update_log_placement", func() error {
-			_, e := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: "log-1"})
+			_, e := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: testID("log-1")})
 			return e
 		}},
-		{"pin_log", func() error { _, e := PinLog.Call(ctx, app, PinLogParams{LogID: "log-1"}); return e }},
+		{"pin_log", func() error { _, e := PinLog.Call(ctx, app, PinLogParams{LogID: testID("log-1")}); return e }},
 		{"update_log_home_position", func() error {
-			_, e := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: "log-1"})
+			_, e := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: testID("log-1")})
 			return e
 		}},
 	}
@@ -137,11 +137,11 @@ func TestPlacementActionsPropagateStoreSentinels(t *testing.T) {
 	app := New(Config{Placements: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: "log-1"}); !errors.Is(err, ErrLogNotFound) {
+	if _, err := UpdateLogPlacement.Call(ctx, app, UpdateLogPlacementParams{LogID: testID("log-1")}); !errors.Is(err, ErrLogNotFound) {
 		t.Fatalf("update_log_placement error = %v, want ErrLogNotFound", err)
 	}
 	store.err = ErrLogNotPinned
-	if _, err := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: "log-1"}); !errors.Is(err, ErrLogNotPinned) {
+	if _, err := UpdateLogHomePosition.Call(ctx, app, UpdateLogHomePositionParams{LogID: testID("log-1")}); !errors.Is(err, ErrLogNotPinned) {
 		t.Fatalf("update_log_home_position error = %v, want ErrLogNotPinned", err)
 	}
 }

@@ -69,37 +69,37 @@ func doseDefinitions() []domain.FieldDefinition {
 func TestLogEntryActionsScopeStoreCallsToContextUser(t *testing.T) {
 	store := &fakeLogEntryStore{
 		definitions: doseDefinitions(),
-		entry:       domain.LogEntry{ID: "entry-1"},
-		entries:     []domain.LogEntry{{ID: "entry-1"}},
+		entry:       domain.LogEntry{ID: testID("entry-1")},
+		entries:     []domain.LogEntry{{ID: testID("entry-1")}},
 	}
 	app := New(Config{Entries: store})
 	ctx := WithUserID(context.Background(), "user-1")
 	occurred := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 
-	if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: "log-1", Fields: map[string]any{"dose": "500"}}); err != nil {
+	if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: testID("log-1"), Fields: map[string]any{"dose": "500"}}); err != nil {
 		t.Fatal(err)
 	}
-	if store.writeUserID != "user-1" || store.writeLogID != "log-1" {
+	if store.writeUserID != "user-1" || store.writeLogID != testID("log-1") {
 		t.Fatalf("CreateLogEntry store call = (%q, %q)", store.writeUserID, store.writeLogID)
 	}
 
-	entries, err := ListLogEntries.Call(ctx, app, ListLogEntriesParams{LogID: "log-1"})
-	if err != nil || len(entries) != 1 || entries[0].ID != "entry-1" {
+	entries, err := ListLogEntries.Call(ctx, app, ListLogEntriesParams{LogID: testID("log-1")})
+	if err != nil || len(entries) != 1 || entries[0].ID != testID("entry-1") {
 		t.Fatalf("ListLogEntries() = %#v, %v", entries, err)
 	}
 
-	update := UpdateLogEntryParams{LogID: "log-1", EntryID: "entry-1", Fields: map[string]any{"dose": "250"}, OccurredAt: occurred}
+	update := UpdateLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-1"), Fields: map[string]any{"dose": "250"}, OccurredAt: occurred}
 	if _, err := UpdateLogEntry.Call(ctx, app, update); err != nil {
 		t.Fatal(err)
 	}
-	if store.writeEntryID != "entry-1" || !store.occurredAt.Equal(occurred) {
+	if store.writeEntryID != testID("entry-1") || !store.occurredAt.Equal(occurred) {
 		t.Fatalf("UpdateLogEntry store call = (%q, %v)", store.writeEntryID, store.occurredAt)
 	}
 
-	if _, err := DeleteLogEntry.Call(ctx, app, DeleteLogEntryParams{LogID: "log-1", EntryID: "entry-2"}); err != nil {
+	if _, err := DeleteLogEntry.Call(ctx, app, DeleteLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-2")}); err != nil {
 		t.Fatal(err)
 	}
-	if store.writeUserID != "user-1" || store.writeEntryID != "entry-2" {
+	if store.writeUserID != "user-1" || store.writeEntryID != testID("entry-2") {
 		t.Fatalf("DeleteLogEntry store call = (%q, %q)", store.writeUserID, store.writeEntryID)
 	}
 }
@@ -124,10 +124,10 @@ func TestLogEntryValuesAreValidatedAgainstStoredDefinitions(t *testing.T) {
 	}
 	for _, c := range rejected {
 		var validationErr *ValidationError
-		if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: "log-1", Fields: c.fields}); !errors.As(err, &validationErr) {
+		if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: testID("log-1"), Fields: c.fields}); !errors.As(err, &validationErr) {
 			t.Fatalf("create_log_entry %s: error = %T %v, want ValidationError", c.name, err, err)
 		}
-		update := UpdateLogEntryParams{LogID: "log-1", EntryID: "entry-1", Fields: c.fields, OccurredAt: occurred}
+		update := UpdateLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-1"), Fields: c.fields, OccurredAt: occurred}
 		if _, err := UpdateLogEntry.Call(ctx, app, update); !errors.As(err, &validationErr) {
 			t.Fatalf("update_log_entry %s: error = %T %v, want ValidationError", c.name, err, err)
 		}
@@ -135,7 +135,7 @@ func TestLogEntryValuesAreValidatedAgainstStoredDefinitions(t *testing.T) {
 	if store.writeCalls != 0 {
 		t.Fatalf("invalid entries reached the store %d times", store.writeCalls)
 	}
-	if store.definitionsUserID != "user-1" || store.definitionsLogID != "log-1" {
+	if store.definitionsUserID != "user-1" || store.definitionsLogID != testID("log-1") {
 		t.Fatalf("definitions were fetched for (%q, %q)", store.definitionsUserID, store.definitionsLogID)
 	}
 }
@@ -147,10 +147,10 @@ func TestLogEntryWritesStopWhenDefinitionsAreUnavailable(t *testing.T) {
 	app := New(Config{Entries: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: "log-1"}); !errors.Is(err, ErrLogNotFound) {
+	if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: testID("log-1")}); !errors.Is(err, ErrLogNotFound) {
 		t.Fatalf("create_log_entry error = %v, want ErrLogNotFound", err)
 	}
-	update := UpdateLogEntryParams{LogID: "log-1", EntryID: "entry-1", OccurredAt: time.Now()}
+	update := UpdateLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-1"), OccurredAt: time.Now()}
 	if _, err := UpdateLogEntry.Call(ctx, app, update); !errors.Is(err, ErrLogNotFound) {
 		t.Fatalf("update_log_entry error = %v, want ErrLogNotFound", err)
 	}
@@ -166,7 +166,7 @@ func TestCreateLogEntryNormalizesNilFields(t *testing.T) {
 	app := New(Config{Entries: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: "log-1"}); err != nil {
+	if _, err := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: testID("log-1")}); err != nil {
 		t.Fatal(err)
 	}
 	if store.writeFields == nil || len(store.writeFields) != 0 {
@@ -180,7 +180,7 @@ func TestUpdateLogEntryRequiresOccurredAt(t *testing.T) {
 	ctx := WithUserID(context.Background(), "user-1")
 
 	var validationErr *ValidationError
-	update := UpdateLogEntryParams{LogID: "log-1", EntryID: "entry-1", Fields: map[string]any{"dose": "500"}}
+	update := UpdateLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-1"), Fields: map[string]any{"dose": "500"}}
 	if _, err := UpdateLogEntry.Call(ctx, app, update); !errors.As(err, &validationErr) {
 		t.Fatalf("update_log_entry error = %T %v, want ValidationError", err, err)
 	}
@@ -199,19 +199,19 @@ func TestLogEntryActionsRequireAuthenticationBeforeCallingStore(t *testing.T) {
 		call func() error
 	}{
 		{"create_log_entry", func() error {
-			_, e := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: "log-1"})
+			_, e := CreateLogEntry.Call(ctx, app, CreateLogEntryParams{LogID: testID("log-1")})
 			return e
 		}},
 		{"list_log_entries", func() error {
-			_, e := ListLogEntries.Call(ctx, app, ListLogEntriesParams{LogID: "log-1"})
+			_, e := ListLogEntries.Call(ctx, app, ListLogEntriesParams{LogID: testID("log-1")})
 			return e
 		}},
 		{"update_log_entry", func() error {
-			_, e := UpdateLogEntry.Call(ctx, app, UpdateLogEntryParams{LogID: "log-1", EntryID: "e-1", OccurredAt: time.Now()})
+			_, e := UpdateLogEntry.Call(ctx, app, UpdateLogEntryParams{LogID: testID("log-1"), EntryID: testID("e-1"), OccurredAt: time.Now()})
 			return e
 		}},
 		{"delete_log_entry", func() error {
-			_, e := DeleteLogEntry.Call(ctx, app, DeleteLogEntryParams{LogID: "log-1", EntryID: "e-1"})
+			_, e := DeleteLogEntry.Call(ctx, app, DeleteLogEntryParams{LogID: testID("log-1"), EntryID: testID("e-1")})
 			return e
 		}},
 	}
@@ -230,11 +230,11 @@ func TestLogEntryActionsPropagateStoreSentinels(t *testing.T) {
 	app := New(Config{Entries: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	update := UpdateLogEntryParams{LogID: "log-1", EntryID: "entry-1", Fields: map[string]any{"dose": "500"}, OccurredAt: time.Now()}
+	update := UpdateLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-1"), Fields: map[string]any{"dose": "500"}, OccurredAt: time.Now()}
 	if _, err := UpdateLogEntry.Call(ctx, app, update); !errors.Is(err, ErrLogEntryNotFound) {
 		t.Fatalf("update_log_entry error = %v, want ErrLogEntryNotFound", err)
 	}
-	if _, err := DeleteLogEntry.Call(ctx, app, DeleteLogEntryParams{LogID: "log-1", EntryID: "entry-1"}); !errors.Is(err, ErrLogEntryNotFound) {
+	if _, err := DeleteLogEntry.Call(ctx, app, DeleteLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-1")}); !errors.Is(err, ErrLogEntryNotFound) {
 		t.Fatalf("delete_log_entry error = %v, want ErrLogEntryNotFound", err)
 	}
 }

@@ -81,6 +81,9 @@ type UpdateSavedQueryParams struct {
 }
 
 func (p *UpdateSavedQueryParams) Validate() error {
+	if e := validID("id", p.ID); e != nil {
+		return e
+	}
 	v := SavedQueryParams{Name: p.Name, QueryText: p.QueryText}
 	e := v.Validate()
 	p.Name = v.Name
@@ -98,6 +101,8 @@ var UpdateSavedQuery = Define(ActionDef[UpdateSavedQueryParams, SavedQuery]{Name
 type DeleteSavedQueryParams struct {
 	ID string `json:"id"`
 }
+
+func (p *DeleteSavedQueryParams) Validate() error { return validID("id", p.ID) }
 
 var DeleteSavedQuery = Define(ActionDef[DeleteSavedQueryParams, struct{}]{Name: "delete_saved_query", Description: "Delete a saved SQL query.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteSavedQueryParams) (struct{}, error) {
 	id, e := requiredUser(ctx)

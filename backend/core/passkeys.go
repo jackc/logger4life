@@ -240,8 +240,8 @@ type FinishPasskeyRegistrationParams struct {
 }
 
 func (p *FinishPasskeyRegistrationParams) Validate() error {
-	if _, err := uuid.FromString(p.ChallengeID); err != nil {
-		return errors.New("challenge_id is invalid")
+	if e := validID("challenge_id", p.ChallengeID); e != nil {
+		return e
 	}
 	if len(p.Credential) == 0 {
 		return errors.New("credential is required")
@@ -327,8 +327,8 @@ type FinishPasskeyLoginParams struct {
 }
 
 func (p FinishPasskeyLoginParams) Validate() error {
-	if _, err := uuid.FromString(p.ChallengeID); err != nil {
-		return errors.New("challenge_id is invalid")
+	if e := validID("challenge_id", p.ChallengeID); e != nil {
+		return e
 	}
 	if len(p.Credential) == 0 {
 		return errors.New("credential is required")
@@ -428,8 +428,8 @@ type RenamePasskeyParams struct {
 }
 
 func (p *RenamePasskeyParams) Validate() error {
-	if _, err := uuid.FromString(p.PasskeyID); err != nil {
-		return errors.New("passkey_id is invalid")
+	if e := validID("passkey_id", p.PasskeyID); e != nil {
+		return e
 	}
 	p.Description = strings.TrimSpace(p.Description)
 	if utf8.RuneCountInString(p.Description) > maxPasskeyDescriptionLength {
@@ -461,8 +461,8 @@ type DeletePasskeyParams struct {
 }
 
 func (p DeletePasskeyParams) Validate() error {
-	if _, err := uuid.FromString(p.PasskeyID); err != nil {
-		return errors.New("passkey_id is invalid")
+	if e := validID("passkey_id", p.PasskeyID); e != nil {
+		return e
 	}
 	return nil
 }

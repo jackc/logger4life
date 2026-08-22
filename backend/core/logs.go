@@ -68,6 +68,8 @@ type GetLogParams struct {
 	LogID string `json:"log_id"`
 }
 
+func (p *GetLogParams) Validate() error { return validID("log_id", p.LogID) }
+
 var GetLog = Define(ActionDef[GetLogParams, Log]{Name: "get_log", Description: "Get a visible log.", Handler: func(ctx context.Context, c *Core, p GetLogParams) (Log, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {
@@ -83,6 +85,9 @@ type UpdateLogParams struct {
 }
 
 func (p *UpdateLogParams) Validate() error {
+	if e := validID("log_id", p.LogID); e != nil {
+		return e
+	}
 	v := CreateLogParams{Name: p.Name, Fields: p.Fields}
 	e := v.Validate()
 	p.Name = v.Name
@@ -101,6 +106,8 @@ var UpdateLog = Define(ActionDef[UpdateLogParams, Log]{Name: "update_log", Descr
 type DeleteLogParams struct {
 	LogID string `json:"log_id"`
 }
+
+func (p *DeleteLogParams) Validate() error { return validID("log_id", p.LogID) }
 
 var DeleteLog = Define(ActionDef[DeleteLogParams, struct{}]{Name: "delete_log", Description: "Delete an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteLogParams) (struct{}, error) {
 	id, e := requiredUser(ctx)

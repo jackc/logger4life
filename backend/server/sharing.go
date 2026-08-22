@@ -9,7 +9,10 @@ import (
 )
 
 func writeSharingError(w http.ResponseWriter, r *http.Request, err error) {
+	var ve *core.ValidationError
 	switch {
+	case errors.As(err, &ve):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": ve.Err.Error()})
 	case errors.Is(err, core.ErrLogNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
 	case errors.Is(err, core.ErrShareNotFound):

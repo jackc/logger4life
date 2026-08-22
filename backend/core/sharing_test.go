@@ -61,11 +61,11 @@ func TestCreateShareTokenAction(t *testing.T) {
 	app := New(Config{Sharing: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	result, err := CreateShareToken.Call(ctx, app, CreateShareTokenParams{LogID: "log-1"})
+	result, err := CreateShareToken.Call(ctx, app, CreateShareTokenParams{LogID: testID("log-1")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.createdUserID != "user-1" || store.createdLogID != "log-1" {
+	if store.createdUserID != "user-1" || store.createdLogID != testID("log-1") {
 		t.Fatalf("store scope = (%q, %q)", store.createdUserID, store.createdLogID)
 	}
 	if len(store.createdToken) != 32 {
@@ -79,33 +79,33 @@ func TestCreateShareTokenAction(t *testing.T) {
 
 func TestSharingActionsCallStore(t *testing.T) {
 	store := &fakeSharingStore{
-		shares: []SharedUser{{ID: "share-1", Username: "bob"}},
-		info:   ShareInfo{LogID: "log-1", LogName: "Shared"},
-		join:   JoinSharedLogResult{LogID: "log-1", LogName: "Shared"},
+		shares: []SharedUser{{ID: testID("share-1"), Username: "bob"}},
+		info:   ShareInfo{LogID: testID("log-1"), LogName: "Shared"},
+		join:   JoinSharedLogResult{LogID: testID("log-1"), LogName: "Shared"},
 	}
 	app := New(Config{Sharing: store})
 	ctx := WithUserID(context.Background(), "user-1")
 
-	if _, err := DeleteShareToken.Call(ctx, app, DeleteShareTokenParams{LogID: "log-1"}); err != nil {
+	if _, err := DeleteShareToken.Call(ctx, app, DeleteShareTokenParams{LogID: testID("log-1")}); err != nil {
 		t.Fatal(err)
 	}
-	shares, err := ListSharedUsers.Call(ctx, app, ListSharedUsersParams{LogID: "log-1"})
+	shares, err := ListSharedUsers.Call(ctx, app, ListSharedUsersParams{LogID: testID("log-1")})
 	if err != nil || len(shares) != 1 || shares[0].Username != "bob" {
 		t.Fatalf("ListSharedUsers() = %#v, %v", shares, err)
 	}
-	if _, err := RemoveSharedUser.Call(ctx, app, RemoveSharedUserParams{LogID: "log-1", ShareID: "share-1"}); err != nil {
+	if _, err := RemoveSharedUser.Call(ctx, app, RemoveSharedUserParams{LogID: testID("log-1"), ShareID: testID("share-1")}); err != nil {
 		t.Fatal(err)
 	}
 	info, err := GetShareInfo.Call(ctx, app, GetShareInfoParams{Token: "0102"})
-	if err != nil || info.LogID != "log-1" {
+	if err != nil || info.LogID != testID("log-1") {
 		t.Fatalf("GetShareInfo() = %#v, %v", info, err)
 	}
 	joined, err := JoinSharedLog.Call(ctx, app, JoinSharedLogParams{Token: "aabb"})
-	if err != nil || joined.LogID != "log-1" {
+	if err != nil || joined.LogID != testID("log-1") {
 		t.Fatalf("JoinSharedLog() = %#v, %v", joined, err)
 	}
 
-	if store.deletedLogID != "log-1" || store.listedLogID != "log-1" || store.removedLogID != "log-1" || store.removedShareID != "share-1" {
+	if store.deletedLogID != testID("log-1") || store.listedLogID != testID("log-1") || store.removedLogID != testID("log-1") || store.removedShareID != testID("share-1") {
 		t.Fatalf("unexpected store calls: %#v", store)
 	}
 	if hex.EncodeToString(store.infoToken) != "0102" || hex.EncodeToString(store.joinToken) != "aabb" {
@@ -132,7 +132,7 @@ func TestSharingActionsRejectInvalidLinksAndPropagateSentinels(t *testing.T) {
 	if _, err := JoinSharedLog.Call(ctx, app, JoinSharedLogParams{Token: "01"}); !errors.Is(err, ErrAlreadyOwnLog) {
 		t.Fatalf("sentinel error = %v", err)
 	}
-	if _, err := ListSharedUsers.Call(context.Background(), app, ListSharedUsersParams{}); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := ListSharedUsers.Call(context.Background(), app, ListSharedUsersParams{LogID: testID("log-1")}); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("unauthenticated error = %v", err)
 	}
 }

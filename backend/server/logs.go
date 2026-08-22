@@ -118,11 +118,7 @@ func handleGetLog(app *core.Core) http.HandlerFunc {
 		logID := chi.URLParam(r, "logID")
 		l, err := core.GetLog.Call(core.WithUserID(r.Context(), user.ID), app, core.GetLogParams{LogID: logID})
 		if err != nil {
-			if errors.Is(err, core.ErrLogNotFound) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			} else {
-				internalError(w, r, err)
-			}
+			writeLogOperationError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, l)
@@ -170,11 +166,7 @@ func handleDeleteLog(app *core.Core) http.HandlerFunc {
 
 		_, err := core.DeleteLog.Call(core.WithUserID(r.Context(), user.ID), app, core.DeleteLogParams{LogID: logID})
 		if err != nil {
-			if errors.Is(err, core.ErrLogNotFound) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "log not found"})
-				return
-			}
-			internalError(w, r, err)
+			writeLogOperationError(w, r, err)
 			return
 		}
 

@@ -20,6 +20,12 @@ type UpdateLogPlacementParams struct {
 }
 
 func (p *UpdateLogPlacementParams) Validate() error {
+	if e := validID("log_id", p.LogID); e != nil {
+		return e
+	}
+	if e := validOptionalID("folder_id", p.FolderID); e != nil {
+		return e
+	}
 	if p.Position < 0 {
 		p.Position = 0
 	}
@@ -39,6 +45,8 @@ type PinLogParams struct {
 	Pinned bool   `json:"pinned"`
 }
 
+func (p *PinLogParams) Validate() error { return validID("log_id", p.LogID) }
+
 var PinLog = Define(ActionDef[PinLogParams, struct{}]{Name: "pin_log", Description: "Set a log's home pin.", Mutating: true, Handler: func(ctx context.Context, c *Core, p PinLogParams) (struct{}, error) {
 	u, e := requiredUser(ctx)
 	if e == nil {
@@ -53,6 +61,9 @@ type UpdateLogHomePositionParams struct {
 }
 
 func (p *UpdateLogHomePositionParams) Validate() error {
+	if e := validID("log_id", p.LogID); e != nil {
+		return e
+	}
 	if p.HomePosition < 0 {
 		p.HomePosition = 0
 	}

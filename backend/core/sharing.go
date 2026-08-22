@@ -49,6 +49,8 @@ type CreateShareTokenParams struct {
 	LogID string `json:"log_id"`
 }
 
+func (p *CreateShareTokenParams) Validate() error { return validID("log_id", p.LogID) }
+
 type ShareToken struct {
 	ShareToken string `json:"share_token"`
 }
@@ -72,6 +74,8 @@ type DeleteShareTokenParams struct {
 	LogID string `json:"log_id"`
 }
 
+func (p *DeleteShareTokenParams) Validate() error { return validID("log_id", p.LogID) }
+
 var DeleteShareToken = Define(ActionDef[DeleteShareTokenParams, struct{}]{Name: "delete_share_token", Description: "Revoke the share link for an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteShareTokenParams) (struct{}, error) {
 	userID, err := requiredUser(ctx)
 	if err == nil {
@@ -84,6 +88,8 @@ type ListSharedUsersParams struct {
 	LogID string `json:"log_id"`
 }
 
+func (p *ListSharedUsersParams) Validate() error { return validID("log_id", p.LogID) }
+
 var ListSharedUsers = Define(ActionDef[ListSharedUsersParams, []SharedUser]{Name: "list_shared_users", Description: "List users sharing an owned log.", Handler: func(ctx context.Context, c *Core, p ListSharedUsersParams) ([]SharedUser, error) {
 	userID, err := requiredUser(ctx)
 	if err != nil {
@@ -95,6 +101,13 @@ var ListSharedUsers = Define(ActionDef[ListSharedUsersParams, []SharedUser]{Name
 type RemoveSharedUserParams struct {
 	LogID   string `json:"log_id"`
 	ShareID string `json:"share_id"`
+}
+
+func (p *RemoveSharedUserParams) Validate() error {
+	if e := validID("log_id", p.LogID); e != nil {
+		return e
+	}
+	return validID("share_id", p.ShareID)
 }
 
 var RemoveSharedUser = Define(ActionDef[RemoveSharedUserParams, struct{}]{Name: "remove_shared_user", Description: "Remove a user from an owned shared log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p RemoveSharedUserParams) (struct{}, error) {

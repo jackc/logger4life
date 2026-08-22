@@ -50,8 +50,8 @@ func (s *fakeSavedQueryStore) DeleteSavedQuery(_ context.Context, userID, id str
 
 func TestSavedQueryActionsScopeStoreCallsToContextUser(t *testing.T) {
 	store := &fakeSavedQueryStore{
-		query:   SavedQuery{ID: "query-1", Name: "Daily doses"},
-		queries: []SavedQuery{{ID: "query-1"}},
+		query:   SavedQuery{ID: testID("query-1"), Name: "Daily doses"},
+		queries: []SavedQuery{{ID: testID("query-1")}},
 	}
 	app := New(Config{SavedQueries: store})
 	ctx := WithUserID(context.Background(), "user-1")
@@ -62,7 +62,7 @@ func TestSavedQueryActionsScopeStoreCallsToContextUser(t *testing.T) {
 	}
 
 	got, err := GetSavedQuery.Call(ctx, app, GetSavedQueryParams{Name: "Daily doses"})
-	if err != nil || got.ID != "query-1" || store.name != "Daily doses" {
+	if err != nil || got.ID != testID("query-1") || store.name != "Daily doses" {
 		t.Fatalf("GetSavedQuery() = %#v, %v (name %q)", got, err, store.name)
 	}
 
@@ -74,18 +74,18 @@ func TestSavedQueryActionsScopeStoreCallsToContextUser(t *testing.T) {
 		t.Fatalf("CreateSavedQuery store call = (%q, %q, %q)", store.scopeUserID, store.name, store.queryText)
 	}
 
-	update := UpdateSavedQueryParams{ID: "query-1", Name: "Monthly", QueryText: "SELECT 2"}
+	update := UpdateSavedQueryParams{ID: testID("query-1"), Name: "Monthly", QueryText: "SELECT 2"}
 	if _, err := UpdateSavedQuery.Call(ctx, app, update); err != nil {
 		t.Fatal(err)
 	}
-	if store.id != "query-1" || store.name != "Monthly" || store.queryText != "SELECT 2" {
+	if store.id != testID("query-1") || store.name != "Monthly" || store.queryText != "SELECT 2" {
 		t.Fatalf("UpdateSavedQuery store call = (%q, %q, %q)", store.id, store.name, store.queryText)
 	}
 
-	if _, err := DeleteSavedQuery.Call(ctx, app, DeleteSavedQueryParams{ID: "query-2"}); err != nil {
+	if _, err := DeleteSavedQuery.Call(ctx, app, DeleteSavedQueryParams{ID: testID("query-2")}); err != nil {
 		t.Fatal(err)
 	}
-	if store.scopeUserID != "user-1" || store.id != "query-2" {
+	if store.scopeUserID != "user-1" || store.id != testID("query-2") {
 		t.Fatalf("DeleteSavedQuery store call = (%q, %q)", store.scopeUserID, store.id)
 	}
 }
@@ -111,7 +111,7 @@ func TestSavedQueryValidationRunsBeforeStore(t *testing.T) {
 		if _, err := CreateSavedQuery.Call(ctx, app, c.params); !errors.As(err, &validationErr) {
 			t.Fatalf("create_saved_query %s: error = %T %v, want ValidationError", c.name, err, err)
 		}
-		update := UpdateSavedQueryParams{ID: "query-1", Name: c.params.Name, QueryText: c.params.QueryText}
+		update := UpdateSavedQueryParams{ID: testID("query-1"), Name: c.params.Name, QueryText: c.params.QueryText}
 		if _, err := UpdateSavedQuery.Call(ctx, app, update); !errors.As(err, &validationErr) {
 			t.Fatalf("update_saved_query %s: error = %T %v, want ValidationError", c.name, err, err)
 		}
@@ -147,11 +147,11 @@ func TestSavedQueryActionsRequireAuthenticationBeforeCallingStore(t *testing.T) 
 			return e
 		}},
 		{"update_saved_query", func() error {
-			_, e := UpdateSavedQuery.Call(ctx, app, UpdateSavedQueryParams{ID: "q-1", Name: "Weekly", QueryText: "SELECT 1"})
+			_, e := UpdateSavedQuery.Call(ctx, app, UpdateSavedQueryParams{ID: testID("q-1"), Name: "Weekly", QueryText: "SELECT 1"})
 			return e
 		}},
 		{"delete_saved_query", func() error {
-			_, e := DeleteSavedQuery.Call(ctx, app, DeleteSavedQueryParams{ID: "q-1"})
+			_, e := DeleteSavedQuery.Call(ctx, app, DeleteSavedQueryParams{ID: testID("q-1")})
 			return e
 		}},
 	}
@@ -177,7 +177,7 @@ func TestSavedQueryActionsPropagateStoreSentinels(t *testing.T) {
 	if _, err := GetSavedQuery.Call(ctx, app, GetSavedQueryParams{Name: "Missing"}); !errors.Is(err, ErrSavedQueryNotFound) {
 		t.Fatalf("get_saved_query error = %v, want ErrSavedQueryNotFound", err)
 	}
-	if _, err := DeleteSavedQuery.Call(ctx, app, DeleteSavedQueryParams{ID: "q-1"}); !errors.Is(err, ErrSavedQueryNotFound) {
+	if _, err := DeleteSavedQuery.Call(ctx, app, DeleteSavedQueryParams{ID: testID("q-1")}); !errors.Is(err, ErrSavedQueryNotFound) {
 		t.Fatalf("delete_saved_query error = %v, want ErrSavedQueryNotFound", err)
 	}
 }

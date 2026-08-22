@@ -25,6 +25,9 @@ type CreateLogEntryParams struct {
 }
 
 func (p *CreateLogEntryParams) Validate() error {
+	if e := validID("log_id", p.LogID); e != nil {
+		return e
+	}
 	if p.Fields == nil {
 		p.Fields = map[string]any{}
 	}
@@ -50,6 +53,8 @@ type ListLogEntriesParams struct {
 	LogID string `json:"log_id"`
 }
 
+func (p *ListLogEntriesParams) Validate() error { return validID("log_id", p.LogID) }
+
 var ListLogEntries = Define(ActionDef[ListLogEntriesParams, []domain.LogEntry]{Name: "list_log_entries", Description: "List entries in a visible log.", Handler: func(ctx context.Context, c *Core, p ListLogEntriesParams) ([]domain.LogEntry, error) {
 	u, e := requiredUser(ctx)
 	if e != nil {
@@ -66,6 +71,12 @@ type UpdateLogEntryParams struct {
 }
 
 func (p *UpdateLogEntryParams) Validate() error {
+	if e := validID("log_id", p.LogID); e != nil {
+		return e
+	}
+	if e := validID("entry_id", p.EntryID); e != nil {
+		return e
+	}
 	if p.Fields == nil {
 		p.Fields = map[string]any{}
 	}
@@ -93,6 +104,13 @@ var UpdateLogEntry = Define(ActionDef[UpdateLogEntryParams, domain.LogEntry]{Nam
 type DeleteLogEntryParams struct {
 	LogID   string `json:"log_id"`
 	EntryID string `json:"entry_id"`
+}
+
+func (p *DeleteLogEntryParams) Validate() error {
+	if e := validID("log_id", p.LogID); e != nil {
+		return e
+	}
+	return validID("entry_id", p.EntryID)
 }
 
 var DeleteLogEntry = Define(ActionDef[DeleteLogEntryParams, struct{}]{Name: "delete_log_entry", Description: "Delete an entry from a visible log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteLogEntryParams) (struct{}, error) {

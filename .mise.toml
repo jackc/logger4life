@@ -29,7 +29,7 @@ rg = "latest"
 ruby = '4.0.3'
 watchexec = "latest"
 
-"github:jackc/tern" = "2.4.1"
+"github:jackc/tern" = "2.4.3"
 "github:jackc/verna" = "0.6.0"
 "go:golang.org/x/tools/cmd/goimports" = "latest"
 

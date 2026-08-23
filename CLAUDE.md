@@ -18,7 +18,7 @@ long-running services. See `docs/development-environment.md`.
 - `mise run dev` — Run PostgreSQL, the backend, and Vite under process-compose
 - `mise run dev:urls` — Print this checkout's ports and URLs
 - `mise run dev:down` — Stop the stack (or `process-compose down`)
-- `process-compose process list` / `process-compose process restart backend` — Inspect and control services without the TUI
+- `process-compose process list` / `process-compose process logs backend` / `process-compose process restart backend` — Inspect and control services without the TUI; no flags needed, `PC_PORT_NUM` is in the environment
 - Ports are never fixed. Read them from the environment (`BACKEND_URL`, `VITE_URL`, `PGPORT`) or `.dev/ports.env`; never assume 4000/5173/5432.
 
 ### Building
@@ -122,7 +122,7 @@ long-running services. See `docs/development-environment.md`.
 - **API client**: `src/lib/api.js` — thin wrappers (`apiGet`, `apiPost`, `apiPut`, `apiDelete`) around fetch
 - **Auth state**: `src/lib/auth.svelte.js` — singleton reactive module using `$state` with exported `getAuth()`, `checkAuth()`, `login()`, `register()`, `logout()`
 - **App settings**: `src/lib/settings.svelte.js` — singleton reactive module for server settings (`allowRegistration`); loaded in layout
-- Vite dev server proxies `/api` requests to `http://localhost:4000`
+- Vite dev server proxies `/api` requests to `$BACKEND_URL` and binds `$VITE_PORT` with `strictPort`
 
 #### Routes
 | Route | File | Purpose |

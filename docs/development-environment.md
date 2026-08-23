@@ -86,11 +86,17 @@ The TUI is the default view. Everything is also scriptable:
 
 ```sh
 process-compose process list             # status
+process-compose process logs backend     # one service's output
 process-compose process restart backend  # restart one service
 process-compose down                     # stop the stack
 ```
 
-Per-process logs are written to `.dev/logs/`.
+No `--port` is needed: `PC_PORT_NUM` is part of the worktree environment, so
+the CLI finds this worktree's instance.
+
+`process-compose process logs` is the current view of a service's output.
+Copies are also written to `.dev/logs/`, but those are flushed as output
+accumulates, so a quiet process may lag behind.
 
 ## The database
 

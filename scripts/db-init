@@ -26,7 +26,10 @@ fi
 pg_start_temporarily
 
 echo "==> creating roles and databases"
-psql --dbname=postgres --quiet --set=ON_ERROR_STOP=1 --file=postgresql/prepare.sql >/dev/null
+# --no-psqlrc: a developer's ~/.psqlrc is for interactive use and may set
+# session defaults (such as default_transaction_read_only) that scripted
+# statements must not inherit.
+psql --no-psqlrc --dbname=postgres --quiet --set=ON_ERROR_STOP=1 --file=postgresql/prepare.sql >/dev/null
 
 echo "==> migrating $PGDATABASE"
 tern migrate

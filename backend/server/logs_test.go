@@ -943,7 +943,11 @@ func TestUpdateLogEntry_Success(t *testing.T) {
 	assert.Equal(t, logID, body["log_id"])
 	assert.NotEmpty(t, body["user_id"])
 	assert.Equal(t, "alice", body["username"])
-	assert.Contains(t, body["occurred_at"], "2025-06-15T10:30:00")
+	occurredAt, err := time.Parse(time.RFC3339, body["occurred_at"].(string))
+	require.NoError(t, err)
+	expectedOccurredAt, err := time.Parse(time.RFC3339, newTime)
+	require.NoError(t, err)
+	assert.WithinDuration(t, expectedOccurredAt, occurredAt, 0)
 	assert.NotEmpty(t, body["created_at"])
 	assert.NotEmpty(t, body["updated_at"])
 }

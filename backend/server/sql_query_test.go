@@ -497,7 +497,7 @@ func TestGetSavedQueryByName(t *testing.T) {
 	}, cookies)
 	wantID := createBody["id"].(string)
 
-	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
+	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
 	require.NoError(t, err)
 	defer pool.Close()
 	app := core.New(core.Config{SavedQueries: pgstore.New(pool)})

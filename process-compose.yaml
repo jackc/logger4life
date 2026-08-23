@@ -1,0 +1,83 @@
+# The development stack for one worktree: its own PostgreSQL cluster, backend,
+# and Vite. Started by `mise run dev`, which allocates the ports and exports
+# the environment this file reads (see scripts/dev-up and scripts/dev-env.sh).
+#
+# Nothing here is worktree-specific: every port and path arrives through the
+# environment, so the same file serves every worktree, macOS, and the dev
+# container.
+
+version: "0.5"
+
+processes:
+  postgres:
+    command: '"$PGBIN/postgres" -D "$PGDATA" -p "$PGPORT" -k "$PGSOCKETDIR" -h "$PGHOST"'
+    readiness_probe:
+      exec:
+        command: 'pg_isready --quiet --host="$PGHOST" --port="$PGPORT"'
+      initial_delay_seconds: 1
+      period_seconds: 1
+      failure_threshold: 30
+    # SIGINT is PostgreSQL's fast shutdown: roll back open transactions and
+    # exit, rather than waiting for clients to disconnect.
+    shutdown:
+      signal: 2
+      timeout_seconds: 20
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    log_location: .dev/logs/postgres.log
+
+  migrate:
+    command: tern migrate
+    depends_on:
+      postgres:
+        condition: process_healthy
+    availability:
+      restart: "no"
+    log_location: .dev/logs/migrate.log
+
+  backend:
+    command: >
+      watchexec --project-origin . --restart
+      --filter main.go --filter "backend/**" --filter go.mod --filter go.sum
+      --
+      go run . server
+      --bind-address "$BIND_ADDRESS"
+      --port "$BACKEND_PORT"
+      --allow-registration
+      --webauthn-rp-id localhost
+      --webauthn-origin "$VITE_URL"
+      --log-format text
+    depends_on:
+      migrate:
+        condition: process_completed_successfully
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: ${BACKEND_PORT}
+        path: /health
+      initial_delay_seconds: 2
+      period_seconds: 2
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    log_location: .dev/logs/backend.log
+
+  vite:
+    command: npm run dev
+    depends_on:
+      backend:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: ${VITE_PORT}
+        path: /
+      initial_delay_seconds: 1
+      period_seconds: 2
+      failure_threshold: 30
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    log_location: .dev/logs/vite.log

@@ -25,7 +25,7 @@ func setupTestRouter(t *testing.T) *httptest.Server {
 func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.Server {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
+	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

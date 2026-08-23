@@ -50,50 +50,57 @@ Share your logs with other users so they can view and add entries:
 ## Tech Stack
 
 * **Frontend** - SvelteKit 2 / Svelte 5 single-page app styled with Tailwind CSS 4
-* **Backend** - Go API using Chi router, served on port 4000
+* **Backend** - Go API using Chi router
 * **Database** - PostgreSQL with pgx and connection pooling
 * **Testing** - Go tests with testify (backend), Playwright (browser)
-* **Build** - Vite (frontend), Rake tasks (build orchestration), mise (tool versions)
+* **Build** - Vite (frontend), Rake tasks (build orchestration), mise (tools, environment, tasks), process-compose (development services)
 
 ## Development
 
 ### Prerequisites
 
-* Go 1.25+
-* Node.js (managed via mise)
-* PostgreSQL
-* Ruby + Bundler (for Rake tasks)
-* [tern](https://github.com/jackc/tern) (database migrations)
+* [mise](https://mise.jdx.dev), which installs everything else the project
+  needs: Go, Node.js, Ruby, tern, and process-compose
+* PostgreSQL 18 binaries — `brew install postgresql@18` on macOS,
+  `apt-get install postgresql-18` on Debian/Ubuntu. No server or cluster needs
+  to be set up: each checkout runs its own.
 
 ### Getting Started
 
-1. Set up the PostgreSQL databases (`logger4life_dev` and `logger4life_test`) and the `logger4life` role.
-2. Run database migrations:
-   ```sh
-   tern migrate --config postgresql/tern.conf --migrations postgresql/migrations
-   ```
-3. Start the frontend dev server:
-   ```sh
-   npm run dev
-   ```
-4. In a separate terminal, build and run the backend:
-   ```sh
-   rake run
-   ```
+```sh
+mise install        # tools
+mise run dev:init   # ports, dependencies, PostgreSQL cluster, migrations
+mise run dev        # PostgreSQL + backend + Vite
+```
 
-The app will be available at `http://localhost:5173` with API requests proxied to port 4000.
+Ports are allocated per checkout rather than fixed, so several worktrees can
+run at once. `mise run dev:urls` prints this one's:
+
+```
+Frontend:        http://localhost:23842
+Backend:         http://localhost:23841
+PostgreSQL:      127.0.0.1:23843
+```
+
+See [docs/development-environment.md](docs/development-environment.md) for how
+the environment is put together.
 
 ### Common Commands
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Vite dev server (port 5173) |
-| `rake run` | Build and run the Go backend (port 4000) |
-| `rake rerun` | Watch for backend changes and auto-restart |
-| `rake build` | Build everything (frontend assets + Go binary) |
-| `rake test` | Run all tests |
-| `rake test:backend` | Run Go backend tests |
-| `rake test:browser` | Run Playwright browser tests |
+| `mise run dev` | Run the stack (PostgreSQL, backend, Vite) |
+| `mise run dev:init` | Prepare a fresh checkout or worktree |
+| `mise run dev:urls` | Print this checkout's ports and URLs |
+| `mise run db:psql` | psql against the development database |
+| `mise run db:reset` | Drop and rebuild the databases |
+| `mise run build` | Build everything (frontend assets + Go binary) |
+| `mise run test` | Run all tests |
+| `mise run test:backend` | Run Go backend tests |
+| `mise run test:browser` | Run Playwright browser tests |
+
+The `rake` tasks behind the build and test commands are still there and still
+work; mise is the front door.
 
 ## Deployment
 

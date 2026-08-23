@@ -26,23 +26,9 @@
     "ghcr.io/devcontainers-extra/features/mise:1": {}
   },
 
-  // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  "forwardPorts": [4000, 5173, 5432, 9323],
-
-  "portsAttributes": {
-    "4000": {
-      "label": "Go HTTP Server"
-    },
-    "5173": {
-      "label": "Vite"
-    },
-    "5432": {
-      "label": "PostgreSQL"
-    },
-    "9323": {
-      "label": "Playwright Report"
-    }
-  },
+  // Ports are allocated per worktree rather than fixed (see scripts/devports),
+  // so there is nothing to list here: VS Code forwards the ports it sees the
+  // stack listening on. `mise run dev:urls` prints them.
 
   "initializeCommand": "docker volume create devstate-shared-logger4life >/dev/null",
 

@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "playwright test",
-    "test:report": "playwright show-report --port 9323 --host 0.0.0.0"
+    "test:report": "playwright show-report --port ${PLAYWRIGHT_REPORT_PORT:-9323} --host 127.0.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

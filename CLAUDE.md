@@ -9,25 +9,34 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 ## Common Commands
 
 ### Development
-- `npm run dev` — Start Vite dev server (port 5173)
-- `rake run` — Build and run the Go backend (port 4000); requires Vite dev server running separately
-- `rake rerun` — Watch for Go/backend changes and auto-rebuild/restart
+Every checkout is a self-contained instance: its own PostgreSQL cluster, its
+own randomly allocated port block, its own runtime state under `.dev/`. mise
+owns tool versions, environment, and one-shot tasks; process-compose owns the
+long-running services. See `docs/development-environment.md`.
+
+- `mise run dev:init` — Prepare a checkout: ports, dependencies, PostgreSQL cluster, migrations
+- `mise run dev` — Run PostgreSQL, the backend, and Vite under process-compose
+- `mise run dev:urls` — Print this checkout's ports and URLs
+- `mise run dev:down` — Stop the stack (or `process-compose down`)
+- `process-compose process list` / `process-compose process restart backend` — Inspect and control services without the TUI
+- Ports are never fixed. Read them from the environment (`BACKEND_URL`, `VITE_URL`, `PGPORT`) or `.dev/ports.env`; never assume 4000/5173/5432.
 
 ### Building
-- `rake build` — Build everything (frontend assets, Go binary, Linux binary)
+- `mise run build` (or `rake build`) — Build everything (frontend assets, Go binary, Linux binary)
 - `rake build:assets` — Build frontend only (runs `npm run build` + zopfli compression)
 - `rake build:binary` — Build Go binary only (`build/logger4life`)
 
 ### Testing
-- `rake test` — Run all tests; auto-prepares test databases
-- `rake test:backend` — Run Go backend tests (`go test ./...`); auto-prepares test databases
-- `rake test:browser` — Run Playwright browser tests (or `npm test`)
+- `mise run test` (or `rake test`) — Run all tests; starts the cluster and prepares test databases
+- `mise run test:backend` — Run Go backend tests; auto-prepares test databases
+- `mise run test:browser` — Run Playwright browser tests (or `npm test`)
 - `rake test:prepare` — Prepare test databases only
 - `npm run test:report` — Show Playwright HTML report
 
 ### Database
 - Migrations managed by **tern** (config: `postgresql/tern.conf`, migrations: `postgresql/migrations/`)
-- Dev database: `logger4life_dev`, test database: `logger4life_test` (both on local PostgreSQL)
+- Dev database: `logger4life_dev`, test database: `logger4life_test`, both in this checkout's own cluster under `.dev/<platform>/postgres/data` on the allocated `PGPORT`
+- `mise run db:psql`, `mise run db:migrate`, `mise run db:reset`, `mise run db:init`
 - DB role: `logger4life`
 - When creating tables, sequences, or other database objects in migrations, grant appropriate permissions to the `logger4life` role (e.g., `GRANT ALL ON TABLE ... TO logger4life`)
 
@@ -36,7 +45,7 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 ### Backend (Go) — `backend/`
 - **CLI**: Cobra-based with subcommands (e.g., `server`). Entry point: `main.go` → `backend.Execute()` → `backend/root.go`
 - **Layering**: `backend/domain` (pure rules) ← `backend/core` (action catalog and driven ports) ← `backend/pgstore` (PostgreSQL) and `backend/server` (HTTP/MCP adapters). See `docs/architecture.md`; `TestArchitecturalBoundaries` enforces the import rules.
-- **HTTP**: Chi v5 router on port 4000 with structured request logging via `httplog/v3`. API routes under `/api/`.
+- **HTTP**: Chi v5 router with structured request logging via `httplog/v3`; the port comes from `--port`/`PORT` (4000 only as a default). API routes under `/api/`.
 - **Database**: pgx v5 with connection pooling (`pgxpool`). Connects to PostgreSQL.
 - **Config**: Environment variables and CLI flags. Precedence: defaults < env vars < CLI flags. Env vars: `DATABASE_URL`, `BIND_ADDRESS`, `PORT`, `ALLOW_REGISTRATION`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`, `LOG_LEVEL`, `LOG_FORMAT`, `MCP_CANONICAL_URL`, `SECURE_COOKIES`. CLI flags: `--database-url`, `--bind-address`, `--port`, `--allow-registration`, `--webauthn-rp-id`, `--webauthn-origin`, `--log-level`, `--log-format`, `--mcp-canonical-url`, `--secure-cookies`. Set `SECURE_COOKIES=true` in any HTTPS deployment so the session cookie gets the `Secure` attribute.
 - **Logging**: Structured logging via `log/slog` and `httplog/v3`. `LOG_LEVEL` accepts `debug`, `info` (default), `warn`, `error`. `LOG_FORMAT` accepts `json` (default), `text`, or `journal` (logs directly to systemd journald via `slog-journal`).
@@ -153,7 +162,9 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 - Go binary → `build/logger4life` (native) and `build/logger4life-linux` (cross-compiled)
 
 ### Tooling
-- **mise** (`.mise.toml`) manages Go, Node.js, and Ruby versions
+- **mise** (`.mise.toml`) manages tool versions, the worktree environment, and the task interface
+- **process-compose** (`process-compose.yaml`) supervises the development services
+- **scripts/** holds the shell out of the task definitions: `devports` (port allocation), `dev-env.sh` (environment assembly), `dev-init`, `dev-up`, `db-init`, `db-reset`, `db-ensure-running`, `pgbin`
 - **Bundler** (`Gemfile`) for Ruby/Rake dependencies
-- Dev container setup in `.devcontainer/` (Ubuntu 24.04, PostgreSQL 18, auto-installs tern + watchexec)
+- Dev container setup in `.devcontainer/` (Ubuntu 24.04 + PostgreSQL 18 binaries + mise); it is a thin Linux shell that runs the same `mise run dev:init` / `mise run dev` as native macOS
 - **fd** and **rg** (ripgrep) are available in the dev container — use them instead of `find` and `grep`

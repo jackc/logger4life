@@ -12,7 +12,7 @@ import (
 
 func insertPasskey(t *testing.T, userID string) {
 	t.Helper()
-	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
+	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
 	require.NoError(t, err)
 	defer pool.Close()
 

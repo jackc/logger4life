@@ -21,7 +21,7 @@ const (
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
+	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ import (
 // clears the run by ON DELETE CASCADE — except OAuth clients, which belong to
 // no user and are named with the same prefix instead.
 func TestStoreConformance(t *testing.T) {
-	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
+	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
 	if err != nil {
 		t.Fatal(err)
 	}

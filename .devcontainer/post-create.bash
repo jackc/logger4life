@@ -1,16 +1,14 @@
 #!/bin/bash
 set -e
 
-psql -f postgresql/prepare.sql
-
-[ ! -f postgresql/tern.conf ] && cp postgresql/tern.example.conf postgresql/tern.conf
+# The container is a thin Linux shell around the same project development
+# interface used natively on macOS: everything that sets up the project itself
+# lives in `mise run dev:init`. Only genuinely container-specific work belongs
+# in this file.
 
 mise trust
 mise install
 eval "$(mise env -s bash)"
-bundle install
-npm install
-npx playwright install --with-deps chromium
 
 # Put mise shims on PATH for non-interactive shells. Those shells read
 # ~/.zprofile but never ~/.zshrc, where the oh-my-zsh mise plugin does
@@ -27,8 +25,11 @@ fi
 EOF
 fi
 
-tern migrate
-PGDATABASE=logger4life_test tern migrate
+# Playwright's browsers are installed by dev:init on every platform; only their
+# shared libraries are Linux-specific.
+npx --yes playwright install-deps chromium
+
+mise run dev:init
 
 # Run any additional setup scripts included on the shared volume. This is to allow for per developer or
 # per-environment customizations. These scripts are not checked into source control.

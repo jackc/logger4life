@@ -87,17 +87,6 @@ end
 desc "Build all"
 task build: ["build/logger4life", "build/assets/.built"]
 
-desc "Run logger4life"
-task run: "build:binary" do
-  puts "Remember to start vite dev server"
-  exec "build/logger4life server --allow-registration"
-end
-
-desc "Watch for source changes and rebuild and rerun"
-task :rerun do
-  exec %q[watchexec --project-origin . -r -f Rakefile -f main.go -f "backend/**" -- rake run]
-end
-
 file "tmp/test/.databases-prepared" => FileList["postgresql/**/*.sql", "test/testdata/*.sql"] do
   sh "psql -f test/setup_test_databases.sql > /dev/null"
   sh "PGDATABASE=logger4life_test tern migrate -m postgresql/migrations -c postgresql/tern.conf"
@@ -105,7 +94,14 @@ file "tmp/test/.databases-prepared" => FileList["postgresql/**/*.sql", "test/tes
 end
 
 desc "Perform all preparation necessary to run tests"
-task "test:prepare" => ["tmp/test", "tmp/test/.databases-prepared"]
+task "test:prepare" => ["tmp/test"] do
+  # The tests need this worktree's PostgreSQL cluster, but not the rest of the
+  # development stack. Starting it here is what lets `rake test` work whether
+  # or not `mise run dev` is up. It is invoked rather than declared as a
+  # prerequisite so that the file task keeps its own freshness check.
+  sh "scripts/db-ensure-running"
+  Rake::Task["tmp/test/.databases-prepared"].invoke
+end
 
 desc "Run Go tests"
 task "test:backend" => ["test:prepare"] do

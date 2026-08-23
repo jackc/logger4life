@@ -27,7 +27,7 @@ import (
 func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxpool.Pool) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), "postgres://postgres:postgres@localhost:5432/logger4life_test")
+	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

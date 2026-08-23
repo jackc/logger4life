@@ -60,7 +60,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins", doseField())
 
-		entry, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{"dose": float64(500)})
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Water")
 
-		entry, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{})
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +116,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 
 		var ids []string
 		for range 3 {
-			entry, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{})
+			entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,7 +149,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 	t.Run("updates an entry in place", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins", doseField())
-		entry, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{"dose": float64(500)})
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -175,7 +175,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		visible := newLog(t, ports, owner.ID, "Visible")
 		other := newLog(t, ports, owner.ID, "Other")
-		entry, err := ports.CreateLogEntry(ctx, owner.ID, other.ID, map[string]any{})
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, other.ID, map[string]any{}, newOccurredAt())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -208,7 +208,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 	t.Run("deletes an entry", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins")
-		entry, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{})
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -226,7 +226,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 	t.Run("discards entries when their log is deleted", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Ephemeral")
-		if _, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{}); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt()); err != nil {
 			t.Fatal(err)
 		}
 		if err := ports.DeleteLog(ctx, owner.ID, log.ID); err != nil {

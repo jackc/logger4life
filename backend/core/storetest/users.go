@@ -25,7 +25,7 @@ func RunUserStore(t *testing.T, ports Ports) {
 		}
 
 		address := user.Username + "@example.com"
-		withEmail, err := ports.CreateUser(ctx, user.Username+"_b", &address, "hash")
+		withEmail, err := ports.CreateUser(ctx, newRowID(), user.Username+"_b", &address, "hash")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -38,7 +38,7 @@ func RunUserStore(t *testing.T, ports Ports) {
 	// cannot be opened by changing the capitalization of an existing one.
 	t.Run("refuses a duplicate username or email whatever its case", func(t *testing.T) {
 		user := newUser(t, ports)
-		if _, err := ports.CreateUser(ctx, strings.ToUpper(user.Username), nil, "hash"); !errors.Is(err, core.ErrUsernameTaken) {
+		if _, err := ports.CreateUser(ctx, newRowID(), strings.ToUpper(user.Username), nil, "hash"); !errors.Is(err, core.ErrUsernameTaken) {
 			t.Errorf("re-registering %q uppercased = %v, want ErrUsernameTaken", user.Username, err)
 		}
 

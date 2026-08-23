@@ -39,14 +39,14 @@ func TestStoreHonorsAmbientTransaction(t *testing.T) {
 	fields := []domain.FieldDefinition{{Name: "Dose", Type: "number"}}
 
 	write := func(ctx context.Context) (string, error) {
-		user, err := store.CreateUser(ctx, txProbeUser, nil, "hash")
+		user, err := store.CreateUser(ctx, "00000000-0000-4000-8000-000000000101", txProbeUser, nil, "hash")
 		if err != nil {
 			return "", err
 		}
-		if _, err := store.CreateLog(ctx, user.ID, txProbeLog, fields); err != nil {
+		if _, err := store.CreateLog(ctx, "00000000-0000-7000-8000-000000000102", user.ID, txProbeLog, fields); err != nil {
 			return "", err
 		}
-		if _, err := store.CreateFolder(ctx, user.ID, txProbeFolder, nil); err != nil {
+		if _, err := store.CreateFolder(ctx, "00000000-0000-7000-8000-000000000103", user.ID, txProbeFolder, nil); err != nil {
 			return "", err
 		}
 		return user.ID, nil

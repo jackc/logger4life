@@ -53,7 +53,7 @@ var (
 // UserStore is the driven persistence port for users and password
 // credentials. Password hashes are kept separate from the public User type.
 type UserStore interface {
-	CreateUser(context.Context, string, *string, string) (User, error)
+	CreateUser(context.Context, string, string, *string, string) (User, error)
 	GetUserByUsername(context.Context, string) (User, string, error)
 	GetUserByID(context.Context, string) (User, error)
 	UpdateUserEmail(context.Context, string, *string) (User, error)
@@ -125,11 +125,15 @@ var RegisterUser = Define(ActionDef[RegisterUserParams, AuthSession]{
 		if err != nil {
 			return AuthSession{}, err
 		}
+		userID, err := newUserID()
+		if err != nil {
+			return AuthSession{}, err
+		}
 		var user User
 		var session Session
 		err = c.tx.InTx(ctx, func(txCtx context.Context) error {
 			var err error
-			user, err = c.users.CreateUser(txCtx, p.Username, p.Email, string(hash))
+			user, err = c.users.CreateUser(txCtx, userID, p.Username, p.Email, string(hash))
 			if err != nil {
 				return err
 			}

@@ -137,6 +137,9 @@ the primary test database once, installs `pgundolog`, and clones it eight
 times. Each test exclusively checks out a clone through
 `github.com/jackc/testdb`; checkout is coordinated in PostgreSQL across test
 package processes, and `pgundolog` restores the clone before it is reused.
+`rake test:backend` then reruns the server suite with the jed and `both`
+adapters; `both` executes each persistence call against PostgreSQL and jed and
+fails immediately if their observable behavior differs.
 
 ## The dev container
 

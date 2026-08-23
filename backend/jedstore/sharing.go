@@ -1,0 +1,141 @@
+package jedstore
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/logger4life/backend/core"
+)
+
+func (s *Store) CreateShareToken(ctx context.Context, userID, logID string, token []byte) error {
+	tag, err := s.conn(ctx).Exec(ctx, `UPDATE all_logs SET share_token=$1 WHERE id=$2 AND user_id=$3`, token, logID, userID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return core.ErrLogNotFound
+	}
+	return err
+}
+
+func (s *Store) DeleteShareToken(ctx context.Context, userID, logID string) error {
+	tag, err := s.conn(ctx).Exec(ctx, `UPDATE all_logs SET share_token=NULL WHERE id=$1 AND user_id=$2`, logID, userID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return core.ErrLogNotFound
+	}
+	return err
+}
+
+func ownedLog(ctx context.Context, q queryRower, userID, logID string) error {
+	var exists bool
+	err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM all_logs WHERE id=$1 AND user_id=$2)`, logID, userID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return core.ErrLogNotFound
+	}
+	return nil
+}
+
+func (s *Store) ListSharedUsers(ctx context.Context, userID, logID string) ([]core.SharedUser, error) {
+	if err := ownedLog(ctx, s.conn(ctx), userID, logID); err != nil {
+		return nil, err
+	}
+	rows, err := s.conn(ctx).Query(ctx, `
+		SELECT ls.id,u.username,ls.created_at
+		FROM log_shares ls
+		JOIN users u ON u.id=ls.user_id
+		WHERE ls.log_id=$1
+		ORDER BY ls.created_at`, logID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	shares := []core.SharedUser{}
+	for rows.Next() {
+		var share core.SharedUser
+		if err := rows.Scan(&share.ID, &share.Username, &share.SharedAt); err != nil {
+			return nil, err
+		}
+		shares = append(shares, share)
+	}
+	return shares, rows.Err()
+}
+
+func (s *Store) RemoveSharedUser(ctx context.Context, userID, logID, shareID string) error {
+	if err := ownedLog(ctx, s.conn(ctx), userID, logID); err != nil {
+		return err
+	}
+	tag, err := s.conn(ctx).Exec(ctx, `DELETE FROM log_shares WHERE id=$1 AND log_id=$2`, shareID, logID)
+	if err == nil && tag.RowsAffected() == 0 {
+		return core.ErrShareNotFound
+	}
+	return err
+}
+
+func (s *Store) GetShareInfo(ctx context.Context, userID string, token []byte) (core.ShareInfo, error) {
+	var info core.ShareInfo
+	err := s.conn(ctx).QueryRow(ctx, `
+		SELECT l.id,l.name,u.username,l.user_id=$1,
+		       EXISTS(SELECT 1 FROM log_shares ls WHERE ls.log_id=l.id AND ls.user_id=$1)
+		FROM all_logs l
+		JOIN users u ON u.id=l.user_id
+		WHERE l.share_token=$2`, userID, token).Scan(&info.LogID, &info.LogName, &info.OwnerUsername, &info.IsOwner, &info.AlreadyMember)
+	if errors.Is(err, errNoRows) {
+		return core.ShareInfo{}, core.ErrInvalidShareLink
+	}
+	if err != nil {
+		return core.ShareInfo{}, err
+	}
+	if info.IsOwner {
+		info.AlreadyMember = false
+	}
+	return info, nil
+}
+
+func (s *Store) JoinSharedLog(ctx context.Context, shareID, userID string, token []byte) (core.JoinSharedLogResult, error) {
+	var result core.JoinSharedLogResult
+	err := s.InTx(ctx, func(ctx context.Context) error {
+		tx := s.conn(ctx)
+
+		var ownerID string
+		err := tx.QueryRow(ctx, `SELECT id,name,user_id FROM all_logs WHERE share_token=$1`, token).Scan(&result.LogID, &result.LogName, &ownerID)
+		if errors.Is(err, errNoRows) {
+			return core.ErrInvalidShareLink
+		}
+		if err != nil {
+			return err
+		}
+		if ownerID == userID {
+			return core.ErrAlreadyOwnLog
+		}
+
+		var insertedShareID string
+		err = tx.QueryRow(ctx, `
+		INSERT INTO log_shares(id,log_id,user_id) VALUES($1,$2,$3)
+		ON CONFLICT (log_id,user_id) DO NOTHING
+		RETURNING id`, shareID, result.LogID, userID).Scan(&insertedShareID)
+		if errors.Is(err, errNoRows) {
+			// Already a member: nothing to insert, and the placement below
+			// would be a no-op too.
+			result.AlreadyMember = true
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		var position, homePosition int
+		err = tx.QueryRow(ctx, `SELECT COALESCE(max(position) FILTER (WHERE folder_id IS NULL)+1,0),COALESCE(max(home_position) FILTER (WHERE pinned_to_home)+1,0) FROM user_log_placements WHERE user_id=$1`, userID).Scan(&position, &homePosition)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+		INSERT INTO user_log_placements(user_id,log_id,folder_id,position,pinned_to_home,home_position)
+		VALUES($1,$2,NULL,$3,true,$4)
+		ON CONFLICT (user_id,log_id) DO NOTHING`, userID, result.LogID, position, homePosition)
+		return err
+	})
+	if err != nil {
+		return core.JoinSharedLogResult{}, err
+	}
+	return result, nil
+}

@@ -42,7 +42,7 @@ type SharingStore interface {
 	ListSharedUsers(context.Context, string, string) ([]SharedUser, error)
 	RemoveSharedUser(context.Context, string, string, string) error
 	GetShareInfo(context.Context, string, []byte) (ShareInfo, error)
-	JoinSharedLog(context.Context, string, []byte) (JoinSharedLogResult, error)
+	JoinSharedLog(context.Context, string, string, []byte) (JoinSharedLogResult, error)
 }
 
 type CreateShareTokenParams struct {
@@ -155,5 +155,9 @@ var JoinSharedLog = Define(ActionDef[JoinSharedLogParams, JoinSharedLogResult]{N
 	if err != nil {
 		return JoinSharedLogResult{}, err
 	}
-	return c.sharing.JoinSharedLog(ctx, userID, token)
+	shareID, err := newID()
+	if err != nil {
+		return JoinSharedLogResult{}, err
+	}
+	return c.sharing.JoinSharedLog(ctx, shareID, userID, token)
 }})

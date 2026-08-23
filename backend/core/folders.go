@@ -25,7 +25,7 @@ type Folder struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 type FolderStore interface {
-	CreateFolder(context.Context, string, string, *string) (Folder, error)
+	CreateFolder(context.Context, string, string, string, *string) (Folder, error)
 	ListFolders(context.Context, string) ([]Folder, error)
 	RenameFolder(context.Context, string, string, string) (Folder, error)
 	MoveFolder(context.Context, string, string, *string, int) error
@@ -64,7 +64,11 @@ var CreateFolder = Define(ActionDef[CreateFolderParams, Folder]{Name: "create_fo
 	if e != nil {
 		return Folder{}, e
 	}
-	return c.folders.CreateFolder(ctx, id, p.Name, p.ParentFolderID)
+	folderID, e := newID()
+	if e != nil {
+		return Folder{}, e
+	}
+	return c.folders.CreateFolder(ctx, folderID, id, p.Name, p.ParentFolderID)
 }})
 
 type ListFoldersParams struct{}

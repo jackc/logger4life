@@ -15,7 +15,6 @@ import (
 // what keeps application SQL inside the approved infrastructure packages.
 var postgreSQLPackages = []string{
 	"github.com/jackc/pgx/",
-	"github.com/jackc/pgsqlarbiter-go",
 }
 
 // postgreSQLAllowed are the only non-test files permitted to import them:
@@ -26,6 +25,24 @@ var postgreSQLAllowed = []string{
 	"server/server.go",
 }
 
+var jedPackages = []string{
+	"github.com/jackc/jed/",
+}
+
+var jedAllowed = []string{
+	"jedstore/",
+	"server/server.go",
+}
+
+var sqlArbiterPackages = []string{
+	"github.com/jackc/pgsqlarbiter-go",
+}
+
+var sqlArbiterAllowed = []string{
+	"pgstore/",
+	"jedstore/",
+}
+
 // pureDependencyRules keep the domain core independent of transport and
 // persistence. Each package may not import anything with these prefixes.
 var pureDependencyRules = map[string][]string{
@@ -34,7 +51,11 @@ var pureDependencyRules = map[string][]string{
 		"github.com/go-chi/",
 		"github.com/spf13/cobra",
 		"github.com/jackc/pgx/",
+		"github.com/jackc/jed/",
+		"github.com/jackc/pgsqlarbiter-go",
 		"github.com/jackc/logger4life/backend/pgstore",
+		"github.com/jackc/logger4life/backend/jedstore",
+		"github.com/jackc/logger4life/backend/dualstore",
 		"github.com/jackc/logger4life/backend/server",
 	},
 	"domain": {
@@ -42,8 +63,12 @@ var pureDependencyRules = map[string][]string{
 		"github.com/go-chi/",
 		"github.com/spf13/cobra",
 		"github.com/jackc/pgx/",
+		"github.com/jackc/jed/",
+		"github.com/jackc/pgsqlarbiter-go",
 		"github.com/jackc/logger4life/backend/core",
 		"github.com/jackc/logger4life/backend/pgstore",
+		"github.com/jackc/logger4life/backend/jedstore",
+		"github.com/jackc/logger4life/backend/dualstore",
 		"github.com/jackc/logger4life/backend/server",
 	},
 }
@@ -77,6 +102,12 @@ func TestArchitecturalBoundaries(t *testing.T) {
 			// the code that ships.
 			if !strings.HasSuffix(rel, "_test.go") && hasAnyPrefix(imported, postgreSQLPackages) && !hasAnyPrefix(rel, postgreSQLAllowed) {
 				t.Errorf("%s imports %q; PostgreSQL belongs in %s", rel, imported, strings.Join(postgreSQLAllowed, " or "))
+			}
+			if !strings.HasSuffix(rel, "_test.go") && hasAnyPrefix(imported, jedPackages) && !hasAnyPrefix(rel, jedAllowed) {
+				t.Errorf("%s imports %q; jed belongs in %s", rel, imported, strings.Join(jedAllowed, " or "))
+			}
+			if !strings.HasSuffix(rel, "_test.go") && hasAnyPrefix(imported, sqlArbiterPackages) && !hasAnyPrefix(rel, sqlArbiterAllowed) {
+				t.Errorf("%s imports %q; user SQL arbitration belongs in %s", rel, imported, strings.Join(sqlArbiterAllowed, " or "))
 			}
 
 			pkg, _, _ := strings.Cut(rel, "/")

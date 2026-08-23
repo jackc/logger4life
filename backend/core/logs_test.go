@@ -20,7 +20,7 @@ type fakeLogStore struct {
 	calls       int
 }
 
-func (s *fakeLogStore) CreateLog(_ context.Context, userID, name string, fields []domain.FieldDefinition) (Log, error) {
+func (s *fakeLogStore) CreateLog(_ context.Context, _ string, userID, name string, fields []domain.FieldDefinition) (Log, error) {
 	s.calls++
 	s.scopeUserID, s.name, s.fields = userID, name, fields
 	return s.log, s.err

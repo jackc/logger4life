@@ -33,7 +33,7 @@ type Log struct {
 // LogStore is the driven persistence port for logs. Implementations belong in
 // infrastructure packages and must enforce the supplied user's scope.
 type LogStore interface {
-	CreateLog(context.Context, string, string, []domain.FieldDefinition) (Log, error)
+	CreateLog(context.Context, string, string, string, []domain.FieldDefinition) (Log, error)
 	GetLog(context.Context, string, string) (Log, error)
 	UpdateLog(context.Context, string, string, string, []domain.FieldDefinition) (Log, error)
 	DeleteLog(context.Context, string, string) error
@@ -61,7 +61,11 @@ var CreateLog = Define(ActionDef[CreateLogParams, Log]{Name: "create_log", Descr
 	if e != nil {
 		return Log{}, e
 	}
-	return c.logs.CreateLog(ctx, id, p.Name, p.Fields)
+	logID, e := newID()
+	if e != nil {
+		return Log{}, e
+	}
+	return c.logs.CreateLog(ctx, logID, id, p.Name, p.Fields)
 }})
 
 type GetLogParams struct {

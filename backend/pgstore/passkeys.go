@@ -37,11 +37,11 @@ func translatePasskeyWriteError(err error) error {
 func (s *Store) CreatePasskey(ctx context.Context, passkey core.Passkey) (core.Passkey, error) {
 	created, err := scanPasskey(s.conn(ctx).QueryRow(ctx,
 		`INSERT INTO passkeys
-		 (user_id, credential_id, public_key, aaguid, sign_count, backup_eligible, backup_state, description)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 (id, user_id, credential_id, public_key, aaguid, sign_count, backup_eligible, backup_state, description)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id, user_id, credential_id, public_key, aaguid, sign_count,
 		           backup_eligible, backup_state, description, created_at`,
-		passkey.UserID, passkey.CredentialID, passkey.PublicKey, passkey.AAGUID,
+		passkey.ID, passkey.UserID, passkey.CredentialID, passkey.PublicKey, passkey.AAGUID,
 		passkey.SignCount, passkey.BackupEligible, passkey.BackupState, passkey.Description,
 	))
 	return created, translatePasskeyWriteError(err)

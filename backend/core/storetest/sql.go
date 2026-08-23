@@ -63,7 +63,7 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 	t.Run("returns a user's own rows with their columns", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins", doseField())
-		if _, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{"dose": float64(500)}); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt()); err != nil {
 			t.Fatal(err)
 		}
 
@@ -116,7 +116,7 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		stranger := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Private", doseField())
-		if _, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{"dose": float64(500)}); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt()); err != nil {
 			t.Fatal(err)
 		}
 
@@ -151,7 +151,7 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 		if err := ports.CreateShareToken(ctx, owner.ID, log.ID, token); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ports.JoinSharedLog(ctx, stranger.ID, token); err != nil {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), stranger.ID, token); err != nil {
 			t.Fatal(err)
 		}
 		shared, err := ports.ExecuteUserSQL(ctx, stranger.ID, "SELECT name FROM logs")
@@ -160,6 +160,22 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 		}
 		if shared.RowCount != 1 {
 			t.Errorf("a shared member sees %#v, want the shared log", shared.Rows)
+		}
+
+		ownerView, err := ports.ExecuteUserSQL(ctx, owner.ID, "SELECT shared_with FROM logs")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantMembers := "{" + stranger.Username + "}"
+		if len(ownerView.Rows) != 1 || ownerView.Rows[0][0] == nil || *ownerView.Rows[0][0] != wantMembers {
+			t.Errorf("owner shared_with = %#v, want %q", ownerView.Rows, wantMembers)
+		}
+		memberView, err := ports.ExecuteUserSQL(ctx, stranger.ID, "SELECT shared_with FROM logs")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(memberView.Rows) != 1 || memberView.Rows[0][0] != nil {
+			t.Errorf("member shared_with = %#v, want NULL", memberView.Rows)
 		}
 	})
 
@@ -206,13 +222,12 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 	// carry what the database said — relation names, values, or server paths.
 	t.Run("reports a failing query without quoting the database", func(t *testing.T) {
 		owner := newUser(t, ports)
+		newLog(t, ports, owner.ID, "Failure")
 
 		_, err := ports.ExecuteUserSQL(ctx, owner.ID, "SELECT 1/0 FROM logs")
 		var failure *core.UserSQLFailure
 		if !errors.As(err, &failure) {
-			// A query that selects no rows never divides, so this may legitimately
-			// succeed; only a reported failure is under test.
-			return
+			t.Fatalf("division by zero returned %v, want a safe UserSQLFailure", err)
 		}
 		assertSafeMessage(t, "a failing query", failure.Message)
 	})
@@ -223,13 +238,13 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Bulk")
 		for range 3 {
-			if _, err := ports.CreateLogEntry(ctx, owner.ID, log.ID, map[string]any{}); err != nil {
+			if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt()); err != nil {
 				t.Fatal(err)
 			}
 		}
 
 		result, err := ports.ExecuteUserSQL(ctx, owner.ID,
-			"SELECT a.id FROM log_entries a, log_entries b, log_entries c, log_entries d, log_entries e, log_entries f, log_entries g")
+			"SELECT a.id FROM log_entries a, log_entries b, log_entries c, log_entries d, log_entries e, log_entries f, log_entries g ORDER BY a.id, b.id, c.id, d.id, e.id, f.id, g.id")
 		if err != nil {
 			t.Fatal(err)
 		}

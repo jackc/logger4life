@@ -30,7 +30,7 @@ func (s *fakeSavedQueryStore) GetSavedQueryByName(_ context.Context, userID, nam
 	return s.query, s.err
 }
 
-func (s *fakeSavedQueryStore) CreateSavedQuery(_ context.Context, userID, name, queryText string) (SavedQuery, error) {
+func (s *fakeSavedQueryStore) CreateSavedQuery(_ context.Context, _ string, userID, name, queryText string) (SavedQuery, error) {
 	s.calls++
 	s.scopeUserID, s.name, s.queryText = userID, name, queryText
 	return s.query, s.err

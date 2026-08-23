@@ -104,9 +104,11 @@ task "test:prepare" => ["tmp/test"] do
   Rake::Task["tmp/test/.databases-prepared"].invoke
 end
 
-desc "Run Go tests"
+desc "Run Go tests against PostgreSQL, jed, and the dual comparison adapter"
 task "test:backend" => ["test:prepare"] do
   sh "mise exec -- go test ./..."
+  sh "mise exec -- env LOGGER4LIFE_TEST_BACKEND=jed go test ./backend/server/"
+  sh "mise exec -- env LOGGER4LIFE_TEST_BACKEND=both go test ./backend/server/"
 end
 
 desc "Run Playwright browser tests"

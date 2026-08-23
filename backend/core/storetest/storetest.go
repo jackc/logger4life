@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/logger4life/backend/core"
@@ -70,14 +71,22 @@ func testUUID(label string) string {
 	return id.String()
 }
 
-var userSeq, clientSeq atomic.Uint64
+var userSeq, clientSeq, rowSeq atomic.Uint64
+
+func newRowID() string {
+	return testUUID(fmt.Sprintf("row-%d", rowSeq.Add(1)))
+}
+
+func newOccurredAt() time.Time {
+	return time.Now().UTC().Truncate(time.Microsecond)
+}
 
 // newUser creates a fixture user with a name unique to this process, so
 // subtests that share a database cannot collide on the username index.
 func newUser(t *testing.T, ports Ports) core.User {
 	t.Helper()
 	name := fmt.Sprintf("%s%d", Prefix, userSeq.Add(1))
-	user, err := ports.CreateUser(context.Background(), name, nil, "fixture-hash")
+	user, err := ports.CreateUser(context.Background(), newRowID(), name, nil, "fixture-hash")
 	if err != nil {
 		t.Fatalf("creating fixture user %s: %v", name, err)
 	}
@@ -94,7 +103,7 @@ func newClientID() string {
 // newLog creates a fixture log owned by user.
 func newLog(t *testing.T, ports Ports, userID, name string, fields ...domain.FieldDefinition) core.Log {
 	t.Helper()
-	log, err := ports.CreateLog(context.Background(), userID, name, fields)
+	log, err := ports.CreateLog(context.Background(), newRowID(), userID, name, fields)
 	if err != nil {
 		t.Fatalf("creating fixture log %q: %v", name, err)
 	}

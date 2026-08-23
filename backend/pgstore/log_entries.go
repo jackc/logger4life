@@ -26,8 +26,8 @@ func scanLogEntry(row rowScanner) (domain.LogEntry, error) {
 	}
 	return e, err
 }
-func (s *Store) CreateLogEntry(ctx context.Context, userID, logID string, fields map[string]any) (domain.LogEntry, error) {
-	return scanLogEntry(s.conn(ctx).QueryRow(ctx, `WITH inserted AS (INSERT INTO log_entries(log_id,user_id,fields) VALUES($1,$2,$3) RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at) SELECT i.id,i.log_id,i.user_id,u.username,i.fields,i.occurred_at,i.created_at,i.updated_at FROM inserted i JOIN users u ON u.id=i.user_id`, logID, userID, fields))
+func (s *Store) CreateLogEntry(ctx context.Context, id, userID, logID string, fields map[string]any, occurredAt time.Time) (domain.LogEntry, error) {
+	return scanLogEntry(s.conn(ctx).QueryRow(ctx, `WITH inserted AS (INSERT INTO log_entries(id,log_id,user_id,fields,occurred_at) VALUES($1,$2,$3,$4,$5) RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at) SELECT i.id,i.log_id,i.user_id,u.username,i.fields,i.occurred_at,i.created_at,i.updated_at FROM inserted i JOIN users u ON u.id=i.user_id`, id, logID, userID, fields, occurredAt))
 }
 func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]domain.LogEntry, error) {
 	if _, e := s.LogFieldDefinitions(ctx, userID, logID); e != nil {

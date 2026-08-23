@@ -38,7 +38,7 @@ type fakeUserStore struct {
 	updatePasswordErr error
 }
 
-func (s *fakeUserStore) CreateUser(ctx context.Context, username string, email *string, hash string) (User, error) {
+func (s *fakeUserStore) CreateUser(ctx context.Context, id, username string, email *string, hash string) (User, error) {
 	s.createdUsername = username
 	s.createdEmail = email
 	s.passwordHash = hash

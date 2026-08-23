@@ -16,7 +16,7 @@ func RunFolderStore(t *testing.T, ports Ports) {
 
 	t.Run("round trips a folder and its parent", func(t *testing.T) {
 		owner := newUser(t, ports)
-		parent, err := ports.CreateFolder(ctx, owner.ID, "Health", nil)
+		parent, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Health", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -24,7 +24,7 @@ func RunFolderStore(t *testing.T, ports Ports) {
 			t.Errorf("created %#v, want a folder at the root", parent)
 		}
 
-		child, err := ports.CreateFolder(ctx, owner.ID, "Vitamins", &parent.ID)
+		child, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Vitamins", &parent.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -43,12 +43,12 @@ func RunFolderStore(t *testing.T, ports Ports) {
 			t.Error("ListFolders returned nil for a user with no folders")
 		}
 
-		mine, err := ports.CreateFolder(ctx, owner.ID, "Health", nil)
+		mine, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Health", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		stranger := newUser(t, ports)
-		if _, err := ports.CreateFolder(ctx, stranger.ID, "Theirs", nil); err != nil {
+		if _, err := ports.CreateFolder(ctx, newRowID(), stranger.ID, "Theirs", nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -66,7 +66,7 @@ func RunFolderStore(t *testing.T, ports Ports) {
 	t.Run("hides another user's folder from every method", func(t *testing.T) {
 		owner := newUser(t, ports)
 		stranger := newUser(t, ports)
-		folder, err := ports.CreateFolder(ctx, owner.ID, "Private", nil)
+		folder, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Private", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -80,7 +80,7 @@ func RunFolderStore(t *testing.T, ports Ports) {
 		if err := ports.DeleteFolder(ctx, stranger.ID, folder.ID); !errors.Is(err, core.ErrFolderNotFound) {
 			t.Errorf("DeleteFolder as a stranger = %v, want ErrFolderNotFound", err)
 		}
-		if _, err := ports.CreateFolder(ctx, stranger.ID, "Child", &folder.ID); !errors.Is(err, core.ErrParentFolderNotFound) {
+		if _, err := ports.CreateFolder(ctx, newRowID(), stranger.ID, "Child", &folder.ID); !errors.Is(err, core.ErrParentFolderNotFound) {
 			t.Errorf("CreateFolder under a stranger's folder = %v, want ErrParentFolderNotFound", err)
 		}
 
@@ -104,14 +104,14 @@ func RunFolderStore(t *testing.T, ports Ports) {
 		if err := ports.DeleteFolder(ctx, owner.ID, UnknownID); !errors.Is(err, core.ErrFolderNotFound) {
 			t.Errorf("DeleteFolder error = %v, want ErrFolderNotFound", err)
 		}
-		if _, err := ports.CreateFolder(ctx, owner.ID, "Child", ptr(UnknownID)); !errors.Is(err, core.ErrParentFolderNotFound) {
+		if _, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Child", ptr(UnknownID)); !errors.Is(err, core.ErrParentFolderNotFound) {
 			t.Errorf("CreateFolder under an unknown parent = %v, want ErrParentFolderNotFound", err)
 		}
 	})
 
 	t.Run("renames a folder", func(t *testing.T) {
 		owner := newUser(t, ports)
-		folder, err := ports.CreateFolder(ctx, owner.ID, "Helth", nil)
+		folder, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Helth", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,15 +129,15 @@ func RunFolderStore(t *testing.T, ports Ports) {
 	// told which mistake it made.
 	t.Run("refuses to make a folder its own ancestor", func(t *testing.T) {
 		owner := newUser(t, ports)
-		grandparent, err := ports.CreateFolder(ctx, owner.ID, "Grandparent", nil)
+		grandparent, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Grandparent", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		parent, err := ports.CreateFolder(ctx, owner.ID, "Parent", &grandparent.ID)
+		parent, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Parent", &grandparent.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		child, err := ports.CreateFolder(ctx, owner.ID, "Child", &parent.ID)
+		child, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Child", &parent.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,11 +158,11 @@ func RunFolderStore(t *testing.T, ports Ports) {
 	// children of either kind is refused until it is emptied.
 	t.Run("refuses to delete a folder that still holds something", func(t *testing.T) {
 		owner := newUser(t, ports)
-		folder, err := ports.CreateFolder(ctx, owner.ID, "Health", nil)
+		folder, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Health", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		child, err := ports.CreateFolder(ctx, owner.ID, "Vitamins", &folder.ID)
+		child, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Vitamins", &folder.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,7 +196,7 @@ func RunFolderStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		var ids []string
 		for _, name := range []string{"First", "Second", "Third", "Fourth"} {
-			f, err := ports.CreateFolder(ctx, owner.ID, name, nil)
+			f, err := ports.CreateFolder(ctx, newRowID(), owner.ID, name, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

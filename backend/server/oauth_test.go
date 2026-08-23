@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -13,10 +14,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
-	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/logger4life/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,23 +23,28 @@ import (
 // setupOAuthTestServer wires the OAuth + MCP routes against the test
 // database. The httptest server is started after the OAuth provider is
 // constructed using the eventual server URL, so audience binding works.
-func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxpool.Pool) {
+func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider) {
 	t.Helper()
 
 	ctx := context.Background()
-	db := testDBManager.AcquireDB(t, ctx)
-	pool := db.PoolConnect(t, ctx)
-
 	srv := httptest.NewUnstartedServer(nil)
 	srv.Start() // starts on a real port; URL is now known
 	t.Cleanup(srv.Close)
 
-	store := pgstore.New(pool)
-	app := core.New(core.Config{
-		Users: store, Sessions: store, Tx: store, Logs: store, Entries: store,
-		Placements: store, Folders: store, SavedQueries: store, SQLSchema: store,
-		UserSQL: store, Sharing: store, OAuth: store, OAuthIssuer: srv.URL,
-	})
+	cfg := DefaultConfig()
+	cfg.DatabaseBackend = testBackend()
+	cfg.AllowRegistration = true
+	cfg.MCPCanonicalURL = srv.URL
+	if usesPostgres() {
+		db := testDBManager.AcquireDB(t, ctx)
+		cfg.DatabaseURL = testutil.DatabaseURL(db)
+	}
+	if cfg.DatabaseBackend != "postgresql" {
+		cfg.JedDataDir = t.TempDir()
+	}
+	app, _, cleanup, err := BuildBackend(ctx, cfg, slog.New(slog.DiscardHandler))
+	require.NoError(t, err)
+	t.Cleanup(cleanup)
 	oauth := newOAuthProvider(app, srv.URL)
 	mcpSrv := newMCPServer(app, oauth)
 
@@ -59,7 +63,7 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxp
 		r.Mount("/mcp", mcpSrv.handler)
 	})
 	srv.Config.Handler = r
-	return srv, oauth, pool
+	return srv, oauth
 }
 
 // pkceParams generates a fresh verifier + S256 challenge pair.
@@ -73,7 +77,7 @@ func pkceParams(t *testing.T) (verifier, challenge string) {
 
 func TestProtectedResourceMetadata(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 
 	resp, err := http.Get(srv.URL + "/.well-known/oauth-protected-resource")
 	require.NoError(t, err)
@@ -90,7 +94,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 
 func TestAuthorizationServerMetadata(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 
 	resp, err := http.Get(srv.URL + "/.well-known/oauth-authorization-server")
 	require.NoError(t, err)
@@ -108,7 +112,7 @@ func TestAuthorizationServerMetadata(t *testing.T) {
 
 func TestDynamicClientRegistration(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 
 	body := strings.NewReader(`{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"client_name":"Claude"}`)
 	resp, err := http.Post(srv.URL+"/oauth/register", "application/json", body)
@@ -125,7 +129,7 @@ func TestDynamicClientRegistration(t *testing.T) {
 
 func TestDynamicClientRegistrationRejectsBadRedirect(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 
 	body := strings.NewReader(`{"redirect_uris":["http://evil.example.com/cb"]}`)
 	resp, err := http.Post(srv.URL+"/oauth/register", "application/json", body)
@@ -140,7 +144,7 @@ func TestDynamicClientRegistrationRejectsBadRedirect(t *testing.T) {
 
 func TestMCPRequiresBearerToken(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 
 	resp, err := http.Post(srv.URL+"/mcp", "application/json", strings.NewReader(`{}`))
 	require.NoError(t, err)
@@ -153,7 +157,7 @@ func TestMCPRequiresBearerToken(t *testing.T) {
 
 func TestMCPRejectsInvalidToken(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(`{}`))
 	require.NoError(t, err)
@@ -200,7 +204,7 @@ func TestSameCanonicalURL(t *testing.T) {
 // binding, code-replay rejection, and refresh-token rotation.
 func TestOAuthEndToEnd(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 
 	jar, err := cookiejar.New(nil)
 	require.NoError(t, err)
@@ -310,7 +314,7 @@ func TestOAuthEndToEnd(t *testing.T) {
 // and its associated access token become unusable.
 func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar}
 
@@ -412,7 +416,7 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 // resource parameter that doesn't match our canonical URL is rejected.
 func TestAuthorizeRejectsAudienceMismatch(t *testing.T) {
 	t.Parallel()
-	srv, _, _ := setupOAuthTestServer(t)
+	srv, _ := setupOAuthTestServer(t)
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar}
 

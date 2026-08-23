@@ -16,6 +16,7 @@ func RunPasskeyStore(t *testing.T, ports Ports) {
 	newPasskey := func(t *testing.T, userID, suffix string) core.Passkey {
 		t.Helper()
 		created, err := ports.CreatePasskey(ctx, core.Passkey{
+			ID:             newRowID(),
 			UserID:         userID,
 			CredentialID:   []byte("credential-" + suffix),
 			PublicKey:      []byte("public-key-" + suffix),
@@ -56,14 +57,14 @@ func RunPasskeyStore(t *testing.T, ports Ports) {
 		newPasskey(t, owner.ID, owner.Username)
 
 		if _, err := ports.CreatePasskey(ctx, core.Passkey{
-			UserID: owner.ID, CredentialID: []byte("credential-" + owner.Username), PublicKey: []byte("k"), AAGUID: []byte("aaguid"),
+			ID: newRowID(), UserID: owner.ID, CredentialID: []byte("credential-" + owner.Username), PublicKey: []byte("k"), AAGUID: []byte("aaguid"),
 		}); !errors.Is(err, core.ErrPasskeyAlreadyRegistered) {
 			t.Errorf("re-registering to the same account = %v, want ErrPasskeyAlreadyRegistered", err)
 		}
 
 		stranger := newUser(t, ports)
 		if _, err := ports.CreatePasskey(ctx, core.Passkey{
-			UserID: stranger.ID, CredentialID: []byte("credential-" + owner.Username), PublicKey: []byte("k"), AAGUID: []byte("aaguid"),
+			ID: newRowID(), UserID: stranger.ID, CredentialID: []byte("credential-" + owner.Username), PublicKey: []byte("k"), AAGUID: []byte("aaguid"),
 		}); !errors.Is(err, core.ErrPasskeyAlreadyRegistered) {
 			t.Errorf("re-registering to another account = %v, want ErrPasskeyAlreadyRegistered", err)
 		}
@@ -171,7 +172,7 @@ func RunPasskeyStore(t *testing.T, ports Ports) {
 		// Deleting frees the credential ID, so the authenticator can be
 		// enrolled again.
 		if _, err := ports.CreatePasskey(ctx, core.Passkey{
-			UserID: owner.ID, CredentialID: passkey.CredentialID, PublicKey: []byte("k"), AAGUID: []byte("aaguid"),
+			ID: newRowID(), UserID: owner.ID, CredentialID: passkey.CredentialID, PublicKey: []byte("k"), AAGUID: []byte("aaguid"),
 		}); err != nil {
 			t.Errorf("re-enrolling a deleted credential = %v, want it allowed", err)
 		}

@@ -51,7 +51,8 @@ Share your logs with other users so they can view and add entries:
 
 * **Frontend** - SvelteKit 2 / Svelte 5 single-page app styled with Tailwind CSS 4
 * **Backend** - Go API using Chi router
-* **Database** - PostgreSQL with pgx and connection pooling
+* **Database** - PostgreSQL with pgx and connection pooling, or an embedded
+  [jed](https://github.com/jackc/jed) database file
 * **Testing** - Go tests with testify (backend), Playwright (browser)
 * **Build** - Vite (frontend), Rake tasks (build orchestration), mise (tools, environment, tasks), process-compose (development services)
 
@@ -101,6 +102,32 @@ the environment is put together.
 
 The `rake` tasks behind the build and test commands are still there and still
 work; mise is the front door.
+
+## Database backends
+
+PostgreSQL remains the default and the development stack continues to use it.
+For a self-contained deployment, select the embedded jed backend and provide a
+persistent data directory:
+
+```sh
+logger4life server \
+  --database-backend jed \
+  --jed-data-dir /var/lib/logger4life
+```
+
+The equivalent environment configuration is:
+
+```sh
+DATABASE_BACKEND=jed
+JED_DATA_DIR=/var/lib/logger4life
+```
+
+Logger4Life creates and migrates
+`/var/lib/logger4life/logger4life.jed` automatically. PostgreSQL uses the
+existing `DATABASE_URL` setting; `DATABASE_BACKEND` defaults to `postgresql`.
+Backend selection does not copy data between databases. See
+[docs/database-backends.md](docs/database-backends.md) for configuration,
+storage, backup details, and the development-only `both` comparison adapter.
 
 ## Deployment
 

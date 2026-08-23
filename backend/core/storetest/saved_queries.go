@@ -15,7 +15,7 @@ func RunSavedQueryStore(t *testing.T, ports Ports) {
 
 	t.Run("round trips a saved query", func(t *testing.T) {
 		owner := newUser(t, ports)
-		created, err := ports.CreateSavedQuery(ctx, owner.ID, "Weekly", "SELECT 1")
+		created, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "Weekly", "SELECT 1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -37,28 +37,28 @@ func RunSavedQueryStore(t *testing.T, ports Ports) {
 	// to pin: a user may keep both "weekly" and "Weekly".
 	t.Run("scopes the name collision to one user and respects case", func(t *testing.T) {
 		owner := newUser(t, ports)
-		if _, err := ports.CreateSavedQuery(ctx, owner.ID, "Weekly", "SELECT 1"); err != nil {
+		if _, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "Weekly", "SELECT 1"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ports.CreateSavedQuery(ctx, owner.ID, "Weekly", "SELECT 2"); !errors.Is(err, core.ErrSavedQueryNameTaken) {
+		if _, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "Weekly", "SELECT 2"); !errors.Is(err, core.ErrSavedQueryNameTaken) {
 			t.Errorf("re-using the name = %v, want ErrSavedQueryNameTaken", err)
 		}
-		if _, err := ports.CreateSavedQuery(ctx, owner.ID, "weekly", "SELECT 2"); err != nil {
+		if _, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "weekly", "SELECT 2"); err != nil {
 			t.Errorf("using the name in another case = %v, want it allowed", err)
 		}
 
 		stranger := newUser(t, ports)
-		if _, err := ports.CreateSavedQuery(ctx, stranger.ID, "Weekly", "SELECT 3"); err != nil {
+		if _, err := ports.CreateSavedQuery(ctx, newRowID(), stranger.ID, "Weekly", "SELECT 3"); err != nil {
 			t.Errorf("another user reusing the name = %v, want it allowed", err)
 		}
 	})
 
 	t.Run("refuses to rename a query onto a name already in use", func(t *testing.T) {
 		owner := newUser(t, ports)
-		if _, err := ports.CreateSavedQuery(ctx, owner.ID, "Weekly", "SELECT 1"); err != nil {
+		if _, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "Weekly", "SELECT 1"); err != nil {
 			t.Fatal(err)
 		}
-		other, err := ports.CreateSavedQuery(ctx, owner.ID, "Monthly", "SELECT 2")
+		other, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "Monthly", "SELECT 2")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +70,7 @@ func RunSavedQueryStore(t *testing.T, ports Ports) {
 	t.Run("hides another user's saved query from every method", func(t *testing.T) {
 		owner := newUser(t, ports)
 		stranger := newUser(t, ports)
-		query, err := ports.CreateSavedQuery(ctx, owner.ID, "Private", "SELECT 1")
+		query, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "Private", "SELECT 1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +117,7 @@ func RunSavedQueryStore(t *testing.T, ports Ports) {
 
 	t.Run("updates and deletes a query", func(t *testing.T) {
 		owner := newUser(t, ports)
-		query, err := ports.CreateSavedQuery(ctx, owner.ID, "Weekly", "SELECT 1")
+		query, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, "Weekly", "SELECT 1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -155,7 +155,7 @@ func RunSavedQueryStore(t *testing.T, ports Ports) {
 		}
 
 		for _, name := range []string{"banana", "Apple", "cherry"} {
-			if _, err := ports.CreateSavedQuery(ctx, owner.ID, name, "SELECT 1"); err != nil {
+			if _, err := ports.CreateSavedQuery(ctx, newRowID(), owner.ID, name, "SELECT 1"); err != nil {
 				t.Fatal(err)
 			}
 		}

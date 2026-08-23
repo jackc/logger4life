@@ -51,7 +51,7 @@ func (s *fakeSharingStore) GetShareInfo(_ context.Context, _ string, token []byt
 	return s.info, s.err
 }
 
-func (s *fakeSharingStore) JoinSharedLog(_ context.Context, _ string, token []byte) (JoinSharedLogResult, error) {
+func (s *fakeSharingStore) JoinSharedLog(_ context.Context, _, _ string, token []byte) (JoinSharedLogResult, error) {
 	s.joinToken = append([]byte(nil), token...)
 	return s.join, s.err
 }

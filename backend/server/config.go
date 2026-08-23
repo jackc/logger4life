@@ -11,7 +11,12 @@ import (
 )
 
 type Config struct {
-	DatabaseURL       string
+	// DatabaseBackend selects "postgresql" (default), "jed", or the
+	// fail-stop comparison harness "both".
+	DatabaseBackend string
+	DatabaseURL     string
+	// JedDataDir holds logger4life.jed and is required by the jed and both backends.
+	JedDataDir        string
 	BindAddress       string
 	Port              string
 	AllowRegistration bool
@@ -25,7 +30,9 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
+		DatabaseBackend:   "postgresql",
 		DatabaseURL:       "postgres://postgres:postgres@localhost:5432/logger4life_dev",
+		JedDataDir:        "",
 		BindAddress:       "127.0.0.1",
 		Port:              "4000",
 		AllowRegistration: false,
@@ -56,8 +63,14 @@ func (c Config) MCPEnabled() bool {
 func ConfigFromEnv() Config {
 	cfg := DefaultConfig()
 
+	if v := os.Getenv("DATABASE_BACKEND"); v != "" {
+		cfg.DatabaseBackend = v
+	}
 	if v := os.Getenv("DATABASE_URL"); v != "" {
 		cfg.DatabaseURL = v
+	}
+	if v := os.Getenv("JED_DATA_DIR"); v != "" {
+		cfg.JedDataDir = v
 	}
 	if v := os.Getenv("BIND_ADDRESS"); v != "" {
 		cfg.BindAddress = v

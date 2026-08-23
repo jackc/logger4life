@@ -46,8 +46,8 @@ func savedErr(e error) error {
 	}
 	return e
 }
-func (s *Store) CreateSavedQuery(ctx context.Context, user, name, text string) (core.SavedQuery, error) {
-	q, e := scanSaved(s.conn(ctx).QueryRow(ctx, `INSERT INTO saved_sql_queries(user_id,name,query_text) VALUES($1,$2,$3) RETURNING id,name,query_text,created_at,updated_at`, user, name, text))
+func (s *Store) CreateSavedQuery(ctx context.Context, id, user, name, text string) (core.SavedQuery, error) {
+	q, e := scanSaved(s.conn(ctx).QueryRow(ctx, `INSERT INTO saved_sql_queries(id,user_id,name,query_text) VALUES($1,$2,$3,$4) RETURNING id,name,query_text,created_at,updated_at`, id, user, name, text))
 	return q, savedErr(e)
 }
 func (s *Store) UpdateSavedQuery(ctx context.Context, user, id, name, text string) (core.SavedQuery, error) {

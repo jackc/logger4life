@@ -48,7 +48,7 @@ func RunLogStore(t *testing.T, ports Ports) {
 	// [] and null differently.
 	t.Run("returns an empty field list rather than none", func(t *testing.T) {
 		owner := newUser(t, ports)
-		log, err := ports.CreateLog(ctx, owner.ID, "Water", nil)
+		log, err := ports.CreateLog(ctx, newRowID(), owner.ID, "Water", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -80,12 +80,12 @@ func RunLogStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		newLog(t, ports, owner.ID, "Vitamins")
 
-		if _, err := ports.CreateLog(ctx, owner.ID, "VITAMINS", nil); !errors.Is(err, core.ErrLogNameTaken) {
+		if _, err := ports.CreateLog(ctx, newRowID(), owner.ID, "VITAMINS", nil); !errors.Is(err, core.ErrLogNameTaken) {
 			t.Errorf("re-using the name = %v, want ErrLogNameTaken", err)
 		}
 
 		stranger := newUser(t, ports)
-		if _, err := ports.CreateLog(ctx, stranger.ID, "Vitamins", nil); err != nil {
+		if _, err := ports.CreateLog(ctx, newRowID(), stranger.ID, "Vitamins", nil); err != nil {
 			t.Errorf("another user reusing the name = %v, want it allowed", err)
 		}
 	})
@@ -163,7 +163,7 @@ func RunLogStore(t *testing.T, ports Ports) {
 		}
 		// The name is free again, which proves the row went rather than being
 		// hidden behind a flag.
-		if _, err := ports.CreateLog(ctx, owner.ID, "Temporary", nil); err != nil {
+		if _, err := ports.CreateLog(ctx, newRowID(), owner.ID, "Temporary", nil); err != nil {
 			t.Errorf("re-creating the deleted log = %v, want it allowed", err)
 		}
 	})

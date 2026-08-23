@@ -35,7 +35,7 @@ func (s mcpSavedQueryStore) GetSavedQueryByName(_ context.Context, _, name strin
 	}
 	return s.saved, nil
 }
-func (mcpSavedQueryStore) CreateSavedQuery(context.Context, string, string, string) (core.SavedQuery, error) {
+func (mcpSavedQueryStore) CreateSavedQuery(context.Context, string, string, string, string) (core.SavedQuery, error) {
 	return core.SavedQuery{}, errors.New("not implemented")
 }
 func (mcpSavedQueryStore) UpdateSavedQuery(context.Context, string, string, string, string) (core.SavedQuery, error) {

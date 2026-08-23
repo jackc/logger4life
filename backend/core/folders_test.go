@@ -19,7 +19,7 @@ type fakeFolderStore struct {
 	calls       int
 }
 
-func (s *fakeFolderStore) CreateFolder(_ context.Context, userID, name string, parentID *string) (Folder, error) {
+func (s *fakeFolderStore) CreateFolder(_ context.Context, _ string, userID, name string, parentID *string) (Folder, error) {
 	s.calls++
 	s.scopeUserID, s.name, s.parentID = userID, name, parentID
 	return s.folder, s.err

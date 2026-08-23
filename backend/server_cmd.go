@@ -15,7 +15,9 @@ var serverCmd = &cobra.Command{
 }
 
 var (
+	flagDatabaseBackend   string
 	flagDatabaseURL       string
+	flagJedDataDir        string
 	flagBindAddress       string
 	flagPort              string
 	flagAllowRegistration bool
@@ -29,7 +31,9 @@ var (
 
 func init() {
 	rootCmd.AddCommand(serverCmd)
+	serverCmd.Flags().StringVar(&flagDatabaseBackend, "database-backend", "", "database backend (postgresql, jed, or both)")
 	serverCmd.Flags().StringVar(&flagDatabaseURL, "database-url", "", "database connection URL")
+	serverCmd.Flags().StringVar(&flagJedDataDir, "jed-data-dir", "", "directory containing the embedded jed database")
 	serverCmd.Flags().StringVar(&flagBindAddress, "bind-address", "", "address to bind to (default 127.0.0.1)")
 	serverCmd.Flags().StringVar(&flagPort, "port", "", "port to listen on (default 4000)")
 	serverCmd.Flags().BoolVar(&flagAllowRegistration, "allow-registration", false, "allow new user registration")
@@ -46,8 +50,14 @@ func init() {
 func runServer(cmd *cobra.Command, args []string) error {
 	cfg := server.ConfigFromEnv()
 
+	if cmd.Flags().Changed("database-backend") {
+		cfg.DatabaseBackend = flagDatabaseBackend
+	}
 	if cmd.Flags().Changed("database-url") {
 		cfg.DatabaseURL = flagDatabaseURL
+	}
+	if cmd.Flags().Changed("jed-data-dir") {
+		cfg.JedDataDir = flagJedDataDir
 	}
 	if cmd.Flags().Changed("bind-address") {
 		cfg.BindAddress = flagBindAddress

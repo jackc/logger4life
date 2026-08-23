@@ -31,12 +31,12 @@ func definedFields(fields []domain.FieldDefinition) []domain.FieldDefinition {
 	return fields
 }
 
-func (s *Store) CreateLog(ctx context.Context, userID, name string, fields []domain.FieldDefinition) (core.Log, error) {
+func (s *Store) CreateLog(ctx context.Context, id, userID, name string, fields []domain.FieldDefinition) (core.Log, error) {
 	fields = definedFields(fields)
 	var l core.Log
 	e := s.InTx(ctx, func(ctx context.Context) error {
 		tx := s.conn(ctx)
-		e := tx.QueryRow(ctx, `INSERT INTO logs(user_id,name,fields) VALUES($1,$2,$3) RETURNING id,name,fields,created_at,updated_at`, userID, name, fields).Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt)
+		e := tx.QueryRow(ctx, `INSERT INTO logs(id,user_id,name,fields) VALUES($1,$2,$3,$4) RETURNING id,name,fields,created_at,updated_at`, id, userID, name, fields).Scan(&l.ID, &l.Name, &l.Fields, &l.CreatedAt, &l.UpdatedAt)
 		if e != nil {
 			var pe *pgconn.PgError
 			if errors.As(e, &pe) && pe.Code == "23505" {

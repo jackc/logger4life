@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/logger4life/backend/pgstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -309,6 +308,9 @@ func TestSQLExecute_CollapsesParserDetails(t *testing.T) {
 
 func TestSQLExecute_StatementTimeout(t *testing.T) {
 	t.Parallel()
+	if testBackend() != "postgresql" {
+		t.Skip("the billion-row cancellation probe is PostgreSQL-specific")
+	}
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -520,8 +522,7 @@ func TestGetSavedQueryByName(t *testing.T) {
 	}, cookies)
 	wantID := createBody["id"].(string)
 
-	pool := srv.pgPool(t)
-	app := core.New(core.Config{SavedQueries: pgstore.New(pool)})
+	app := srv.app
 
 	q, err := core.GetSavedQuery.Call(core.WithUserID(context.Background(), userID), app,
 		core.GetSavedQueryParams{Name: "log count"})

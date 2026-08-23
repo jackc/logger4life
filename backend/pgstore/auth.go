@@ -22,13 +22,13 @@ func translateUserWriteError(err error) error {
 	return err
 }
 
-func (s *Store) CreateUser(ctx context.Context, username string, email *string, passwordHash string) (core.User, error) {
+func (s *Store) CreateUser(ctx context.Context, id, username string, email *string, passwordHash string) (core.User, error) {
 	var user core.User
 	err := s.conn(ctx).QueryRow(ctx,
-		`INSERT INTO users (username, email, password_hash)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO users (id, username, email, password_hash)
+		 VALUES ($1, $2, $3, $4)
 		 RETURNING id, username, email`,
-		username, email, passwordHash,
+		id, username, email, passwordHash,
 	).Scan(&user.ID, &user.Username, &user.Email)
 	return user, translateUserWriteError(err)
 }

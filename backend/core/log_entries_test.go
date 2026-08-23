@@ -34,9 +34,9 @@ func (s *fakeLogEntryStore) LogFieldDefinitions(_ context.Context, userID, logID
 	return s.definitions, s.definitionsErr
 }
 
-func (s *fakeLogEntryStore) CreateLogEntry(_ context.Context, userID, logID string, fields map[string]any) (domain.LogEntry, error) {
+func (s *fakeLogEntryStore) CreateLogEntry(_ context.Context, entryID, userID, logID string, fields map[string]any, occurredAt time.Time) (domain.LogEntry, error) {
 	s.writeCalls++
-	s.writeUserID, s.writeLogID, s.writeFields = userID, logID, fields
+	s.writeUserID, s.writeLogID, s.writeEntryID, s.writeFields, s.occurredAt = userID, logID, entryID, fields, occurredAt
 	return s.entry, s.err
 }
 

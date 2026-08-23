@@ -13,7 +13,7 @@ var ErrLogEntryNotFound = errors.New("entry not found")
 
 type LogEntryStore interface {
 	LogFieldDefinitions(context.Context, string, string) ([]domain.FieldDefinition, error)
-	CreateLogEntry(context.Context, string, string, map[string]any) (domain.LogEntry, error)
+	CreateLogEntry(context.Context, string, string, string, map[string]any, time.Time) (domain.LogEntry, error)
 	ListLogEntries(context.Context, string, string) ([]domain.LogEntry, error)
 	UpdateLogEntry(context.Context, string, string, string, map[string]any, time.Time) (domain.LogEntry, error)
 	DeleteLogEntry(context.Context, string, string, string) error
@@ -46,7 +46,12 @@ var CreateLogEntry = Define(ActionDef[CreateLogEntryParams, domain.LogEntry]{Nam
 	if e = domain.ValidateFieldValues(defs, p.Fields); e != nil {
 		return domain.LogEntry{}, &ValidationError{Action: "create_log_entry", Err: e}
 	}
-	return c.entries.CreateLogEntry(ctx, u, p.LogID, p.Fields)
+	entryID, e := newID()
+	if e != nil {
+		return domain.LogEntry{}, e
+	}
+	occurredAt := time.Now().UTC().Truncate(time.Microsecond)
+	return c.entries.CreateLogEntry(ctx, entryID, u, p.LogID, p.Fields, occurredAt)
 }})
 
 type ListLogEntriesParams struct {

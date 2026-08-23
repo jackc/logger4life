@@ -31,7 +31,7 @@ func folderOwned(ctx context.Context, q queryRower, folderID, userID string) err
 	}
 	return nil
 }
-func (s *Store) CreateFolder(ctx context.Context, userID, name string, parent *string) (core.Folder, error) {
+func (s *Store) CreateFolder(ctx context.Context, id, userID, name string, parent *string) (core.Folder, error) {
 	if parent != nil {
 		e := folderOwned(ctx, s.conn(ctx), *parent, userID)
 		if errors.Is(e, pgx.ErrNoRows) {
@@ -41,7 +41,7 @@ func (s *Store) CreateFolder(ctx context.Context, userID, name string, parent *s
 			return core.Folder{}, e
 		}
 	}
-	return scanFolder(s.conn(ctx).QueryRow(ctx, `INSERT INTO folders(user_id,parent_folder_id,name,position) SELECT $1,$2,$3,COALESCE(max(position)+1,0) FROM folders WHERE user_id=$1 AND parent_folder_id IS NOT DISTINCT FROM $2 RETURNING id,name,parent_folder_id,position,created_at,updated_at`, userID, parent, name))
+	return scanFolder(s.conn(ctx).QueryRow(ctx, `INSERT INTO folders(id,user_id,parent_folder_id,name,position) SELECT $1,$2,$3,$4,COALESCE(max(position)+1,0) FROM folders WHERE user_id=$2 AND parent_folder_id IS NOT DISTINCT FROM $3 RETURNING id,name,parent_folder_id,position,created_at,updated_at`, id, userID, parent, name))
 }
 func (s *Store) ListFolders(ctx context.Context, userID string) ([]core.Folder, error) {
 	rows, e := s.conn(ctx).Query(ctx, `SELECT id,name,parent_folder_id,position,created_at,updated_at FROM folders WHERE user_id=$1 ORDER BY parent_folder_id NULLS FIRST,position`, userID)

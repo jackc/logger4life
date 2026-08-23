@@ -52,7 +52,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 	// entries but must not be able to re-share the log or read its roster.
 	t.Run("keeps share management with the owner", func(t *testing.T) {
 		owner, joiner, log, token := shared(t)
-		if _, err := ports.JoinSharedLog(ctx, joiner.ID, token); err != nil {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token); err != nil {
 			t.Fatal(err)
 		}
 
@@ -85,7 +85,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 		if _, err := ports.GetShareInfo(ctx, owner.ID, []byte("no-such-token")); !errors.Is(err, core.ErrInvalidShareLink) {
 			t.Errorf("GetShareInfo error = %v, want ErrInvalidShareLink", err)
 		}
-		if _, err := ports.JoinSharedLog(ctx, owner.ID, []byte("no-such-token")); !errors.Is(err, core.ErrInvalidShareLink) {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), owner.ID, []byte("no-such-token")); !errors.Is(err, core.ErrInvalidShareLink) {
 			t.Errorf("JoinSharedLog error = %v, want ErrInvalidShareLink", err)
 		}
 		if err := ports.CreateShareToken(ctx, owner.ID, UnknownID, []byte("t")); !errors.Is(err, core.ErrLogNotFound) {
@@ -103,7 +103,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 			t.Fatalf("the joiner could already read the log before joining: %v", err)
 		}
 
-		result, err := ports.JoinSharedLog(ctx, joiner.ID, token)
+		result, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +133,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 		}
 
 		// A member may write entries; that is the point of sharing.
-		if _, err := ports.CreateLogEntry(ctx, joiner.ID, log.ID, map[string]any{"dose": float64(1)}); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), joiner.ID, log.ID, map[string]any{"dose": float64(1)}, newOccurredAt()); err != nil {
 			t.Errorf("a member writing an entry = %v, want it allowed", err)
 		}
 		_ = owner
@@ -143,11 +143,11 @@ func RunSharingStore(t *testing.T, ports Ports) {
 	// must be reported rather than duplicating the membership.
 	t.Run("reports a repeat join instead of duplicating it", func(t *testing.T) {
 		owner, joiner, log, token := shared(t)
-		if _, err := ports.JoinSharedLog(ctx, joiner.ID, token); err != nil {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token); err != nil {
 			t.Fatal(err)
 		}
 
-		again, err := ports.JoinSharedLog(ctx, joiner.ID, token)
+		again, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -184,7 +184,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 		if !info.IsOwner || info.AlreadyMember {
 			t.Errorf("share info for the owner = %#v, want IsOwner without AlreadyMember", info)
 		}
-		if _, err := ports.JoinSharedLog(ctx, owner.ID, token); !errors.Is(err, core.ErrAlreadyOwnLog) {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), owner.ID, token); !errors.Is(err, core.ErrAlreadyOwnLog) {
 			t.Errorf("the owner joining = %v, want ErrAlreadyOwnLog", err)
 		}
 	})
@@ -195,10 +195,10 @@ func RunSharingStore(t *testing.T, ports Ports) {
 	// establish membership for itself rather than infer it from a placement.
 	t.Run("removes a member and with them their access", func(t *testing.T) {
 		owner, joiner, log, token := shared(t)
-		if _, err := ports.JoinSharedLog(ctx, joiner.ID, token); err != nil {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token); err != nil {
 			t.Fatal(err)
 		}
-		entry, err := ports.CreateLogEntry(ctx, joiner.ID, log.ID, map[string]any{"dose": float64(1)})
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), joiner.ID, log.ID, map[string]any{"dose": float64(1)}, newOccurredAt())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -251,10 +251,10 @@ func RunSharingStore(t *testing.T, ports Ports) {
 	// again puts the log back where the member had filed it.
 	t.Run("restores a rejoining member to where they had filed the log", func(t *testing.T) {
 		owner, joiner, log, token := shared(t)
-		if _, err := ports.JoinSharedLog(ctx, joiner.ID, token); err != nil {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token); err != nil {
 			t.Fatal(err)
 		}
-		folder, err := ports.CreateFolder(ctx, joiner.ID, "Theirs", nil)
+		folder, err := ports.CreateFolder(ctx, newRowID(), joiner.ID, "Theirs", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -269,7 +269,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 		if err := ports.RemoveSharedUser(ctx, owner.ID, log.ID, roster[0].ID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ports.JoinSharedLog(ctx, joiner.ID, token); err != nil {
+		if _, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token); err != nil {
 			t.Fatalf("rejoining = %v, want it allowed", err)
 		}
 

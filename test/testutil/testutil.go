@@ -41,3 +41,9 @@ func InitTestDBManager(*testing.M) *testdb.Manager {
 
 	return manager
 }
+
+// DatabaseURL targets an acquired copy while inheriting the checkout's PG*
+// connection settings from the test environment.
+func DatabaseURL(db *testdb.DB) string {
+	return "postgres:///" + db.DBName()
+}

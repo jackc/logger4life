@@ -8,6 +8,8 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
+	assert.Equal(t, "postgresql", cfg.DatabaseBackend)
+	assert.Empty(t, cfg.JedDataDir)
 	assert.False(t, cfg.AllowRegistration)
 	assert.Equal(t, "127.0.0.1", cfg.BindAddress)
 	assert.Equal(t, "4000", cfg.Port)
@@ -16,7 +18,9 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
+	t.Setenv("DATABASE_BACKEND", "jed")
 	t.Setenv("DATABASE_URL", "postgres://localhost/mydb")
+	t.Setenv("JED_DATA_DIR", "/srv/logger4life")
 	t.Setenv("BIND_ADDRESS", "0.0.0.0")
 	t.Setenv("PORT", "8080")
 	t.Setenv("ALLOW_REGISTRATION", "true")
@@ -24,7 +28,9 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("WEBAUTHN_ORIGIN", "https://example.com")
 
 	cfg := ConfigFromEnv()
+	assert.Equal(t, "jed", cfg.DatabaseBackend)
 	assert.Equal(t, "postgres://localhost/mydb", cfg.DatabaseURL)
+	assert.Equal(t, "/srv/logger4life", cfg.JedDataDir)
 	assert.Equal(t, "0.0.0.0", cfg.BindAddress)
 	assert.Equal(t, "8080", cfg.Port)
 	assert.Equal(t, "0.0.0.0:8080", cfg.ListenAddress())
@@ -36,6 +42,8 @@ func TestConfigFromEnv(t *testing.T) {
 
 func TestConfigFromEnv_Defaults(t *testing.T) {
 	cfg := ConfigFromEnv()
+	assert.Equal(t, "postgresql", cfg.DatabaseBackend)
+	assert.Empty(t, cfg.JedDataDir)
 	assert.Contains(t, cfg.DatabaseURL, "logger4life_dev")
 	assert.Equal(t, "127.0.0.1", cfg.BindAddress)
 	assert.Equal(t, "4000", cfg.Port)

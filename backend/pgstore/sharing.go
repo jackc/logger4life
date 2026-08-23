@@ -92,7 +92,7 @@ func (s *Store) GetShareInfo(ctx context.Context, userID string, token []byte) (
 	return info, nil
 }
 
-func (s *Store) JoinSharedLog(ctx context.Context, userID string, token []byte) (core.JoinSharedLogResult, error) {
+func (s *Store) JoinSharedLog(ctx context.Context, shareID, userID string, token []byte) (core.JoinSharedLogResult, error) {
 	var result core.JoinSharedLogResult
 	err := s.InTx(ctx, func(ctx context.Context) error {
 		tx := s.conn(ctx)
@@ -109,11 +109,11 @@ func (s *Store) JoinSharedLog(ctx context.Context, userID string, token []byte) 
 			return core.ErrAlreadyOwnLog
 		}
 
-		var shareID string
+		var insertedShareID string
 		err = tx.QueryRow(ctx, `
-		INSERT INTO log_shares(log_id,user_id) VALUES($1,$2)
+		INSERT INTO log_shares(id,log_id,user_id) VALUES($1,$2,$3)
 		ON CONFLICT (log_id,user_id) DO NOTHING
-		RETURNING id`, result.LogID, userID).Scan(&shareID)
+		RETURNING id`, shareID, result.LogID, userID).Scan(&insertedShareID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Already a member: nothing to insert, and the placement below
 			// would be a no-op too.

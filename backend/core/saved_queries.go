@@ -22,7 +22,7 @@ type SavedQuery struct {
 type SavedQueryStore interface {
 	ListSavedQueries(context.Context, string) ([]SavedQuery, error)
 	GetSavedQueryByName(context.Context, string, string) (SavedQuery, error)
-	CreateSavedQuery(context.Context, string, string, string) (SavedQuery, error)
+	CreateSavedQuery(context.Context, string, string, string, string) (SavedQuery, error)
 	UpdateSavedQuery(context.Context, string, string, string, string) (SavedQuery, error)
 	DeleteSavedQuery(context.Context, string, string) error
 }
@@ -71,7 +71,11 @@ var CreateSavedQuery = Define(ActionDef[SavedQueryParams, SavedQuery]{Name: "cre
 	if e != nil {
 		return SavedQuery{}, e
 	}
-	return c.savedQueries.CreateSavedQuery(ctx, id, p.Name, p.QueryText)
+	queryID, e := newID()
+	if e != nil {
+		return SavedQuery{}, e
+	}
+	return c.savedQueries.CreateSavedQuery(ctx, queryID, id, p.Name, p.QueryText)
 }})
 
 type UpdateSavedQueryParams struct {

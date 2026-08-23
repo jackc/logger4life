@@ -10,9 +10,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/logger4life/backend/pgstore"
+	"github.com/jackc/logger4life/test/testutil"
+	"github.com/jackc/testdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,28 +24,28 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *testServer
 	t.Helper()
 
 	ctx := context.Background()
-	db := testDBManager.AcquireDB(t, ctx)
-	pool := db.PoolConnect(t, ctx)
+	cfg := DefaultConfig()
+	cfg.DatabaseBackend = testBackend()
+	cfg.AllowRegistration = allowRegistration
+	cfg.WebAuthnRPID = "localhost"
+	cfg.WebAuthnOrigin = "http://localhost"
 
-	wan, err := webauthn.New(&webauthn.Config{
-		RPDisplayName: "Logger4Life Test",
-		RPID:          "localhost",
-		RPOrigins:     []string{"http://localhost"},
-	})
+	var db *testdb.DB
+	if usesPostgres() {
+		db = testDBManager.AcquireDB(t, ctx)
+		cfg.DatabaseURL = testutil.DatabaseURL(db)
+	}
+	if cfg.DatabaseBackend != "postgresql" {
+		cfg.JedDataDir = t.TempDir()
+	}
+
+	app, _, cleanup, err := BuildBackend(ctx, cfg, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
-	store := pgstore.New(pool)
-	app := core.New(core.Config{
-		Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan,
-		Tx: store, Logs: store, Entries: store, Placements: store, Folders: store,
-		SavedQueries: store, SQLSchema: store, UserSQL: store, Sharing: store,
-		// The same stack the composition root installs, so these tests
-		// exercise the configuration that actually ships.
-		Middleware: []core.Middleware{core.RequireUser(), auditMiddleware(slog.New(slog.DiscardHandler))},
-	})
+	t.Cleanup(cleanup)
 
 	r := chi.NewRouter()
 	r.Use(loadSession(app))
-	r.Get("/api/settings", handleSettings(Config{AllowRegistration: allowRegistration, WebAuthnRPID: "localhost", WebAuthnOrigin: "http://localhost"}))
+	r.Get("/api/settings", handleSettings(cfg))
 	r.Post("/api/register", handleRegister(app, allowRegistration))
 	r.Post("/api/login", handleLogin(app))
 	r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(app))
@@ -94,7 +93,7 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *testServer
 		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(app))
 	})
 
-	return &testServer{Server: httptest.NewServer(r), db: db}
+	return &testServer{Server: httptest.NewServer(r), db: db, app: app}
 }
 
 func postJSON(url string, body any, cookies []*http.Cookie) (*http.Response, map[string]any) {

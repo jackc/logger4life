@@ -28,7 +28,7 @@ func RunLogPlacementStore(t *testing.T, ports Ports) {
 
 	t.Run("moves a log into a folder and back to the root", func(t *testing.T) {
 		owner := newUser(t, ports)
-		folder, err := ports.CreateFolder(ctx, owner.ID, "Health", nil)
+		folder, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Health", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -79,7 +79,7 @@ func RunLogPlacementStore(t *testing.T, ports Ports) {
 	t.Run("refuses to file a log into a folder the caller does not own", func(t *testing.T) {
 		owner := newUser(t, ports)
 		stranger := newUser(t, ports)
-		theirFolder, err := ports.CreateFolder(ctx, stranger.ID, "Theirs", nil)
+		theirFolder, err := ports.CreateFolder(ctx, newRowID(), stranger.ID, "Theirs", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +191,7 @@ func RunLogPlacementStore(t *testing.T, ports Ports) {
 		}
 		assertDenseRootPositions(t, ports, owner.ID)
 
-		folder, err := ports.CreateFolder(ctx, owner.ID, "Health", nil)
+		folder, err := ports.CreateFolder(ctx, newRowID(), owner.ID, "Health", nil)
 		if err != nil {
 			t.Fatal(err)
 		}

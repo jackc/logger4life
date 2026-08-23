@@ -279,8 +279,12 @@ var FinishPasskeyRegistration = Define(ActionDef[FinishPasskeyRegistrationParams
 		if err != nil {
 			return PasskeyInfo{}, ErrPasskeyVerificationFailed
 		}
+		passkeyID, err := newID()
+		if err != nil {
+			return PasskeyInfo{}, err
+		}
 		passkey, err := c.passkeys.CreatePasskey(ctx, Passkey{
-			UserID: user.user.ID, CredentialID: credential.ID, PublicKey: credential.PublicKey,
+			ID: passkeyID, UserID: user.user.ID, CredentialID: credential.ID, PublicKey: credential.PublicKey,
 			AAGUID: credential.Authenticator.AAGUID, SignCount: credential.Authenticator.SignCount,
 			BackupEligible: credential.Flags.BackupEligible, BackupState: credential.Flags.BackupState,
 			Description: p.Description,

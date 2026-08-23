@@ -11,6 +11,9 @@ import (
 
 func insertPasskey(t *testing.T, srv *testServer, userID string) {
 	t.Helper()
+	if testBackend() != "postgresql" {
+		t.Skip("this server fixture inserts a passkey directly into PostgreSQL")
+	}
 	pool := srv.pgPool(t)
 
 	_, err := pool.Exec(context.Background(),

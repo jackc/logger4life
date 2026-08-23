@@ -12,6 +12,7 @@
 /tmp
 /logger4life_*
 /logger4life.env
+/.vscode/
 
 # Playwright
 /test-results/

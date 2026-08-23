@@ -25,11 +25,11 @@ fi
 EOF
 fi
 
+mise run dev:init
+
 # Playwright's browsers are installed by dev:init on every platform; only their
 # shared libraries are Linux-specific.
-npx --yes playwright install-deps chromium
-
-mise run dev:init
+npx playwright install-deps chromium
 
 # Run any additional setup scripts included on the shared volume. This is to allow for per developer or
 # per-environment customizations. These scripts are not checked into source control.

@@ -11,6 +11,7 @@ import (
 // --- Create Folder ---
 
 func TestCreateFolder_AtRoot(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -26,6 +27,7 @@ func TestCreateFolder_AtRoot(t *testing.T) {
 }
 
 func TestCreateFolder_AppendsToEnd(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -41,6 +43,7 @@ func TestCreateFolder_AppendsToEnd(t *testing.T) {
 }
 
 func TestCreateFolder_Nested(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -61,6 +64,7 @@ func TestCreateFolder_Nested(t *testing.T) {
 }
 
 func TestCreateFolder_EmptyName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -73,6 +77,7 @@ func TestCreateFolder_EmptyName(t *testing.T) {
 }
 
 func TestCreateFolder_ParentBelongsToOtherUser(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -94,6 +99,7 @@ func TestCreateFolder_ParentBelongsToOtherUser(t *testing.T) {
 // --- List Folders ---
 
 func TestListFolders_Empty(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -106,6 +112,7 @@ func TestListFolders_Empty(t *testing.T) {
 }
 
 func TestListFolders_ReturnsOnlyOwn(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -124,6 +131,7 @@ func TestListFolders_ReturnsOnlyOwn(t *testing.T) {
 // --- Rename Folder ---
 
 func TestRenameFolder_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -139,6 +147,7 @@ func TestRenameFolder_Success(t *testing.T) {
 }
 
 func TestRenameFolder_OtherUsersFolder(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -162,6 +171,7 @@ func listFolders(t *testing.T, srvURL string, cookies []*http.Cookie) []map[stri
 }
 
 func TestMoveFolder_WithinSameParent(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -190,6 +200,7 @@ func TestMoveFolder_WithinSameParent(t *testing.T) {
 }
 
 func TestMoveFolder_ToDifferentParent(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -223,6 +234,7 @@ func TestMoveFolder_ToDifferentParent(t *testing.T) {
 }
 
 func TestMoveFolder_CycleRejected(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -246,6 +258,7 @@ func TestMoveFolder_CycleRejected(t *testing.T) {
 }
 
 func TestMoveFolder_IntoSelfRejected(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -265,6 +278,7 @@ func TestMoveFolder_IntoSelfRejected(t *testing.T) {
 // --- Delete Folder ---
 
 func TestDeleteFolder_Empty(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -288,6 +302,7 @@ func TestDeleteFolder_Empty(t *testing.T) {
 }
 
 func TestDeleteFolder_NonEmpty_Subfolder(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -306,6 +321,7 @@ func TestDeleteFolder_NonEmpty_Subfolder(t *testing.T) {
 }
 
 func TestDeleteFolder_NonEmpty_Log(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -329,6 +345,7 @@ func TestDeleteFolder_NonEmpty_Log(t *testing.T) {
 }
 
 func TestDeleteFolder_OtherUsersFolder(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -345,6 +362,7 @@ func TestDeleteFolder_OtherUsersFolder(t *testing.T) {
 // --- Unauthenticated ---
 
 func TestFolders_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 

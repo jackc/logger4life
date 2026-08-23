@@ -87,9 +87,10 @@ end
 desc "Build all"
 task build: ["build/logger4life", "build/assets/.built"]
 
-file "tmp/test/.databases-prepared" => FileList["postgresql/**/*.sql", "test/testdata/*.sql"] do
-  sh "psql --no-psqlrc -f test/setup_test_databases.sql > /dev/null"
-  sh "PGDATABASE=logger4life_test tern migrate -m postgresql/migrations -c postgresql/tern.conf"
+file "tmp/test/.databases-prepared" => FileList["Rakefile", ".mise.toml", "postgresql/**/*.sql", "test/*.sql", "test/testdata/*.sql"] do
+  # devports may have created .dev/ports.env during test:prepare, after this
+  # Rake process started. A nested mise exec reloads that new environment.
+  sh "mise exec -- psql --no-psqlrc -v ON_ERROR_STOP=1 -f test/setup_test_databases.sql > /dev/null"
   sh "touch tmp/test/.databases-prepared"
 end
 
@@ -105,16 +106,12 @@ end
 
 desc "Run Go tests"
 task "test:backend" => ["test:prepare"] do
-  # -p 1: the server and pgstore packages share logger4life_test and clear
-  # tables around their own tests, so they must not run at once. The browser
-  # suite uses that database too and leaves its rows behind, so tests here
-  # scope their assertions to the rows they write rather than table counts.
-  sh "go test -p 1 ./..."
+  sh "mise exec -- go test ./..."
 end
 
 desc "Run Playwright browser tests"
 task "test:browser" => ["test:prepare"] do
-  sh "npm test"
+  sh "mise exec -- npm test"
 end
 
 desc "Run all tests"

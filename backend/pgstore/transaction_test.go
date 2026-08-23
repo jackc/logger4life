@@ -6,13 +6,8 @@ import (
 	"testing"
 
 	"github.com/jackc/logger4life/backend/domain"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Names this test writes under. logger4life_test is shared with the server
-// package and with the Playwright suite, which does not clean up after itself,
-// so every assertion and the cleanup are scoped to these names rather than to
-// whole-table counts.
 const (
 	txProbeUser   = "tx_probe_user"
 	txProbeLog    = "tx_probe_log"
@@ -21,20 +16,7 @@ const (
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
-	if err != nil {
-		t.Fatal(err)
-	}
-	cleanup := func() {
-		// Everything this test writes hangs off the user by ON DELETE CASCADE.
-		pool.Exec(context.Background(), "DELETE FROM users WHERE username = $1", txProbeUser)
-	}
-	cleanup()
-	t.Cleanup(func() {
-		cleanup()
-		pool.Close()
-	})
-	return New(pool)
+	return New(acquireTestPool(t))
 }
 
 func countRows(t *testing.T, s *Store, sql string, args ...any) int {
@@ -51,6 +33,7 @@ func countRows(t *testing.T, s *Store, sql string, args ...any) int {
 // transaction's context must join it, so a later failure discards the whole
 // unit rather than leaving some ports committed.
 func TestStoreHonorsAmbientTransaction(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx := context.Background()
 	fields := []domain.FieldDefinition{{Name: "Dose", Type: "number"}}

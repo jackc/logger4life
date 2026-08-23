@@ -5,18 +5,15 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func insertPasskey(t *testing.T, userID string) {
+func insertPasskey(t *testing.T, srv *testServer, userID string) {
 	t.Helper()
-	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
-	require.NoError(t, err)
-	defer pool.Close()
+	pool := srv.pgPool(t)
 
-	_, err = pool.Exec(context.Background(),
+	_, err := pool.Exec(context.Background(),
 		`INSERT INTO passkeys (user_id, credential_id, public_key, aaguid, sign_count, description)
 		 VALUES ($1, $2, $3, $4, 0, $5)`,
 		userID, []byte("fake-cred-id-1"), []byte("fake-public-key"), []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, "Test Key",
@@ -25,6 +22,7 @@ func insertPasskey(t *testing.T, userID string) {
 }
 
 func TestListPasskeys_Empty(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -41,6 +39,7 @@ func TestListPasskeys_Empty(t *testing.T) {
 }
 
 func TestListPasskeys_WithPasskeys(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -52,7 +51,7 @@ func TestListPasskeys_WithPasskeys(t *testing.T) {
 	require.NotNil(t, cookie)
 
 	userID := regBody["id"].(string)
-	insertPasskey(t, userID)
+	insertPasskey(t, srv, userID)
 
 	resp, body := getJSONArray(srv.URL+"/api/me/passkeys", []*http.Cookie{cookie})
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -63,6 +62,7 @@ func TestListPasskeys_WithPasskeys(t *testing.T) {
 }
 
 func TestListPasskeys_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -71,6 +71,7 @@ func TestListPasskeys_Unauthenticated(t *testing.T) {
 }
 
 func TestUpdatePasskeyDescription(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -82,7 +83,7 @@ func TestUpdatePasskeyDescription(t *testing.T) {
 	require.NotNil(t, cookie)
 
 	userID := regBody["id"].(string)
-	insertPasskey(t, userID)
+	insertPasskey(t, srv, userID)
 
 	// Get the passkey ID
 	_, listBody := getJSONArray(srv.URL+"/api/me/passkeys", []*http.Cookie{cookie})
@@ -101,6 +102,7 @@ func TestUpdatePasskeyDescription(t *testing.T) {
 }
 
 func TestUpdatePasskey_NotOwned(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -111,7 +113,7 @@ func TestUpdatePasskey_NotOwned(t *testing.T) {
 	}, nil)
 	aliceCookie := findSessionCookie(regResp)
 	require.NotNil(t, aliceCookie)
-	insertPasskey(t, regBody["id"].(string))
+	insertPasskey(t, srv, regBody["id"].(string))
 
 	// Get Alice's passkey ID
 	_, listBody := getJSONArray(srv.URL+"/api/me/passkeys", []*http.Cookie{aliceCookie})
@@ -135,6 +137,7 @@ func TestUpdatePasskey_NotOwned(t *testing.T) {
 }
 
 func TestDeletePasskey(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -144,7 +147,7 @@ func TestDeletePasskey(t *testing.T) {
 	}, nil)
 	cookie := findSessionCookie(regResp)
 	require.NotNil(t, cookie)
-	insertPasskey(t, regBody["id"].(string))
+	insertPasskey(t, srv, regBody["id"].(string))
 
 	// Get the passkey ID
 	_, listBody := getJSONArray(srv.URL+"/api/me/passkeys", []*http.Cookie{cookie})
@@ -161,6 +164,7 @@ func TestDeletePasskey(t *testing.T) {
 }
 
 func TestDeletePasskey_NotOwned(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -170,7 +174,7 @@ func TestDeletePasskey_NotOwned(t *testing.T) {
 	}, nil)
 	aliceCookie := findSessionCookie(regResp)
 	require.NotNil(t, aliceCookie)
-	insertPasskey(t, regBody["id"].(string))
+	insertPasskey(t, srv, regBody["id"].(string))
 
 	_, listBody := getJSONArray(srv.URL+"/api/me/passkeys", []*http.Cookie{aliceCookie})
 	require.Equal(t, 1, len(listBody))
@@ -195,6 +199,7 @@ func TestDeletePasskey_NotOwned(t *testing.T) {
 }
 
 func TestPasskeyLoginBegin_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -205,6 +210,7 @@ func TestPasskeyLoginBegin_Success(t *testing.T) {
 }
 
 func TestPasskeyRegisterBegin_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -214,6 +220,7 @@ func TestPasskeyRegisterBegin_Unauthenticated(t *testing.T) {
 }
 
 func TestPasskeyRegisterBegin_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -231,6 +238,7 @@ func TestPasskeyRegisterBegin_Success(t *testing.T) {
 }
 
 func TestPasskeyLoginFinish_InvalidChallenge(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -243,6 +251,7 @@ func TestPasskeyLoginFinish_InvalidChallenge(t *testing.T) {
 }
 
 func TestPasskeyRegisterFinish_InvalidChallenge(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 

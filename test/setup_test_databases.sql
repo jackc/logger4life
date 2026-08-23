@@ -1,23 +1,35 @@
--- Ensure the test database and app role exist.
+\set primary_test_database_name `echo $TEST_DATABASE`
+\set copied_test_database_count `echo $TEST_DATABASE_COUNT`
+
+-- Ensure the application roles and databases exist before rebuilding the
+-- primary test database. Migrations grant privileges to those roles.
 \i postgresql/prepare.sql
 
--- Clean the test database so tern can re-run migrations from scratch.
-\c logger4life_test
-DROP TABLE IF EXISTS oauth_refresh_tokens CASCADE;
-DROP TABLE IF EXISTS oauth_access_tokens CASCADE;
-DROP TABLE IF EXISTS oauth_authorization_codes CASCADE;
-DROP TABLE IF EXISTS oauth_clients CASCADE;
-DROP TABLE IF EXISTS saved_sql_queries CASCADE;
-DROP SCHEMA IF EXISTS sql_query CASCADE;
-DROP TABLE IF EXISTS webauthn_challenges CASCADE;
-DROP TABLE IF EXISTS passkeys CASCADE;
-DROP TABLE IF EXISTS user_log_placements CASCADE;
-DROP TABLE IF EXISTS folders CASCADE;
-DROP TABLE IF EXISTS log_shares CASCADE;
-DROP TABLE IF EXISTS log_entries CASCADE;
-DROP TABLE IF EXISTS logs CASCADE;
-DROP TABLE IF EXISTS sessions CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS schema_version CASCADE;
--- The cluster-wide logger4life_sql_user role is preserved between test runs;
--- the migration's CREATE ROLE is guarded by an existence check.
+drop database if exists :primary_test_database_name with (force);
+create database :primary_test_database_name;
+
+\c :primary_test_database_name
+
+\setenv PGDATABASE :primary_test_database_name
+\! tern migrate -c postgresql/tern.conf -m postgresql/migrations
+
+-- Record every row change so a checked-out copy can be restored to its
+-- pristine post-migration state without maintaining a table list here.
+\o /dev/null
+\i test/testdata/pgundolog.sql
+select pgundolog.create_trigger_for_all_tables_in_schema('public');
+\o
+
+-- github.com/jackc/testdb coordinates exclusive database checkout through
+-- this table, including across separate `go test` package processes.
+create schema testdb;
+create table testdb.databases (name text primary key, acquirer_pid int);
+
+insert into testdb.databases (name)
+select :'primary_test_database_name' || '_' || n
+from generate_series(1, :copied_test_database_count) n;
+
+select format('drop database if exists %I with (force)', name),
+	format('create database %I template = %I', name, :'primary_test_database_name')
+from testdb.databases
+\gexec

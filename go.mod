@@ -9,6 +9,7 @@ require (
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/jackc/pgsqlarbiter-go v0.1.0
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/testdb v0.0.0-20221015161059-a3705a386fe0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1

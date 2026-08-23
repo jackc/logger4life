@@ -12,6 +12,11 @@ _.file = ".dev/ports.env"
 PGDATABASE = "logger4life_dev"
 PGUSER = "postgres"
 
+# Parallel test databases: the primary is migrated once, then copied
+# TEST_DATABASE_COUNT times; each PostgreSQL test acquires an exclusive copy.
+TEST_DATABASE = "logger4life_test"
+TEST_DATABASE_COUNT = "8"
+
 # Keep process-compose's own log next to the worktree it belongs to; the
 # default lives in /tmp and would be shared by every worktree.
 PC_LOG_FILE = "{{config_root}}/.dev/process-compose.log"

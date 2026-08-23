@@ -21,6 +21,9 @@ if [ ! -f "$PGDATA/PG_VERSION" ]; then
 		--locale-provider=builtin \
 		--builtin-locale=C.UTF-8 \
 		--no-sync >/dev/null
+	# The file-task marker belongs to the database cluster, not just this
+	# checkout. A new cluster has no testdb coordinator or copied databases.
+	rm -f tmp/test/.databases-prepared
 fi
 
 pg_start_temporarily
@@ -33,5 +36,5 @@ psql --no-psqlrc --dbname=postgres --quiet --set=ON_ERROR_STOP=1 --file=postgres
 
 echo "==> migrating $PGDATABASE"
 tern migrate
-echo "==> migrating logger4life_test"
-PGDATABASE=logger4life_test tern migrate
+echo "==> migrating $TEST_DATABASE"
+PGDATABASE="$TEST_DATABASE" tern migrate

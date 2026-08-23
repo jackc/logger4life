@@ -35,7 +35,7 @@ long-running services. See `docs/development-environment.md`.
 
 ### Database
 - Migrations managed by **tern** (config: `postgresql/tern.conf`, migrations: `postgresql/migrations/`)
-- Dev database: `logger4life_dev`, test database: `logger4life_test`, both in this checkout's own cluster under `.dev/<platform>/postgres/data` on the allocated `PGPORT`
+- Dev database: `logger4life_dev`; browser-test database: `logger4life_test`; Go database tests exclusively check out one of eight `logger4life_test_N` copies. All live in this checkout's own cluster under `.dev/<platform>/postgres/data` on the allocated `PGPORT`.
 - `mise run db:psql`, `mise run db:migrate`, `mise run db:reset`, `mise run db:init`
 - DB role: `logger4life`
 - When creating tables, sequences, or other database objects in migrations, grant appropriate permissions to the `logger4life` role (e.g., `GRANT ALL ON TABLE ... TO logger4life`)
@@ -154,7 +154,7 @@ long-running services. See `docs/development-environment.md`.
 | `log_shares` | id (UUIDv7), log_id, user_id | Unique (log_id, user_id) |
 
 ### Testing
-- **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `backend/pgstore/` holds store conformance tests. Run them with `rake test:backend`, not bare `go test ./...` — the server and pgstore packages share `logger4life_test` and must not run concurrently (`-p 1`). `setupTestRouter()` creates a test server against `logger4life_test` DB and cleans up between tests.
+- **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `backend/pgstore/` holds store conformance tests. `rake test:prepare` migrates `logger4life_test`, installs `pgundolog`, and clones eight databases. PostgreSQL tests run in parallel and exclusively check out a clone through `github.com/jackc/testdb`; `pgundolog` resets the clone on reuse. Run through `rake test:backend` so the database pool is prepared first.
 - **Browser**: **Playwright** (Chromium only) in `tests/` — `auth.spec.js`, `home.spec.js`, `logs.spec.js`. Playwright auto-starts both Vite dev server and Go backend.
 
 ### Build Artifacts

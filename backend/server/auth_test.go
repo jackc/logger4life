@@ -13,34 +13,20 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestRouter(t *testing.T) *httptest.Server {
+func setupTestRouter(t *testing.T) *testServer {
 	return setupTestRouterWithConfig(t, true)
 }
 
-func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.Server {
+func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *testServer {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		pool.Exec(context.Background(), "DELETE FROM webauthn_challenges")
-		pool.Exec(context.Background(), "DELETE FROM passkeys")
-		pool.Exec(context.Background(), "DELETE FROM saved_sql_queries")
-		pool.Exec(context.Background(), "DELETE FROM user_log_placements")
-		pool.Exec(context.Background(), "DELETE FROM folders")
-		pool.Exec(context.Background(), "DELETE FROM log_shares")
-		pool.Exec(context.Background(), "DELETE FROM log_entries")
-		pool.Exec(context.Background(), "DELETE FROM logs")
-		pool.Exec(context.Background(), "DELETE FROM sessions")
-		pool.Exec(context.Background(), "DELETE FROM users")
-		pool.Close()
-	})
+	ctx := context.Background()
+	db := testDBManager.AcquireDB(t, ctx)
+	pool := db.PoolConnect(t, ctx)
 
 	wan, err := webauthn.New(&webauthn.Config{
 		RPDisplayName: "Logger4Life Test",
@@ -108,7 +94,7 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *httptest.S
 		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(app))
 	})
 
-	return httptest.NewServer(r)
+	return &testServer{Server: httptest.NewServer(r), db: db}
 }
 
 func postJSON(url string, body any, cookies []*http.Cookie) (*http.Response, map[string]any) {
@@ -183,6 +169,7 @@ func findSessionCookie(resp *http.Response) *http.Cookie {
 }
 
 func TestRegister_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -203,6 +190,7 @@ func TestRegister_Success(t *testing.T) {
 }
 
 func TestRegister_NoEmail(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -217,6 +205,7 @@ func TestRegister_NoEmail(t *testing.T) {
 }
 
 func TestRegister_DuplicateUsername(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -235,6 +224,7 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 }
 
 func TestRegister_MissingUsername(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -247,6 +237,7 @@ func TestRegister_MissingUsername(t *testing.T) {
 }
 
 func TestRegister_ShortPassword(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -260,6 +251,7 @@ func TestRegister_ShortPassword(t *testing.T) {
 }
 
 func TestLogin_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -282,6 +274,7 @@ func TestLogin_Success(t *testing.T) {
 }
 
 func TestLogin_CaseInsensitiveUsername(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -300,6 +293,7 @@ func TestLogin_CaseInsensitiveUsername(t *testing.T) {
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -318,6 +312,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 }
 
 func TestLogin_NonexistentUser(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -331,6 +326,7 @@ func TestLogin_NonexistentUser(t *testing.T) {
 }
 
 func TestMe_Authenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -351,6 +347,7 @@ func TestMe_Authenticated(t *testing.T) {
 }
 
 func TestMe_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -361,6 +358,7 @@ func TestMe_Unauthenticated(t *testing.T) {
 }
 
 func TestLogout(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -383,6 +381,7 @@ func TestLogout(t *testing.T) {
 }
 
 func TestRegister_Disabled(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouterWithConfig(t, false)
 	defer srv.Close()
 
@@ -396,6 +395,7 @@ func TestRegister_Disabled(t *testing.T) {
 }
 
 func TestSettings_RegistrationEnabled(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouterWithConfig(t, true)
 	defer srv.Close()
 
@@ -406,6 +406,7 @@ func TestSettings_RegistrationEnabled(t *testing.T) {
 }
 
 func TestSettings_RegistrationDisabled(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouterWithConfig(t, false)
 	defer srv.Close()
 
@@ -416,6 +417,7 @@ func TestSettings_RegistrationDisabled(t *testing.T) {
 }
 
 func TestChangeEmail_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -440,6 +442,7 @@ func TestChangeEmail_Success(t *testing.T) {
 }
 
 func TestChangeEmail_ClearEmail(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -464,6 +467,7 @@ func TestChangeEmail_ClearEmail(t *testing.T) {
 }
 
 func TestChangeEmail_DuplicateEmail(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -490,6 +494,7 @@ func TestChangeEmail_DuplicateEmail(t *testing.T) {
 }
 
 func TestChangeEmail_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -502,6 +507,7 @@ func TestChangeEmail_Unauthenticated(t *testing.T) {
 }
 
 func TestChangePassword_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -536,6 +542,7 @@ func TestChangePassword_Success(t *testing.T) {
 }
 
 func TestChangePassword_WrongCurrentPassword(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -556,6 +563,7 @@ func TestChangePassword_WrongCurrentPassword(t *testing.T) {
 }
 
 func TestChangePassword_ShortNewPassword(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -576,6 +584,7 @@ func TestChangePassword_ShortNewPassword(t *testing.T) {
 }
 
 func TestChangePassword_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 

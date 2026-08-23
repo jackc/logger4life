@@ -38,6 +38,7 @@ func registerUser(t *testing.T, srvURL, username string) []*http.Cookie {
 // --- Create Log ---
 
 func TestCreateLog_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -55,6 +56,7 @@ func TestCreateLog_Success(t *testing.T) {
 }
 
 func TestCreateLog_EmptyName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -69,6 +71,7 @@ func TestCreateLog_EmptyName(t *testing.T) {
 }
 
 func TestCreateLog_DuplicateName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -83,6 +86,7 @@ func TestCreateLog_DuplicateName(t *testing.T) {
 }
 
 func TestCreateLog_WithFields(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -114,6 +118,7 @@ func TestCreateLog_WithFields(t *testing.T) {
 }
 
 func TestCreateLog_NoFieldsReturnsEmptyArray(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -129,6 +134,7 @@ func TestCreateLog_NoFieldsReturnsEmptyArray(t *testing.T) {
 }
 
 func TestCreateLog_InvalidFieldType(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -146,6 +152,7 @@ func TestCreateLog_InvalidFieldType(t *testing.T) {
 }
 
 func TestCreateLog_WithBooleanField(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -168,6 +175,7 @@ func TestCreateLog_WithBooleanField(t *testing.T) {
 }
 
 func TestCreateLog_DuplicateFieldNames(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -186,6 +194,7 @@ func TestCreateLog_DuplicateFieldNames(t *testing.T) {
 }
 
 func TestCreateLog_EmptyFieldName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -203,6 +212,7 @@ func TestCreateLog_EmptyFieldName(t *testing.T) {
 }
 
 func TestCreateLog_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -214,6 +224,7 @@ func TestCreateLog_Unauthenticated(t *testing.T) {
 // --- List Logs ---
 
 func TestListLogs_Empty(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -226,6 +237,7 @@ func TestListLogs_Empty(t *testing.T) {
 }
 
 func TestListLogs_ReturnUserLogs(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -243,6 +255,7 @@ func TestListLogs_ReturnUserLogs(t *testing.T) {
 }
 
 func TestListLogs_DoesNotReturnOtherUsersLogs(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -260,6 +273,7 @@ func TestListLogs_DoesNotReturnOtherUsersLogs(t *testing.T) {
 // --- Get Log ---
 
 func TestGetLog_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -276,6 +290,7 @@ func TestGetLog_Success(t *testing.T) {
 }
 
 func TestGetLog_NotFound(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -288,6 +303,7 @@ func TestGetLog_NotFound(t *testing.T) {
 }
 
 func TestGetLog_OtherUsersLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -304,6 +320,7 @@ func TestGetLog_OtherUsersLog(t *testing.T) {
 }
 
 func TestGetLog_ReturnsFields(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -331,6 +348,7 @@ func TestGetLog_ReturnsFields(t *testing.T) {
 // --- Update Log ---
 
 func TestUpdateLog_RenameSucess(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -351,6 +369,7 @@ func TestUpdateLog_RenameSucess(t *testing.T) {
 }
 
 func TestUpdateLog_UpdateFields(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -386,6 +405,7 @@ func TestUpdateLog_UpdateFields(t *testing.T) {
 }
 
 func TestUpdateLog_SameNameAllowed(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -403,6 +423,7 @@ func TestUpdateLog_SameNameAllowed(t *testing.T) {
 }
 
 func TestUpdateLog_EmptyName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -420,6 +441,7 @@ func TestUpdateLog_EmptyName(t *testing.T) {
 }
 
 func TestUpdateLog_DuplicateName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -438,6 +460,7 @@ func TestUpdateLog_DuplicateName(t *testing.T) {
 }
 
 func TestUpdateLog_InvalidFieldType(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -458,6 +481,7 @@ func TestUpdateLog_InvalidFieldType(t *testing.T) {
 }
 
 func TestUpdateLog_DuplicateFieldNames(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -479,6 +503,7 @@ func TestUpdateLog_DuplicateFieldNames(t *testing.T) {
 }
 
 func TestUpdateLog_NotFound(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -493,6 +518,7 @@ func TestUpdateLog_NotFound(t *testing.T) {
 }
 
 func TestUpdateLog_OtherUsersLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -511,6 +537,7 @@ func TestUpdateLog_OtherUsersLog(t *testing.T) {
 }
 
 func TestUpdateLog_SharedUserCannotEdit(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -535,6 +562,7 @@ func TestUpdateLog_SharedUserCannotEdit(t *testing.T) {
 }
 
 func TestUpdateLog_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -546,6 +574,7 @@ func TestUpdateLog_Unauthenticated(t *testing.T) {
 }
 
 func TestUpdateLog_ExistingEntriesUntouched(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -596,6 +625,7 @@ func TestUpdateLog_ExistingEntriesUntouched(t *testing.T) {
 // --- Create Log Entry ---
 
 func TestCreateLogEntry_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -617,6 +647,7 @@ func TestCreateLogEntry_Success(t *testing.T) {
 }
 
 func TestCreateLogEntry_NonexistentLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -629,6 +660,7 @@ func TestCreateLogEntry_NonexistentLog(t *testing.T) {
 }
 
 func TestCreateLogEntry_OtherUsersLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -645,6 +677,7 @@ func TestCreateLogEntry_OtherUsersLog(t *testing.T) {
 }
 
 func TestCreateLogEntry_WithFields(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -678,6 +711,7 @@ func TestCreateLogEntry_WithFields(t *testing.T) {
 }
 
 func TestCreateLogEntry_WrongFieldType(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -702,6 +736,7 @@ func TestCreateLogEntry_WrongFieldType(t *testing.T) {
 }
 
 func TestCreateLogEntry_UnknownField(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -726,6 +761,7 @@ func TestCreateLogEntry_UnknownField(t *testing.T) {
 }
 
 func TestCreateLogEntry_MissingRequiredField(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -748,6 +784,7 @@ func TestCreateLogEntry_MissingRequiredField(t *testing.T) {
 }
 
 func TestCreateLogEntry_WithBooleanField(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -784,6 +821,7 @@ func TestCreateLogEntry_WithBooleanField(t *testing.T) {
 }
 
 func TestCreateLogEntry_InvalidBooleanValue(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -808,6 +846,7 @@ func TestCreateLogEntry_InvalidBooleanValue(t *testing.T) {
 }
 
 func TestCreateLogEntry_OptionalFieldOmitted(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -835,6 +874,7 @@ func TestCreateLogEntry_OptionalFieldOmitted(t *testing.T) {
 // --- List Log Entries ---
 
 func TestListLogEntries_Empty(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -850,6 +890,7 @@ func TestListLogEntries_Empty(t *testing.T) {
 }
 
 func TestListLogEntries_ReturnsEntries(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -870,6 +911,7 @@ func TestListLogEntries_ReturnsEntries(t *testing.T) {
 }
 
 func TestListLogEntries_OtherUsersLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -885,6 +927,7 @@ func TestListLogEntries_OtherUsersLog(t *testing.T) {
 }
 
 func TestListLogEntries_ReturnsFields(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -921,6 +964,7 @@ func TestListLogEntries_ReturnsFields(t *testing.T) {
 // --- Update Log Entry ---
 
 func TestUpdateLogEntry_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -953,6 +997,7 @@ func TestUpdateLogEntry_Success(t *testing.T) {
 }
 
 func TestUpdateLogEntry_WithFields(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -993,6 +1038,7 @@ func TestUpdateLogEntry_WithFields(t *testing.T) {
 }
 
 func TestUpdateLogEntry_NonexistentEntry(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1011,6 +1057,7 @@ func TestUpdateLogEntry_NonexistentEntry(t *testing.T) {
 }
 
 func TestUpdateLogEntry_NonexistentLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1026,6 +1073,7 @@ func TestUpdateLogEntry_NonexistentLog(t *testing.T) {
 }
 
 func TestUpdateLogEntry_OtherUsersLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1048,6 +1096,7 @@ func TestUpdateLogEntry_OtherUsersLog(t *testing.T) {
 }
 
 func TestUpdateLogEntry_InvalidFieldValues(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1078,6 +1127,7 @@ func TestUpdateLogEntry_InvalidFieldValues(t *testing.T) {
 }
 
 func TestUpdateLogEntry_MissingRequiredField(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1106,6 +1156,7 @@ func TestUpdateLogEntry_MissingRequiredField(t *testing.T) {
 }
 
 func TestUpdateLogEntry_MissingOccurredAt(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1126,6 +1177,7 @@ func TestUpdateLogEntry_MissingOccurredAt(t *testing.T) {
 }
 
 func TestUpdateLogEntry_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1140,6 +1192,7 @@ func TestUpdateLogEntry_Unauthenticated(t *testing.T) {
 // --- Delete Log Entry ---
 
 func TestDeleteLogEntry_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1162,6 +1215,7 @@ func TestDeleteLogEntry_Success(t *testing.T) {
 }
 
 func TestDeleteLogEntry_NonexistentEntry(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1177,6 +1231,7 @@ func TestDeleteLogEntry_NonexistentEntry(t *testing.T) {
 }
 
 func TestDeleteLogEntry_NonexistentLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1189,6 +1244,7 @@ func TestDeleteLogEntry_NonexistentLog(t *testing.T) {
 }
 
 func TestDeleteLogEntry_OtherUsersLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1208,6 +1264,7 @@ func TestDeleteLogEntry_OtherUsersLog(t *testing.T) {
 }
 
 func TestDeleteLogEntry_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1219,6 +1276,7 @@ func TestDeleteLogEntry_Unauthenticated(t *testing.T) {
 // --- Delete Log ---
 
 func TestDeleteLog_Success(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1238,6 +1296,7 @@ func TestDeleteLog_Success(t *testing.T) {
 }
 
 func TestDeleteLog_AlsoDeletesEntries(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1261,6 +1320,7 @@ func TestDeleteLog_AlsoDeletesEntries(t *testing.T) {
 }
 
 func TestDeleteLog_NotFound(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1273,6 +1333,7 @@ func TestDeleteLog_NotFound(t *testing.T) {
 }
 
 func TestDeleteLog_OtherUsersLog(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1294,6 +1355,7 @@ func TestDeleteLog_OtherUsersLog(t *testing.T) {
 }
 
 func TestDeleteLog_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1305,6 +1367,7 @@ func TestDeleteLog_Unauthenticated(t *testing.T) {
 // --- Entry Creator Tracking ---
 
 func TestCreateLogEntry_SharedUser_TracksCorrectUser(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1325,6 +1388,7 @@ func TestCreateLogEntry_SharedUser_TracksCorrectUser(t *testing.T) {
 }
 
 func TestListLogEntries_SharedLog_ShowsCorrectUsers(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1351,6 +1415,7 @@ func TestListLogEntries_SharedLog_ShowsCorrectUsers(t *testing.T) {
 }
 
 func TestUpdateLogEntry_PreservesOriginalCreator(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1381,6 +1446,7 @@ func TestUpdateLogEntry_PreservesOriginalCreator(t *testing.T) {
 // --- Placement ---
 
 func TestCreateLog_AssignsPlacement(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1396,6 +1462,7 @@ func TestCreateLog_AssignsPlacement(t *testing.T) {
 }
 
 func TestListLogs_OrderedByPlacement(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1415,6 +1482,7 @@ func TestListLogs_OrderedByPlacement(t *testing.T) {
 }
 
 func TestUpdateLogPlacement_MoveIntoFolder(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1438,6 +1506,7 @@ func TestUpdateLogPlacement_MoveIntoFolder(t *testing.T) {
 }
 
 func TestUpdateLogPlacement_ReorderWithinFolder(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1462,6 +1531,7 @@ func TestUpdateLogPlacement_ReorderWithinFolder(t *testing.T) {
 }
 
 func TestUpdateLogPlacement_PerUserNotShared(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1496,6 +1566,7 @@ func TestUpdateLogPlacement_PerUserNotShared(t *testing.T) {
 }
 
 func TestUpdateLogPlacement_FolderBelongsToOtherUser(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1517,6 +1588,7 @@ func TestUpdateLogPlacement_FolderBelongsToOtherUser(t *testing.T) {
 }
 
 func TestUpdateLogPlacement_NoAccess(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1534,6 +1606,7 @@ func TestUpdateLogPlacement_NoAccess(t *testing.T) {
 }
 
 func TestJoinLog_CreatesPlacementForJoiner(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1558,6 +1631,7 @@ func TestJoinLog_CreatesPlacementForJoiner(t *testing.T) {
 // --- Pin to home + home position ---
 
 func TestCreateLog_DefaultsPinnedWithHomePosition(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1573,6 +1647,7 @@ func TestCreateLog_DefaultsPinnedWithHomePosition(t *testing.T) {
 }
 
 func TestPinLog_UnpinAndRepin(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1607,6 +1682,7 @@ func TestPinLog_UnpinAndRepin(t *testing.T) {
 }
 
 func TestPinLog_IdempotentNoChange(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1623,6 +1699,7 @@ func TestPinLog_IdempotentNoChange(t *testing.T) {
 }
 
 func TestPinLog_PerUserNotShared(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1648,6 +1725,7 @@ func TestPinLog_PerUserNotShared(t *testing.T) {
 }
 
 func TestUpdateLogHomePosition_Reorder(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1670,6 +1748,7 @@ func TestUpdateLogHomePosition_Reorder(t *testing.T) {
 }
 
 func TestUpdateLogHomePosition_RejectsUnpinned(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1690,6 +1769,7 @@ func TestUpdateLogHomePosition_RejectsUnpinned(t *testing.T) {
 }
 
 func TestUpdateLogHomePosition_NoAccess(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1706,6 +1786,7 @@ func TestUpdateLogHomePosition_NoAccess(t *testing.T) {
 // (there's no FK between log_shares and user_log_placements). A subsequent
 // re-join must not 23505 on the placement PK.
 func TestJoinLog_RejoinAfterShareRemoval(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1749,6 +1830,7 @@ func TestJoinLog_RejoinAfterShareRemoval(t *testing.T) {
 // PostgreSQL, which rejected the cast and turned a bad request into a 500 with
 // a database error in the log.
 func TestMalformedIDsAreRejectedNotFatal(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -1794,6 +1876,7 @@ func TestMalformedIDsAreRejectedNotFatal(t *testing.T) {
 // restore the folder the log was filed under. The log stayed readable and
 // writable by ID.
 func TestRemoveShare_RevokesAccessNotJustTheListing(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 

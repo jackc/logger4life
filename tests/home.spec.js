@@ -104,8 +104,10 @@ test('unpinned logs disappear from home; empty-state shows', async ({ page }) =>
 	await expect(page.getByRole('link', { name: 'Water' })).toBeVisible();
 
 	// Unpin it from the /logs page (star toggle).
-	await page.locator('[data-testid="log-row"]').filter({ hasText: 'Water' })
-		.locator('[data-testid="pin-toggle"]').click();
+	const pinToggle = page.locator('[data-testid="log-row"]').filter({ hasText: 'Water' })
+		.locator('[data-testid="pin-toggle"]');
+	await pinToggle.click();
+	await expect(pinToggle).toHaveAttribute('aria-label', 'Pin to home');
 
 	await page.goto('/');
 	await expect(page.getByText('No logs pinned to your home page')).toBeVisible();

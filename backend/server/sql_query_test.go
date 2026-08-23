@@ -12,7 +12,6 @@ import (
 
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/pgstore"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,6 +65,7 @@ func shareLogToUserViaAPI(t *testing.T, srvURL, logID, otherUsername string, own
 // ---------------------------------------------------------------------------
 
 func TestSQLExecute_SelectFromLogs(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -87,6 +87,7 @@ func TestSQLExecute_SelectFromLogs(t *testing.T) {
 }
 
 func TestSQLExecute_DataIsolation(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -107,6 +108,7 @@ func TestSQLExecute_DataIsolation(t *testing.T) {
 }
 
 func TestSQLExecute_LogEntriesFiltered(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -124,6 +126,7 @@ func TestSQLExecute_LogEntriesFiltered(t *testing.T) {
 }
 
 func TestSQLExecute_SharedWith_OwnerSeesUsernames(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -147,6 +150,7 @@ func TestSQLExecute_SharedWith_OwnerSeesUsernames(t *testing.T) {
 }
 
 func TestSQLExecute_RejectsDDL(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -163,6 +167,7 @@ func TestSQLExecute_RejectsDDL(t *testing.T) {
 }
 
 func TestSQLExecute_RejectsWrites(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -178,6 +183,7 @@ func TestSQLExecute_RejectsWrites(t *testing.T) {
 }
 
 func TestSQLExecute_RejectsPublicSchema(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -188,6 +194,7 @@ func TestSQLExecute_RejectsPublicSchema(t *testing.T) {
 }
 
 func TestSQLExecute_RejectsSchemaQualifiedReferences(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -199,6 +206,7 @@ func TestSQLExecute_RejectsSchemaQualifiedReferences(t *testing.T) {
 }
 
 func TestSQLExecute_RejectsDangerousFunctions(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -214,6 +222,7 @@ func TestSQLExecute_RejectsDangerousFunctions(t *testing.T) {
 }
 
 func TestSQLExecute_RejectsMultiStatement(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -223,6 +232,7 @@ func TestSQLExecute_RejectsMultiStatement(t *testing.T) {
 }
 
 func TestSQLExecute_RejectsEmptyQuery(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -233,6 +243,7 @@ func TestSQLExecute_RejectsEmptyQuery(t *testing.T) {
 }
 
 func TestSQLExecute_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -241,6 +252,7 @@ func TestSQLExecute_Unauthenticated(t *testing.T) {
 }
 
 func TestSQLExecute_TruncatesAt1000Rows(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -254,6 +266,7 @@ func TestSQLExecute_TruncatesAt1000Rows(t *testing.T) {
 }
 
 func TestSQLExecute_TruncatesAtResultByteLimit(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -271,6 +284,7 @@ func TestSQLExecute_TruncatesAtResultByteLimit(t *testing.T) {
 }
 
 func TestSQLExecute_RedactsPostgresErrorDetails(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -283,6 +297,7 @@ func TestSQLExecute_RedactsPostgresErrorDetails(t *testing.T) {
 }
 
 func TestSQLExecute_CollapsesParserDetails(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -293,6 +308,7 @@ func TestSQLExecute_CollapsesParserDetails(t *testing.T) {
 }
 
 func TestSQLExecute_StatementTimeout(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -311,6 +327,7 @@ func (e failingUserSQLExecutor) ExecuteUserSQL(context.Context, string, string) 
 }
 
 func TestSQLExecute_DoesNotExposeInternalPortErrors(t *testing.T) {
+	t.Parallel()
 	secret := "database host is secret.internal"
 	app := core.New(core.Config{UserSQL: failingUserSQLExecutor{err: errors.New(secret)}})
 	handler := handleExecuteSQL(app)
@@ -330,6 +347,7 @@ func TestSQLExecute_DoesNotExposeInternalPortErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSQLSchema_ReturnsViewsWithComments(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -371,6 +389,7 @@ func TestSQLSchema_ReturnsViewsWithComments(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSavedQueries_CRUD(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -412,6 +431,7 @@ func TestSavedQueries_CRUD(t *testing.T) {
 }
 
 func TestSavedQueries_DuplicateName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -428,6 +448,7 @@ func TestSavedQueries_DuplicateName(t *testing.T) {
 }
 
 func TestSavedQueries_Isolation(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 
@@ -461,6 +482,7 @@ func TestSavedQueries_Isolation(t *testing.T) {
 }
 
 func TestSavedQueries_ValidationErrors(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -483,6 +505,7 @@ func TestSavedQueries_ValidationErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetSavedQueryByName(t *testing.T) {
+	t.Parallel()
 	srv := setupTestRouter(t)
 	defer srv.Close()
 	cookies := registerUser(t, srv.URL, "alice")
@@ -497,9 +520,7 @@ func TestGetSavedQueryByName(t *testing.T) {
 	}, cookies)
 	wantID := createBody["id"].(string)
 
-	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
-	require.NoError(t, err)
-	defer pool.Close()
+	pool := srv.pgPool(t)
 	app := core.New(core.Config{SavedQueries: pgstore.New(pool)})
 
 	q, err := core.GetSavedQuery.Call(core.WithUserID(context.Background(), userID), app,

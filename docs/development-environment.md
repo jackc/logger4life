@@ -105,9 +105,10 @@ Each worktree has a complete PostgreSQL cluster under
 directory built by the dev container cannot be read by a native macOS
 PostgreSQL, and one worktree may be opened both ways).
 
-It holds `logger4life_dev` and `logger4life_test`, listens only on loopback,
-and uses trust authentication — safe for a cluster whose port nothing else
-knows, and one less secret in the environment.
+It holds `logger4life_dev`, the browser-test database `logger4life_test`, and
+eight `logger4life_test_N` copies used by parallel Go tests. It listens only
+on loopback and uses trust authentication — safe for a cluster whose port
+nothing else knows, and one less secret in the environment.
 
 | Command | Description |
 |---------|-------------|
@@ -130,6 +131,12 @@ mise run test:browser   # Playwright
 
 The browser suite starts its own backend and Vite on the worktree's reserved
 test ports, against the worktree's own `logger4life_test`.
+
+Go tests that reach PostgreSQL run concurrently. `rake test:prepare` migrates
+the primary test database once, installs `pgundolog`, and clones it eight
+times. Each test exclusively checks out a clone through
+`github.com/jackc/testdb`; checkout is coordinated in PostgreSQL across test
+package processes, and `pgundolog` restores the clone before it is reused.
 
 ## The dev container
 

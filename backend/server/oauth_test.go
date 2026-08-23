@@ -27,20 +27,9 @@ import (
 func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider, *pgxpool.Pool) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), testDatabaseURL())
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		ctx := context.Background()
-		pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens")
-		pool.Exec(ctx, "DELETE FROM oauth_access_tokens")
-		pool.Exec(ctx, "DELETE FROM oauth_authorization_codes")
-		pool.Exec(ctx, "DELETE FROM oauth_clients")
-		pool.Exec(ctx, "DELETE FROM sessions")
-		pool.Exec(ctx, "DELETE FROM logs")
-		pool.Exec(ctx, "DELETE FROM users")
-		pool.Close()
-	})
+	ctx := context.Background()
+	db := testDBManager.AcquireDB(t, ctx)
+	pool := db.PoolConnect(t, ctx)
 
 	srv := httptest.NewUnstartedServer(nil)
 	srv.Start() // starts on a real port; URL is now known
@@ -83,6 +72,7 @@ func pkceParams(t *testing.T) (verifier, challenge string) {
 }
 
 func TestProtectedResourceMetadata(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 
 	resp, err := http.Get(srv.URL + "/.well-known/oauth-protected-resource")
@@ -99,6 +89,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 }
 
 func TestAuthorizationServerMetadata(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 
 	resp, err := http.Get(srv.URL + "/.well-known/oauth-authorization-server")
@@ -116,6 +107,7 @@ func TestAuthorizationServerMetadata(t *testing.T) {
 }
 
 func TestDynamicClientRegistration(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 
 	body := strings.NewReader(`{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"client_name":"Claude"}`)
@@ -132,6 +124,7 @@ func TestDynamicClientRegistration(t *testing.T) {
 }
 
 func TestDynamicClientRegistrationRejectsBadRedirect(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 
 	body := strings.NewReader(`{"redirect_uris":["http://evil.example.com/cb"]}`)
@@ -146,6 +139,7 @@ func TestDynamicClientRegistrationRejectsBadRedirect(t *testing.T) {
 }
 
 func TestMCPRequiresBearerToken(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 
 	resp, err := http.Post(srv.URL+"/mcp", "application/json", strings.NewReader(`{}`))
@@ -158,6 +152,7 @@ func TestMCPRequiresBearerToken(t *testing.T) {
 }
 
 func TestMCPRejectsInvalidToken(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(`{}`))
@@ -173,6 +168,7 @@ func TestMCPRejectsInvalidToken(t *testing.T) {
 }
 
 func TestVerifyPKCE(t *testing.T) {
+	t.Parallel()
 	verifier, challenge := pkceParams(t)
 	assert.True(t, domain.VerifyPKCE(challenge, "S256", verifier))
 	assert.False(t, domain.VerifyPKCE(challenge, "S256", "wrong-verifier-but-still-long-enough-43-chars-yes"))
@@ -181,6 +177,7 @@ func TestVerifyPKCE(t *testing.T) {
 }
 
 func TestSameCanonicalURL(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		a, b string
 		want bool
@@ -202,6 +199,7 @@ func TestSameCanonicalURL(t *testing.T) {
 // pipeline including PKCE verification, code consumption, audience
 // binding, code-replay rejection, and refresh-token rotation.
 func TestOAuthEndToEnd(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 
 	jar, err := cookiejar.New(nil)
@@ -311,6 +309,7 @@ func TestOAuthEndToEnd(t *testing.T) {
 // entire token family is revoked — both the newly-issued refresh token
 // and its associated access token become unusable.
 func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar}
@@ -412,6 +411,7 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 // TestAuthorizeRejectsAudienceMismatch verifies RFC 8707 enforcement: a
 // resource parameter that doesn't match our canonical URL is rejected.
 func TestAuthorizeRejectsAudienceMismatch(t *testing.T) {
+	t.Parallel()
 	srv, _, _ := setupOAuthTestServer(t)
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar}

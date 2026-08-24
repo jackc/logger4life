@@ -54,14 +54,14 @@ Share your logs with other users so they can view and add entries:
 * **Database** - PostgreSQL with pgx and connection pooling, or an embedded
   [jed](https://github.com/jackc/jed) database file
 * **Testing** - Go tests with testify (backend), Playwright (browser)
-* **Build** - Vite (frontend), Rake tasks (build orchestration), mise (tools, environment, tasks), process-compose (development services)
+* **Build** - Vite (frontend), mise (tools, environment, and task orchestration), process-compose (development services)
 
 ## Development
 
 ### Prerequisites
 
 * [mise](https://mise.jdx.dev), which installs everything else the project
-  needs: Go, Node.js, Ruby, tern, and process-compose
+  needs: Go, Node.js, Port Tamer, tern, and process-compose
 * PostgreSQL 18 binaries — `brew install postgresql@18` on macOS,
   `apt-get install postgresql-18` on Debian/Ubuntu. No server or cluster needs
   to be set up: each checkout runs its own.
@@ -96,12 +96,11 @@ the environment is put together.
 | `mise run db:psql` | psql against the development database |
 | `mise run db:reset` | Drop and rebuild the databases |
 | `mise run build` | Build everything (frontend assets + Go binary) |
+| `mise run build:assets` | Build frontend assets |
+| `mise run build:binary` | Build the native Go binary |
 | `mise run test` | Run all tests |
 | `mise run test:backend` | Run Go backend tests |
 | `mise run test:browser` | Run Playwright browser tests |
-
-The `rake` tasks behind the build and test commands are still there and still
-work; mise is the front door.
 
 ## Database backends
 
@@ -133,13 +132,14 @@ storage, backup details, and the development-only `both` comparison adapter.
 
 Logger4Life can easily be deployed with [verna](https://github.com/jackc/verna).
 
-There are rake tasks that build artifacts suitable for deployment with verna and `deploy/caddy-handle-template.json`
-contains a preconfigured Caddy handle template.
+The mise release tasks build artifacts suitable for deployment with verna,
+and `deploy/caddy-handle-template.json` contains a preconfigured Caddy handle
+template.
 
 If these are used, then deployment is one-line command.
 
 ```
-rake build/linux_amd64.tar.gz && verna app deploy build/linux_amd64.tar.gz
+mise run build:linux-amd64 && verna app deploy build/linux_amd64.tar.gz
 ```
 
 Set your verna config in `.mise.local.toml`. For example:

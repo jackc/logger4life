@@ -1,7 +1,7 @@
 // Package testutil provides shared test-database plumbing: a testdb.Manager
 // connected to the primary test database hands out exclusive copies that are
 // reset with pgundolog between tests. The databases are prepared by
-// `rake test:prepare`.
+// `mise run test:prepare`.
 package testutil
 
 import (
@@ -21,7 +21,7 @@ import (
 func InitTestDBManager(*testing.M) *testdb.Manager {
 	testDatabase := os.Getenv("TEST_DATABASE")
 	if testDatabase == "" {
-		fmt.Println("TEST_DATABASE is not set: run tests in the project environment after `rake test:prepare`")
+		fmt.Println("TEST_DATABASE is not set: run tests with `mise run test:backend`")
 		os.Exit(1)
 	}
 

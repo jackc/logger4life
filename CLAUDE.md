@@ -19,18 +19,19 @@ long-running services. See `docs/development-environment.md`.
 - `mise run dev:urls` — Print this checkout's ports and URLs
 - `mise run dev:down` — Stop the stack (or `process-compose down`)
 - `process-compose process list` / `process-compose process logs backend` / `process-compose process restart backend` — Inspect and control services without the TUI; no flags needed, `PC_PORT_NUM` is in the environment
-- Ports are never fixed. Read them from the environment (`BACKEND_URL`, `VITE_URL`, `PGPORT`) or `.dev/ports.env`; never assume 4000/5173/5432.
+- Ports are never fixed. Read them from the environment (`BACKEND_URL`, `VITE_URL`, `PGPORT`) or `.port-tamer.env`; never assume 4000/5173/5432.
 
 ### Building
-- `mise run build` (or `rake build`) — Build everything (frontend assets, Go binary, Linux binary)
-- `rake build:assets` — Build frontend only (runs `npm run build` + zopfli compression)
-- `rake build:binary` — Build Go binary only (`build/logger4life`)
+- `mise run build` — Build frontend assets and the native Go binary
+- `mise run build:assets` — Build frontend assets only
+- `mise run build:binary` — Build the native Go binary (`build/logger4life`)
+- `mise run build:linux-amd64` / `build:linux-arm64` / `build:darwin-amd64` / `build:darwin-arm64` — Build a release directory and tarball
 
 ### Testing
-- `mise run test` (or `rake test`) — Run all tests; starts the cluster and prepares test databases
+- `mise run test` — Run all tests; starts the cluster and prepares test databases
 - `mise run test:backend` — Run Go backend tests; auto-prepares test databases
 - `mise run test:browser` — Run Playwright browser tests (or `npm test`)
-- `rake test:prepare` — Prepare test databases only
+- `mise run test:prepare` — Prepare test databases only
 - `npm run test:report` — Show Playwright HTML report
 
 ### Database
@@ -162,17 +163,18 @@ migrations in `db/migrations/jed/` expose the same logical tables:
 | `oauth_*` | hashed codes/tokens, client_id, user_id, family_id | OAuth clients, grants, rotation, and revocation |
 
 ### Testing
-- **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `backend/pgstore/`, `backend/jedstore/`, and `backend/dualstore/` run the same store conformance suite. `rake test:prepare` migrates `logger4life_test`, installs `pgundolog`, and clones eight databases. PostgreSQL tests run in parallel and exclusively check out a clone through `github.com/jackc/testdb`; `pgundolog` resets the clone on reuse. `rake test:backend` runs the server suite against `postgresql`, `jed`, and the fail-stop `both` adapter.
+- **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `backend/pgstore/`, `backend/jedstore/`, and `backend/dualstore/` run the same store conformance suite. `mise run test:prepare` migrates `logger4life_test`, installs `pgundolog`, and clones eight databases. PostgreSQL tests run in parallel and exclusively check out a clone through `github.com/jackc/testdb`; `pgundolog` resets the clone on reuse. `mise run test:backend` runs the server suite against `postgresql`, `jed`, and the fail-stop `both` adapter.
 - **Browser**: **Playwright** (Chromium only) in `tests/` — `auth.spec.js`, `home.spec.js`, `logs.spec.js`. Playwright auto-starts both Vite dev server and Go backend.
 
 ### Build Artifacts
-- Frontend assets → `build/assets/` (with `.gz` compressed copies via zopfli)
-- Go binary → `build/logger4life` (native) and `build/logger4life-linux` (cross-compiled)
+- Frontend assets → `build/assets/` (with compressed copies from the Vite compression plugin)
+- Native Go binary → `build/logger4life`
+- Release directories and archives → `build/<os>_<arch>/` and `build/<os>_<arch>.tar.gz`
 
 ### Tooling
 - **mise** (`.mise.toml`) manages tool versions, the worktree environment, and the task interface
+- **Port Tamer** (`port-tamer.toml`) allocates the named port group persisted in `.port-tamer.env`
 - **process-compose** (`process-compose.yaml`) supervises the development services
-- **scripts/** holds the shell out of the task definitions: `devports` (port allocation), `dev-env.sh` (environment assembly), `dev-init`, `dev-up`, `db-init`, `db-reset`, `db-ensure-running`, `pgbin`
-- **Bundler** (`Gemfile`) for Ruby/Rake dependencies
+- **scripts/** holds the shell out of the task definitions: `dev-env.sh` (environment assembly), `dev-urls` (project URL display), `dev-exec` (fresh environment command wrapper), `build-release`, `dev-init`, `dev-up`, `db-init`, `db-reset`, `db-ensure-running`, `pgbin`
 - Dev container setup in `.devcontainer/` (Ubuntu 24.04 + PostgreSQL 18 binaries + mise); it is a thin Linux shell that runs the same `mise run dev:init` / `mise run dev` as native macOS
 - **fd** and **rg** (ripgrep) are available in the dev container — use them instead of `find` and `grep`

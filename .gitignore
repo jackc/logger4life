@@ -1,4 +1,6 @@
 /.dev
+/.port-tamer.env
+/.port-tamer.env.lock
 /.sass-cache
 /build
 /config.test.yml

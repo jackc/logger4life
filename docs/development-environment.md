@@ -9,13 +9,13 @@ same commands work natively on macOS and inside the dev container.
 git worktree      = instance
 mise              = tool versions, environment, one-shot tasks
 process-compose    = the long-running services
-.dev/             = instance-local state (git-ignored)
+.dev/ + .port-tamer.env = instance-local state (git-ignored)
 ```
 
 ## Getting started
 
 ```sh
-mise install        # tools: Go, Node, Ruby, tern, process-compose, ...
+mise install        # tools: Go, Node, Port Tamer, tern, process-compose, ...
 mise run dev:init   # ports, dependencies, PostgreSQL cluster, migrations
 mise run dev        # PostgreSQL + backend + Vite
 ```
@@ -35,8 +35,9 @@ each worktree runs `initdb` into its own `.dev/` directory.
 
 ## Ports
 
-Nothing in this project has a fixed port. When a worktree is initialized it
-draws a random block of 20 ports and persists it in `.dev/ports.env`:
+Nothing in this project has a fixed port. When a task first needs ports,
+[Port Tamer](https://github.com/jackc/port-tamer) chooses an available,
+consecutive group and persists it in `.port-tamer.env`:
 
 ```
 PORT_BASE=23840
@@ -50,19 +51,23 @@ TEST_VITE_PORT=23847      base + 7
 PLAYWRIGHT_REPORT_PORT=23848  base + 8
 ```
 
-`mise` loads that file, so every task, test run, and shell in the worktree
-agrees on the ports, and `process-compose` finds its own instance without
-flags. To see them:
+The names and their order live in [`port-tamer.toml`](../port-tamer.toml).
+Port Tamer owns only those assignments; mise and `scripts/dev-env.sh` derive
+this project's URLs and database connection strings from them.
+
+`mise` loads the saved assignments, so every task, test run, and shell in the
+worktree agrees on the ports, and `process-compose` finds its own instance
+without flags. To see the project URLs:
 
 ```sh
 mise run dev:urls
 ```
 
-Two dormant worktrees may draw the same block; that is harmless. Before
-starting anything, `mise run dev` re-checks the block and draws a new one if
-another process now holds a port — the operating system is the registry of
-the allocations that currently matter. `mise run dev:ports:reset` forces a new
-block.
+`port-tamer allocate` checks the complete group when it creates an allocation.
+Later calls preserve that group even when its ports are listening, because the
+listeners may be this worktree's own services. `port-tamer status` reports the
+saved assignments and their current availability. After stopping the stack,
+`mise run dev:ports:reset` deliberately chooses a different group.
 
 Services bind to `127.0.0.1`. The URLs are spelled `localhost` because
 WebAuthn will not accept an IP address as a relying party ID and this app has
@@ -118,8 +123,8 @@ nothing else knows, and one less secret in the environment.
 | `mise run db:init` | create the cluster if absent, then migrate |
 
 The database tasks and the test suites start the cluster if it is not already
-running, so `rake test` works whether or not `mise run dev` is up. To throw the
-cluster away entirely, delete `.dev/<platform>/postgres`.
+running, so `mise run test` works whether or not `mise run dev` is up. To throw
+the cluster away entirely, delete `.dev/<platform>/postgres`.
 
 ## Tests
 
@@ -132,12 +137,12 @@ mise run test:browser   # Playwright
 The browser suite starts its own backend and Vite on the worktree's reserved
 test ports, against the worktree's own `logger4life_test`.
 
-Go tests that reach PostgreSQL run concurrently. `rake test:prepare` migrates
+Go tests that reach PostgreSQL run concurrently. `mise run test:prepare` migrates
 the primary test database once, installs `pgundolog`, and clones it eight
 times. Each test exclusively checks out a clone through
 `github.com/jackc/testdb`; checkout is coordinated in PostgreSQL across test
 package processes, and `pgundolog` restores the clone before it is reused.
-`rake test:backend` then reruns the server suite with the jed and `both`
+`mise run test:backend` then reruns the server suite with the jed and `both`
 adapters; `both` executes each persistence call against PostgreSQL and jed and
 fails immediately if their observable behavior differs.
 
@@ -154,9 +159,9 @@ differences, or stronger isolation. Use native macOS for the fast inner loop.
 ## What lives where
 
 ```
-repository (shared through git)     worktree-local (.dev/, git-ignored)
-  mise.toml, tasks                    ports.env
-  process-compose.yaml                PostgreSQL cluster
-  scripts/                            process-compose logs
-  source                              build output
+repository (shared through git)     worktree-local (git-ignored)
+  mise.toml, tasks                    .port-tamer.env
+  port-tamer.toml                     .dev/ PostgreSQL cluster
+  process-compose.yaml                .dev/ process-compose logs
+  scripts/ and source                 build output
 ```

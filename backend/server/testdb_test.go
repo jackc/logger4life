@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// testBackend selects the adapter exercised by the server suite. The Rake
+// testBackend selects the adapter exercised by the server suite. The mise
 // task runs the package once with each supported value.
 func testBackend() string {
 	if backend := os.Getenv("LOGGER4LIFE_TEST_BACKEND"); backend != "" {

@@ -4,13 +4,25 @@
 # the caller has already changed to the worktree root and set -e.
 #
 # This is the one place where a worktree's environment is assembled: the
-# persisted port block, the paths of this worktree's PostgreSQL cluster, and
-# the PostgreSQL binaries to run it with.
+# ports persisted by port-tamer, the project-specific values derived from
+# them, the paths of this worktree's PostgreSQL cluster, and the PostgreSQL
+# binaries to run it with.
 
 set -a
 
-scripts/devports init >/dev/null
-. .dev/ports.env
+port-tamer allocate
+. .port-tamer.env
+
+# port-tamer deliberately owns only named port assignments. URLs, database
+# names, and other application settings belong to this project.
+BIND_ADDRESS="127.0.0.1"
+BACKEND_URL="http://localhost:$BACKEND_PORT"
+VITE_URL="http://localhost:$VITE_PORT"
+TEST_BACKEND_URL="http://localhost:$TEST_BACKEND_PORT"
+TEST_VITE_URL="http://localhost:$TEST_VITE_PORT"
+PGHOST="127.0.0.1"
+DATABASE_URL="postgres://postgres@$PGHOST:$PGPORT/logger4life_dev"
+TEST_DATABASE_URL="postgres://postgres@$PGHOST:$PGPORT/logger4life_test"
 
 # A PostgreSQL data directory cannot be shared between platforms, and one
 # worktree may be opened natively and in the dev container, so each gets its

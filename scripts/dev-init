@@ -9,13 +9,12 @@ cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 . scripts/dev-env.sh
 
 echo "==> installing dependencies"
-bundle install --quiet
 npm install --silent
 npx playwright install chromium
 
 scripts/db-init
 
 echo
-scripts/devports show
+scripts/dev-urls
 echo
 echo "Run 'mise run dev' to start the stack."

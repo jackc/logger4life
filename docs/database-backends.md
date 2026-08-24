@@ -63,7 +63,7 @@ jed keep independent databases, and this project does not currently include a
 cross-backend import/export command.
 
 PostgreSQL, jed, and the dual adapter run the shared
-`backend/core/storetest` conformance suite. `rake test:backend` also runs the
+`backend/core/storetest` conformance suite. `mise run test:backend` also runs the
 HTTP server suite against each of `postgresql`, `jed`, and `both`, so a change
 that behaves differently between engines fails the normal backend test task.
 The conformance suite covers authentication, logs and entries, folders and

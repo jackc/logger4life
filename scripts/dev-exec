@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Run a command with this worktree's complete, freshly loaded environment.
+#
+# mise normally loads .port-tamer.env before starting a task. On a checkout's
+# first database or test task, however, db-ensure-running creates that file
+# after mise has already started. Sourcing dev-env.sh here makes the generated
+# ports visible to the command without recursively invoking mise.
+
+set -euo pipefail
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+. scripts/dev-env.sh
+
+exec "$@"

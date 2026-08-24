@@ -2,18 +2,16 @@
 #
 # Start this worktree's development stack under process-compose.
 #
-# Ports are re-checked and re-allocated here, before anything is started and
-# before the environment is read, so that services never inherit a stale
-# allocation.
+# The worktree's stable port group is allocated lazily before the environment
+# is read. Existing assignments do not move merely because a service is
+# listening on them; that service may be this worktree's own process.
 
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
-scripts/devports ensure
 . scripts/dev-env.sh
 
-
-scripts/devports show
+scripts/dev-urls
 echo
 
 exec process-compose up --ordered-shutdown "$@"

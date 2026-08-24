@@ -38,9 +38,6 @@ processes:
 
   backend:
     command: >
-      watchexec --project-origin . --restart
-      --filter main.go --filter "backend/**" --filter go.mod --filter go.sum
-      --
       go run . server
       --bind-address "$BIND_ADDRESS"
       --port "$BACKEND_PORT"
@@ -48,6 +45,12 @@ processes:
       --webauthn-rp-id localhost
       --webauthn-origin "$VITE_URL"
       --log-format text
+    watch:
+      paths:
+        - path: main.go
+        - path: backend
+        - path: go.mod
+        - path: go.sum
     depends_on:
       migrate:
         condition: process_completed_successfully

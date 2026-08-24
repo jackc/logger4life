@@ -84,8 +84,8 @@ postgres  ->  migrate  ->  backend  ->  vite
 
 Each arrow is a real dependency: `migrate` waits until `pg_isready` succeeds,
 `backend` waits until the migrations exit successfully, `vite` waits until the
-backend answers `/health`. The backend runs under `watchexec`, so editing Go
-code restarts it.
+backend answers `/health`. Process Compose watches the backend's Go source and
+module files, so editing them rebuilds and restarts the backend.
 
 The TUI is the default view. Everything is also scriptable:
 

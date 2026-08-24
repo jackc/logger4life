@@ -41,7 +41,6 @@ go = '1.26.4'
 nodejs = '24.13.0'
 process-compose = "1.122.0"
 rg = "latest"
-watchexec = "latest"
 
 "github:jackc/port-tamer" = "0.1.0"
 "github:jackc/tern" = "2.4.3"

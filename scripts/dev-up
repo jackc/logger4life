@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start this worktree's development stack under process-compose.
+# Start or join this worktree's development service profile.
 #
 # The worktree's stable port group is allocated lazily before the environment
 # is read. Existing assignments do not move merely because a service is
@@ -9,9 +9,7 @@
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
-. scripts/dev-env.sh
-
 scripts/dev-urls
 echo
 
-exec process-compose up --ordered-shutdown "$@"
+exec scripts/services dev "$@"

@@ -36,7 +36,10 @@ TEST_DATABASE="${TEST_DATABASE:-logger4life_test}"
 TEST_DATABASE_COUNT="${TEST_DATABASE_COUNT:-8}"
 TERN_CONFIG="${TERN_CONFIG:-postgresql/tern.conf}"
 TERN_MIGRATIONS="${TERN_MIGRATIONS:-postgresql/migrations}"
-PC_LOG_FILE="${PC_LOG_FILE:-$PWD/.dev/process-compose.log}"
+PC_ADDRESS="${PC_ADDRESS:-127.0.0.1}"
+PC_SERVER_LOG_FILE="${PC_SERVER_LOG_FILE:-$PWD/.dev/process-compose.log}"
+PC_CLIENT_LOG_FILE="${PC_CLIENT_LOG_FILE:-$PWD/.dev/process-compose-client.log}"
+PC_POSTGRES_PID_FILE="${PC_POSTGRES_PID_FILE:-$PWD/.dev/$DEV_PLATFORM/postgres/process-compose.pid}"
 
 # Resolved here rather than at the point of use so that a machine without the
 # PostgreSQL server binaries says so immediately, with installation
@@ -52,30 +55,3 @@ mkdir -p "$PGSOCKETDIR" .dev/logs
 if [ ! -f postgresql/tern.conf ]; then
 	cp postgresql/tern.example.conf postgresql/tern.conf
 fi
-
-# The db tasks must work whether or not `mise run dev` is up, so they start the
-# cluster themselves when it is down. pg_start_temporarily registers the stop
-# as an exit trap only when it started the cluster: a stack that was already
-# running keeps running.
-
-pg_running() {
-	"$PGBIN/pg_ctl" --pgdata="$PGDATA" status >/dev/null 2>&1
-}
-
-pg_start() {
-	echo "==> starting PostgreSQL on port $PGPORT" >&2
-	"$PGBIN/pg_ctl" --pgdata="$PGDATA" --wait --silent \
-		--options="-p $PGPORT -k $PGSOCKETDIR -h $PGHOST" start
-}
-
-pg_stop() {
-	"$PGBIN/pg_ctl" --pgdata="$PGDATA" --wait --silent --mode=fast stop
-}
-
-pg_start_temporarily() {
-	if pg_running; then
-		return
-	fi
-	pg_start
-	trap pg_stop EXIT
-}

@@ -1,40 +1,9 @@
 #!/usr/bin/env bash
 #
-# Create this worktree's PostgreSQL cluster, its databases, and its schema.
-# Idempotent, and safe to run while the development stack is up.
+# Ensure this worktree's PostgreSQL cluster, databases, and schema exist.
+# PostgreSQL itself is always launched by process-compose.
 
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-. scripts/dev-env.sh
 
-if [ ! -f "$PGDATA/PG_VERSION" ]; then
-	echo "==> initdb $PGDATA"
-	mkdir -p "$(dirname "$PGDATA")"
-	# The builtin locale provider behaves identically on macOS and Linux, and
-	# trust authentication is safe for a cluster that only ever listens on
-	# loopback with a port nothing else knows.
-	"$PGBIN/initdb" \
-		--pgdata="$PGDATA" \
-		--username=postgres \
-		--auth=trust \
-		--encoding=UTF8 \
-		--locale-provider=builtin \
-		--builtin-locale=C.UTF-8 \
-		--no-sync >/dev/null
-	# The file-task marker belongs to the database cluster, not just this
-	# checkout. A new cluster has no testdb coordinator or copied databases.
-	rm -f tmp/test/.databases-prepared
-fi
-
-pg_start_temporarily
-
-echo "==> creating roles and databases"
-# --no-psqlrc: a developer's ~/.psqlrc is for interactive use and may set
-# session defaults (such as default_transaction_read_only) that scripted
-# statements must not inherit.
-psql --no-psqlrc --dbname=postgres --quiet --set=ON_ERROR_STOP=1 --file=postgresql/prepare.sql >/dev/null
-
-echo "==> migrating $PGDATABASE"
-tern migrate
-echo "==> migrating $TEST_DATABASE"
-PGDATABASE="$TEST_DATABASE" tern migrate
+exec scripts/with-services db -- true

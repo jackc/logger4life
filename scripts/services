@@ -1,0 +1,355 @@
+#!/usr/bin/env bash
+# Manage service profiles through the one process-compose supervisor assigned
+# to this worktree. This script knows profiles, never individual services.
+
+set -euo pipefail
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+command="${1:-}"
+if [ ! -f .port-tamer.env ]; then
+    case "$command" in
+        down)
+            exit 0
+            ;;
+        status)
+            exit 1
+            ;;
+    esac
+fi
+
+. scripts/dev-env.sh
+
+client_log_args=(--log-file "$PC_CLIENT_LOG_FILE" --log-no-color)
+server_log_args=(--log-file "$PC_SERVER_LOG_FILE" --log-no-color)
+connection_args=(--address "$PC_ADDRESS" --port "$PC_PORT_NUM")
+generation_file="$PWD/.dev/process-compose.generation"
+lease_dir="$PWD/.dev/process-compose-leases"
+
+pc_client() {
+    process-compose "${connection_args[@]}" "${client_log_args[@]}" "$@"
+}
+
+pc_server() {
+    process-compose "${connection_args[@]}" "${server_log_args[@]}" --ordered-shutdown "$@"
+}
+
+server_running() {
+    pc_client list --output json >/dev/null 2>&1
+}
+
+service_generation() {
+    git hash-object \
+        process-compose.yaml \
+        .mise.toml \
+        scripts/dev-env.sh \
+        scripts/pgbin \
+        scripts/postgres \
+        scripts/postgres-ready \
+        scripts/db-bootstrap |
+        git hash-object --stdin
+}
+
+check_generation() {
+    local running_generation="" current_generation
+    if [ -r "$generation_file" ]; then
+        running_generation="$(sed -n '1p' "$generation_file")"
+    fi
+    current_generation="$(service_generation)"
+    if [ "$running_generation" != "$current_generation" ]; then
+        cat >&2 <<'EOF'
+the running process-compose supervisor uses an older service catalog.
+Run 'mise run dev:down', then retry this task.
+EOF
+        return 1
+    fi
+}
+
+validate_profile() {
+    case "$1" in
+        ''|*[!a-z0-9_-]*)
+            echo "invalid service profile: $1" >&2
+            exit 2
+            ;;
+    esac
+}
+
+validate_token() {
+    case "$1" in
+        ''|*[!a-zA-Z0-9._-]*)
+            echo "invalid service lease token" >&2
+            exit 2
+            ;;
+    esac
+}
+
+lock_dir="$PWD/.dev/process-compose-start.lock"
+lock_held=false
+
+release_lock() {
+    if [ "$lock_held" = true ]; then
+        rm -f "$lock_dir/pid"
+        rmdir "$lock_dir" 2>/dev/null || true
+        lock_held=false
+    fi
+}
+
+acquire_lock() {
+    local attempts=0 owner_pid=""
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        if [ -r "$lock_dir/pid" ]; then
+            owner_pid="$(sed -n '1p' "$lock_dir/pid")"
+        fi
+        if [ -z "$owner_pid" ] || ! kill -0 "$owner_pid" 2>/dev/null; then
+            rm -f "$lock_dir/pid"
+            rmdir "$lock_dir" 2>/dev/null || true
+            continue
+        fi
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 300 ]; then
+            echo "timed out waiting for the process-compose start lock" >&2
+            exit 1
+        fi
+        sleep 0.1
+    done
+    printf '%s\n' "$$" > "$lock_dir/pid"
+    lock_held=true
+    trap release_lock EXIT HUP INT TERM
+}
+
+process_state() {
+    pc_client process get "$1" --output json | node -e '
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => input += chunk);
+process.stdin.on("end", () => {
+    const rows = JSON.parse(input);
+    if (!Array.isArray(rows) || rows.length !== 1) process.exit(2);
+    process.stdout.write(`${rows[0].status}\t${rows[0].exit_code}`);
+});'
+}
+
+wait_for_profile() {
+    local profile="$1"
+    local ready_process="services-${profile}-ready"
+    local state status exit_code attempts=0
+
+    while true; do
+        state="$(process_state "$ready_process" 2>/dev/null || true)"
+        status="${state%%$'\t'*}"
+        exit_code="${state#*$'\t'}"
+        case "$status" in
+            Completed)
+                if [ "$exit_code" = 0 ]; then
+                    return
+                fi
+                ;;
+            Failed|Skipped)
+                ;;
+            *)
+                attempts=$((attempts + 1))
+                if [ "$attempts" -lt 600 ]; then
+                    sleep 0.2
+                    continue
+                fi
+                ;;
+        esac
+
+        echo "service profile '$profile' did not become ready" >&2
+        pc_client list >&2 || true
+        return 1
+    done
+}
+
+stop_server() {
+    if server_running; then
+        pc_client down
+    fi
+    rm -f "$generation_file"
+}
+
+start_profile_locked() {
+    local profile="$1" ownership
+    validate_profile "$profile"
+
+    if server_running; then
+        ownership=reused
+        check_generation || return 1
+    else
+        ownership=created
+        echo "==> starting process-compose supervisor" >&2
+        if ! pc_server --keep-project up --detached >&2; then
+            return 1
+        fi
+        if ! service_generation > "$generation_file"; then
+            stop_server >/dev/null 2>&1 || true
+            return 1
+        fi
+    fi
+
+    echo "==> starting service profile '$profile'" >&2
+    if ! pc_client namespace start "$profile" >&2; then
+        if [ "$ownership" = created ]; then
+            stop_server >/dev/null 2>&1 || true
+        fi
+        return 1
+    fi
+
+    printf '%s\n' "$ownership"
+}
+
+clean_stale_leases() {
+    local lease_file owner_pid
+    mkdir -p "$lease_dir"
+    for lease_file in "$lease_dir"/*; do
+        [ -f "$lease_file" ] || continue
+        owner_pid="$(sed -n '1p' "$lease_file")"
+        case "$owner_pid" in
+            ''|*[!0-9]*)
+                rm -f "$lease_file"
+                ;;
+            *)
+                if ! kill -0 "$owner_pid" 2>/dev/null; then
+                    rm -f "$lease_file"
+                fi
+                ;;
+        esac
+    done
+}
+
+leases_remain() {
+    local lease_file
+    for lease_file in "$lease_dir"/*; do
+        if [ -f "$lease_file" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+lease_profile() {
+    local profile="$1" token="$2" owner_pid="$3" wait_mode="$4"
+    local status
+    validate_profile "$profile"
+    validate_token "$token"
+    case "$owner_pid" in
+        ''|*[!0-9]*)
+            echo "invalid service lease owner PID" >&2
+            exit 2
+            ;;
+    esac
+
+    acquire_lock
+    clean_stale_leases
+    printf '%s\n' "$owner_pid" > "$lease_dir/$token"
+
+    set +e
+    start_profile_locked "$profile" >/dev/null
+    status=$?
+    set -e
+    if [ "$status" -ne 0 ]; then
+        rm -f "$lease_dir/$token"
+        release_lock
+        trap - EXIT HUP INT TERM
+        return "$status"
+    fi
+
+    release_lock
+    trap - EXIT HUP INT TERM
+
+    if [ "$wait_mode" = wait ] && ! wait_for_profile "$profile"; then
+        release_lease "$token" >/dev/null 2>&1 || true
+        return 1
+    fi
+    printf '%s\n' "$token"
+}
+
+release_lease() {
+    local token="$1"
+    validate_token "$token"
+    acquire_lock
+    clean_stale_leases
+    rm -f "$lease_dir/$token"
+    clean_stale_leases
+    if ! leases_remain; then
+        stop_server
+    fi
+    release_lock
+    trap - EXIT HUP INT TERM
+}
+
+clear_leases() {
+    local lease_file
+    mkdir -p "$lease_dir"
+    for lease_file in "$lease_dir"/*; do
+        [ -f "$lease_file" ] || continue
+        rm -f "$lease_file"
+    done
+}
+
+usage() {
+    cat >&2 <<'EOF'
+usage: scripts/services lease PROFILE TOKEN OWNER_PID
+       scripts/services release TOKEN
+       scripts/services dev [process-compose attach options]
+       scripts/services attach [process-compose attach options]
+       scripts/services status
+       scripts/services down
+EOF
+    exit 2
+}
+
+case "$command" in
+    lease)
+        [ "$#" -eq 4 ] || usage
+        lease_profile "$2" "$3" "$4" wait
+        ;;
+    release)
+        [ "$#" -eq 2 ] || usage
+        release_lease "$2"
+        ;;
+    dev)
+        shift
+        dev_token="dev-$$-${RANDOM}-${RANDOM}"
+        lease_profile dev "$dev_token" "$$" no-wait >/dev/null
+        dev_cleaned_up=false
+        cleanup_dev() {
+            if [ "$dev_cleaned_up" = false ]; then
+                dev_cleaned_up=true
+                release_lease "$dev_token" >/dev/null 2>&1 || true
+            fi
+        }
+        trap cleanup_dev EXIT
+        set +e
+        process-compose \
+            "${connection_args[@]}" \
+            "${client_log_args[@]}" \
+            attach "$@"
+        status=$?
+        set -e
+        cleanup_dev
+        trap - EXIT
+        exit "$status"
+        ;;
+    attach)
+        shift
+        exec process-compose \
+            "${connection_args[@]}" \
+            "${client_log_args[@]}" \
+            attach "$@"
+        ;;
+    status)
+        [ "$#" -eq 1 ] || usage
+        server_running
+        ;;
+    down)
+        [ "$#" -eq 1 ] || usage
+        acquire_lock
+        clear_leases
+        stop_server
+        release_lock
+        trap - EXIT HUP INT TERM
+        ;;
+    *)
+        usage
+        ;;
+esac

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Run a finite mise task with a ready process-compose service profile. Reuse a
+# running supervisor; otherwise create one and tear it down with the task.
+
+set -euo pipefail
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+if [ "$#" -lt 3 ] || [ "$2" != "--" ]; then
+    echo "usage: scripts/with-services PROFILE -- COMMAND [ARG...]" >&2
+    exit 2
+fi
+
+profile="$1"
+shift 2
+lease_token="task-$$-${RANDOM}-${RANDOM}"
+scripts/services lease "$profile" "$lease_token" "$$" >/dev/null
+cleaned_up=false
+
+cleanup() {
+    if [ "$cleaned_up" = false ]; then
+        cleaned_up=true
+        scripts/services release "$lease_token" >/dev/null 2>&1 || true
+    fi
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT TERM HUP
+
+set +e
+"$@"
+status=$?
+set -e
+
+cleanup
+trap - EXIT INT TERM HUP
+exit "$status"

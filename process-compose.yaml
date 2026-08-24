@@ -1,19 +1,27 @@
-# The development stack for one worktree: its own PostgreSQL cluster, backend,
-# and Vite. Started by `mise run dev`, which allocates the ports and exports
-# the environment this file reads (see scripts/dev-up and scripts/dev-env.sh).
+# The shared service catalog for one worktree. Mise owns finite developer
+# tasks; process-compose is the only component that launches shared services.
+# Profiles are expressed as namespaces and acquired through scripts/services:
+#
+#   db    PostgreSQL with roles, databases, and migrations ready
+#   test  every service required by the test tasks
+#   dev   the interactive backend and Vite development stack
 #
 # Nothing here is worktree-specific: every port and path arrives through the
 # environment, so the same file serves every worktree, macOS, and the dev
 # container.
 
 version: "0.5"
+is_strict: true
+ordered_shutdown: true
 
 processes:
   postgres:
-    command: '"$PGBIN/postgres" -D "$PGDATA" -p "$PGPORT" -k "$PGSOCKETDIR" -h "$PGHOST"'
+    command: scripts/postgres
+    namespace: [db, test, dev]
+    disabled: true
     readiness_probe:
       exec:
-        command: 'pg_isready --quiet --host="$PGHOST" --port="$PGPORT"'
+        command: scripts/postgres-ready
       initial_delay_seconds: 1
       period_seconds: 1
       failure_threshold: 30
@@ -27,14 +35,36 @@ processes:
       max_restarts: 3
     log_location: .dev/logs/postgres.log
 
-  migrate:
-    command: tern migrate
+  database-ready:
+    command: scripts/db-bootstrap
+    namespace: [db, test, dev]
+    disabled: true
     depends_on:
       postgres:
         condition: process_healthy
     availability:
       restart: "no"
-    log_location: .dev/logs/migrate.log
+    log_location: .dev/logs/database-ready.log
+
+  services-db-ready:
+    command: "true"
+    namespace: db
+    disabled: true
+    depends_on:
+      database-ready:
+        condition: process_completed_successfully
+    availability:
+      restart: "no"
+
+  services-test-ready:
+    command: "true"
+    namespace: test
+    disabled: true
+    depends_on:
+      database-ready:
+        condition: process_completed_successfully
+    availability:
+      restart: "no"
 
   backend:
     command: >
@@ -45,6 +75,8 @@ processes:
       --webauthn-rp-id localhost
       --webauthn-origin "$VITE_URL"
       --log-format text
+    namespace: dev
+    disabled: true
     watch:
       paths:
         - path: main.go
@@ -52,7 +84,7 @@ processes:
         - path: go.mod
         - path: go.sum
     depends_on:
-      migrate:
+      database-ready:
         condition: process_completed_successfully
     readiness_probe:
       http_get:
@@ -69,6 +101,8 @@ processes:
 
   vite:
     command: npm run dev
+    namespace: dev
+    disabled: true
     depends_on:
       backend:
         condition: process_healthy
@@ -84,3 +118,13 @@ processes:
       restart: on_failure
       max_restarts: 3
     log_location: .dev/logs/vite.log
+
+  services-dev-ready:
+    command: "true"
+    namespace: dev
+    disabled: true
+    depends_on:
+      vite:
+        condition: process_healthy
+    availability:
+      restart: "no"

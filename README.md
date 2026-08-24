@@ -83,6 +83,11 @@ Backend:         http://localhost:23841
 PostgreSQL:      127.0.0.1:23843
 ```
 
+Mise remains the task interface. Tasks that need services acquire a named
+`db`, `test`, or `dev` profile from the worktree's single process-compose
+supervisor; process-compose is the only component that launches shared
+worktree service dependencies.
+
 See [docs/development-environment.md](docs/development-environment.md) for how
 the environment is put together.
 

@@ -12,12 +12,14 @@ Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) wit
 Every checkout is a self-contained instance: its own PostgreSQL cluster, its
 own randomly allocated port block, its own runtime state under `.dev/`. mise
 owns tool versions, environment, and one-shot tasks; process-compose owns the
-long-running services. See `docs/development-environment.md`.
+service profiles and is the only launcher for shared worktree services.
+Finite test, database, build, and release commands remain mise tasks. See
+`docs/development-environment.md`.
 
 - `mise run dev:init` — Prepare a checkout: ports, dependencies, PostgreSQL cluster, migrations
 - `mise run dev` — Run PostgreSQL, the backend, and Vite under process-compose
 - `mise run dev:urls` — Print this checkout's ports and URLs
-- `mise run dev:down` — Stop the stack (or `process-compose down`)
+- `mise run dev:down` — Stop the worktree's process-compose supervisor and services
 - `process-compose process list` / `process-compose process logs backend` / `process-compose process restart backend` — Inspect and control services without the TUI; no flags needed, `PC_PORT_NUM` is in the environment
 - Ports are never fixed. Read them from the environment (`BACKEND_URL`, `VITE_URL`, `PGPORT`) or `.port-tamer.env`; never assume 4000/5173/5432.
 
@@ -28,7 +30,7 @@ long-running services. See `docs/development-environment.md`.
 - `mise run build:linux-amd64` / `build:linux-arm64` / `build:darwin-amd64` / `build:darwin-arm64` — Build a release directory and tarball
 
 ### Testing
-- `mise run test` — Run all tests; starts the cluster and prepares test databases
+- `mise run test` — Run all tests; acquires the process-compose `test` profile and prepares test databases
 - `mise run test:backend` — Run Go backend tests; auto-prepares test databases
 - `mise run test:browser` — Run Playwright browser tests (or `npm test`)
 - `mise run test:prepare` — Prepare test databases only
@@ -174,7 +176,8 @@ migrations in `db/migrations/jed/` expose the same logical tables:
 ### Tooling
 - **mise** (`.mise.toml`) manages tool versions, the worktree environment, and the task interface
 - **Port Tamer** (`port-tamer.toml`) allocates the named port group persisted in `.port-tamer.env`
-- **process-compose** (`process-compose.yaml`) supervises the development services
-- **scripts/** holds the shell out of the task definitions: `dev-env.sh` (environment assembly), `dev-urls` (project URL display), `dev-exec` (fresh environment command wrapper), `build-release`, `dev-init`, `dev-up`, `db-init`, `db-reset`, `db-ensure-running`, `pgbin`
+- **process-compose** (`process-compose.yaml`) is the sole launcher for shared worktree services and groups them into `db`, `test`, and `dev` profiles
+- **scripts/services** starts or joins the worktree supervisor; **scripts/with-services** lends a ready profile to a finite mise task and cleans up supervisors it created
+- **scripts/** also holds `dev-env.sh` (environment assembly), `dev-urls` (project URL display), `dev-exec` (fresh environment command wrapper), `postgres` / `postgres-ready` / `db-bootstrap` (service lifecycle), `build-release`, `dev-init`, `dev-up`, `db-init`, `db-reset`, and `pgbin`
 - Dev container setup in `.devcontainer/` (Ubuntu 24.04 + PostgreSQL 18 binaries + mise); it is a thin Linux shell that runs the same `mise run dev:init` / `mise run dev` as native macOS
 - **fd** and **rg** (ripgrep) are available in the dev container — use them instead of `find` and `grep`

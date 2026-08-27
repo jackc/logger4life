@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Prepare this worktree to run `mise run dev`: allocate ports, install
-# dependencies, and build the PostgreSQL cluster. Idempotent, and identical on
-# macOS and inside the dev container.
+# dependencies. The cluster is initialized and migrated by `mise run dev` the
+# first time it starts. Idempotent, and identical on macOS and inside the dev
+# container.
 
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -11,8 +12,6 @@ cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 echo "==> installing dependencies"
 npm install --silent
 npx playwright install chromium
-
-scripts/db-init
 
 echo
 scripts/dev-urls

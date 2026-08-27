@@ -38,7 +38,7 @@ TERN_CONFIG="${TERN_CONFIG:-postgresql/tern.conf}"
 TERN_MIGRATIONS="${TERN_MIGRATIONS:-postgresql/migrations}"
 PC_ADDRESS="${PC_ADDRESS:-127.0.0.1}"
 PC_SERVER_LOG_FILE="${PC_SERVER_LOG_FILE:-$PWD/.dev/process-compose.log}"
-PC_CLIENT_LOG_FILE="${PC_CLIENT_LOG_FILE:-$PWD/.dev/process-compose-client.log}"
+PC_LOG_FILE="${PC_LOG_FILE:-$PWD/.dev/process-compose-client.log}"
 PC_POSTGRES_PID_FILE="${PC_POSTGRES_PID_FILE:-$PWD/.dev/$DEV_PLATFORM/postgres/process-compose.pid}"
 
 # Resolved here rather than at the point of use so that a machine without the

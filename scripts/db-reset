@@ -6,10 +6,6 @@
 
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-if [ "${1:-}" != "--services-ready" ]; then
-    exec scripts/with-services db -- "$0" --services-ready
-fi
-
 . scripts/dev-env.sh
 
 for database in "$PGDATABASE" "$TEST_DATABASE"; do

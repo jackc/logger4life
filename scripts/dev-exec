@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Run a command with this worktree's complete, freshly loaded environment.
 #
-# mise normally loads .port-tamer.env before starting a task. On a checkout's
-# first service-backed task, however, scripts/services creates that file after
-# mise has already started. Sourcing dev-env.sh here makes the generated ports
-# visible to the command without recursively invoking mise.
+# Sourcing dev-env.sh here keeps commands correct when the saved port group or
+# another local environment value changed after the calling shell started.
 
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"

@@ -27,11 +27,11 @@ PGUSER = "postgres"
 TEST_DATABASE = "logger4life_test"
 TEST_DATABASE_COUNT = "8"
 
-# Keep the process-compose server and client logs separate. Client commands
-# open their log on every invocation and must not truncate the running
-# supervisor's log.
+# Client commands use PC_LOG_FILE; `mise run dev` overrides it for the server.
+# Keeping them separate prevents a client invocation from truncating the
+# running development supervisor's log.
 PC_SERVER_LOG_FILE = "{{config_root}}/.dev/process-compose.log"
-PC_CLIENT_LOG_FILE = "{{config_root}}/.dev/process-compose-client.log"
+PC_LOG_FILE = "{{config_root}}/.dev/process-compose-client.log"
 PC_ADDRESS = "127.0.0.1"
 
 # Tern migration configuration
@@ -55,7 +55,7 @@ rg = "latest"
 # process-compose (see process-compose.yaml); everything here is one-shot.
 
 [tasks."dev:init"]
-description = "Prepare this worktree: ports, dependencies, PostgreSQL cluster"
+description = "Prepare this worktree: ports and dependencies"
 dir = "{{config_root}}"
 run = "scripts/dev-init"
 
@@ -67,7 +67,18 @@ run = "scripts/dev-up"
 [tasks."dev:down"]
 description = "Stop this worktree's development stack"
 dir = "{{config_root}}"
-run = "scripts/services down"
+run = "scripts/dev-down"
+
+[tasks."dev:wait"]
+description = "Wait for a detached development stack to become ready"
+dir = "{{config_root}}"
+run = "scripts/dev-ready --wait"
+
+[tasks."dev:ready"]
+description = "Require the development stack to be ready"
+dir = "{{config_root}}"
+run = "scripts/dev-ready"
+hide = true
 
 [tasks."dev:urls"]
 description = "Print this worktree's ports and URLs"
@@ -79,25 +90,23 @@ description = "Choose a new port group for this worktree (stop its services firs
 dir = "{{config_root}}"
 run = ["port-tamer allocate --overwrite", "scripts/dev-urls"]
 
-[tasks."db:init"]
-description = "Create and migrate this worktree's PostgreSQL cluster"
-dir = "{{config_root}}"
-run = "scripts/db-init"
-
 [tasks."db:reset"]
 description = "Drop and rebuild this worktree's databases"
 dir = "{{config_root}}"
+depends = ["dev:ready"]
 run = "scripts/db-reset"
 
 [tasks."db:migrate"]
 description = "Run pending migrations against the development database"
 dir = "{{config_root}}"
-run = "scripts/with-services db -- scripts/dev-exec tern migrate"
+depends = ["dev:ready"]
+run = "scripts/dev-exec tern migrate"
 
 [tasks."db:psql"]
 description = "Open psql against the development database"
 dir = "{{config_root}}"
-run = "scripts/with-services db -- scripts/dev-exec psql"
+depends = ["dev:ready"]
+run = "scripts/dev-exec psql"
 interactive = true
 
 [tasks."build:binary"]
@@ -159,20 +168,13 @@ run = "rm -rf build"
 [tasks."test:prepare"]
 description = "Prepare the PostgreSQL test databases"
 dir = "{{config_root}}"
-run = "scripts/with-services test -- mise run test:prepare:run"
-
-[tasks."test:prepare:run"]
-description = "Prepare the PostgreSQL test databases (services already ready)"
-dir = "{{config_root}}"
+depends = ["dev:ready"]
 sources = [
   "postgresql/**/*.sql",
   "test/*.sql",
   "test/testdata/*.sql",
-  "scripts/db-bootstrap",
   "scripts/dev-env.sh",
   "scripts/dev-exec",
-  "scripts/services",
-  "scripts/with-services",
   "port-tamer.toml",
   "process-compose.yaml",
 ]
@@ -182,43 +184,24 @@ run = [
   "scripts/dev-exec psql --no-psqlrc -v ON_ERROR_STOP=1 -f test/setup_test_databases.sql > /dev/null",
   "touch tmp/test/.databases-prepared",
 ]
-hide = true
 
 [tasks.test]
 description = "Run the backend and browser test suites"
 dir = "{{config_root}}"
-run = "scripts/with-services test -- mise run test:run"
-
-[tasks."test:run"]
-description = "Run all test suites (services already ready)"
-dir = "{{config_root}}"
-run = [{ task = "test:backend:run" }, { task = "test:browser:run" }]
-hide = true
+run = [{ task = "test:backend" }, { task = "test:browser" }]
 
 [tasks."test:backend"]
 description = "Run Go tests against PostgreSQL, jed, and the dual comparison adapter"
 dir = "{{config_root}}"
-run = "scripts/with-services test -- mise run test:backend:run"
-
-[tasks."test:backend:run"]
-description = "Run backend tests (services already ready)"
-dir = "{{config_root}}"
-depends = ["test:prepare:run"]
+depends = ["test:prepare"]
 run = [
   "scripts/dev-exec go test ./...",
   "scripts/dev-exec env LOGGER4LIFE_TEST_BACKEND=jed go test ./backend/server/",
   "scripts/dev-exec env LOGGER4LIFE_TEST_BACKEND=both go test ./backend/server/",
 ]
-hide = true
 
 [tasks."test:browser"]
 description = "Run the Playwright browser tests"
 dir = "{{config_root}}"
-run = "scripts/with-services test -- mise run test:browser:run"
-
-[tasks."test:browser:run"]
-description = "Run browser tests (services already ready)"
-dir = "{{config_root}}"
-depends = ["test:prepare:run"]
+depends = ["test:prepare"]
 run = "scripts/dev-exec npm test"
-hide = true

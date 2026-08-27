@@ -70,8 +70,8 @@ Share your logs with other users so they can view and add entries:
 
 ```sh
 mise install        # tools
-mise run dev:init   # ports, dependencies, PostgreSQL cluster, migrations
-mise run dev        # PostgreSQL + backend + Vite
+mise run dev:init   # ports and dependencies
+mise run dev        # PostgreSQL + migrations + backend + Vite
 ```
 
 Ports are allocated per checkout rather than fixed, so several worktrees can
@@ -83,10 +83,9 @@ Backend:         http://localhost:23841
 PostgreSQL:      127.0.0.1:23843
 ```
 
-Mise remains the task interface. Tasks that need services acquire a named
-`db`, `test`, or `dev` profile from the worktree's single process-compose
-supervisor; process-compose is the only component that launches shared
-worktree service dependencies.
+`mise run dev` is the only command that launches worktree services. Tests and
+database commands use that running environment and fail with a startup hint
+when it is absent.
 
 See [docs/development-environment.md](docs/development-environment.md) for how
 the environment is put together.
@@ -97,6 +96,8 @@ the environment is put together.
 |---------|-------------|
 | `mise run dev` | Run the stack (PostgreSQL, backend, Vite) |
 | `mise run dev:init` | Prepare a fresh checkout or worktree |
+| `mise run dev:wait` | Wait for a detached stack to become ready |
+| `mise run dev:down` | Stop a detached stack |
 | `mise run dev:urls` | Print this checkout's ports and URLs |
 | `mise run db:psql` | psql against the development database |
 | `mise run db:reset` | Drop and rebuild the databases |
@@ -106,6 +107,10 @@ the environment is put together.
 | `mise run test` | Run all tests |
 | `mise run test:backend` | Run Go backend tests |
 | `mise run test:browser` | Run Playwright browser tests |
+
+Keep `mise run dev` running while using the test and database commands. CI and
+agents can start it detached with `mise run dev -- -D`, wait with
+`mise run dev:wait`, and stop it with `mise run dev:down` when finished.
 
 ## Database backends
 

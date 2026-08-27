@@ -1,10 +1,6 @@
-# The shared service catalog for one worktree. Mise owns finite developer
-# tasks; process-compose is the only component that launches shared services.
-# Profiles are expressed as namespaces and acquired through scripts/services:
-#
-#   db    PostgreSQL with roles, databases, and migrations ready
-#   test  every service required by the test tasks
-#   dev   the interactive backend and Vite development stack
+# The development stack for one worktree. `mise run dev` is its sole launcher;
+# tests and database commands connect to this running stack but never start or
+# stop its services.
 #
 # Nothing here is worktree-specific: every port and path arrives through the
 # environment, so the same file serves every worktree, macOS, and the dev
@@ -17,8 +13,6 @@ ordered_shutdown: true
 processes:
   postgres:
     command: scripts/postgres
-    namespace: [db, test, dev]
-    disabled: true
     readiness_probe:
       exec:
         command: scripts/postgres-ready
@@ -37,34 +31,12 @@ processes:
 
   database-ready:
     command: scripts/db-bootstrap
-    namespace: [db, test, dev]
-    disabled: true
     depends_on:
       postgres:
         condition: process_healthy
     availability:
       restart: "no"
     log_location: .dev/logs/database-ready.log
-
-  services-db-ready:
-    command: "true"
-    namespace: db
-    disabled: true
-    depends_on:
-      database-ready:
-        condition: process_completed_successfully
-    availability:
-      restart: "no"
-
-  services-test-ready:
-    command: "true"
-    namespace: test
-    disabled: true
-    depends_on:
-      database-ready:
-        condition: process_completed_successfully
-    availability:
-      restart: "no"
 
   backend:
     command: >
@@ -75,8 +47,6 @@ processes:
       --webauthn-rp-id localhost
       --webauthn-origin "$VITE_URL"
       --log-format text
-    namespace: dev
-    disabled: true
     watch:
       paths:
         - path: main.go
@@ -101,8 +71,6 @@ processes:
 
   vite:
     command: npm run dev
-    namespace: dev
-    disabled: true
     depends_on:
       backend:
         condition: process_healthy
@@ -118,13 +86,3 @@ processes:
       restart: on_failure
       max_restarts: 3
     log_location: .dev/logs/vite.log
-
-  services-dev-ready:
-    command: "true"
-    namespace: dev
-    disabled: true
-    depends_on:
-      vite:
-        condition: process_healthy
-    availability:
-      restart: "no"

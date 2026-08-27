@@ -8,7 +8,7 @@ same commands work natively on macOS and inside the dev container.
 ```
 git worktree      = instance
 mise              = tool versions, environment, finite tasks
-process-compose    = service profiles and service lifecycles
+process-compose    = the development service graph and lifecycle
 .dev/ + .port-tamer.env = instance-local state (git-ignored)
 ```
 
@@ -16,12 +16,13 @@ process-compose    = service profiles and service lifecycles
 
 ```sh
 mise install        # tools: Go, Node, Port Tamer, tern, process-compose, ...
-mise run dev:init   # ports, dependencies, PostgreSQL cluster, migrations
-mise run dev        # PostgreSQL + backend + Vite
+mise run dev:init   # ports and dependencies
+mise run dev        # PostgreSQL + migrations + backend + Vite
 ```
 
 `mise run dev:init` is idempotent; run it again after pulling changes that add
-a dependency or a migration.
+a tool or Node dependency. The PostgreSQL cluster is initialized lazily and
+migrations are applied when `mise run dev` starts.
 
 PostgreSQL itself is the one prerequisite mise does not install:
 
@@ -75,9 +76,9 @@ passkeys.
 
 ## The stack
 
-`mise run dev` acquires the `dev` profile from
+`mise run dev` starts
 [process-compose](https://github.com/F1bonacc1/process-compose), whose service
-catalog lives in [`process-compose.yaml`](../process-compose.yaml):
+graph lives in [`process-compose.yaml`](../process-compose.yaml):
 
 ```
 postgres  ->  database-ready  ->  backend  ->  vite
@@ -89,33 +90,31 @@ the backend waits for that to complete; Vite waits until the backend answers
 `/health`. Process Compose watches the backend's Go source and module files,
 so editing them rebuilds and restarts the backend.
 
-There is one process-compose supervisor per running worktree. `scripts/services`
-starts it or connects to it and exposes three profiles:
+There is one process-compose supervisor per running worktree, and `mise run
+dev` is its only launcher. The foreground terminal owns the stack until it is
+interrupted. Tests, migrations, reset, and `psql` only connect to this running
+environment; they never start or stop services. This explicit ownership keeps
+PostgreSQL from outliving a test command under a second launcher.
 
-| Profile | Services made ready for |
-|---------|-------------------------|
-| `db` | database commands such as `psql` and migrations |
-| `test` | backend and browser test tasks |
-| `dev` | the interactive backend and frontend stack |
+After changing `process-compose.yaml` or a lifecycle script, stop and restart
+the stack so the running supervisor loads the new configuration.
 
-Mise still owns all finite tasks. `scripts/with-services PROFILE -- COMMAND`
-only acquires the requested service profile before running a mise task. If a
-supervisor was already running, the task borrows it. Otherwise the wrapper
-starts a temporary detached supervisor and shuts it down when the task exits.
-No mise task launches a profile service directly; task-local fixtures such as
-Playwright's temporary backend and Vite processes remain owned by that task.
+The TUI is the default view. A detached stack is useful for CI and agents:
 
-Each borrower holds a PID-backed lease. Concurrent tasks may acquire different
-profiles and share services; the supervisor is stopped only after the final
-lease is released. Leases left by a killed task are pruned by the next service
-operation.
+```sh
+mise run dev -- -D
+mise run dev:wait
+mise run test
+mise run dev:down
+```
 
-The supervisor records the generation of the service catalog and its lifecycle
-scripts when it starts. If those files change while it is running, the next
-service-backed task asks for `mise run dev:down` instead of hot-reloading and
-silently restarting shared dependencies underneath another task.
+`dev:wait` prevents tests from racing cluster initialization, migrations, or
+application readiness. CI must put `dev:down` in an unconditional cleanup
+step, and agents must run it when they finish. An interrupted agent can leave
+a detached stack behind, but it remains owned by a discoverable process-compose
+supervisor and `mise run dev:down` cleans it up.
 
-The TUI is the default view. Everything is also scriptable:
+Everything is also inspectable while the stack runs:
 
 ```sh
 process-compose process list             # status
@@ -130,7 +129,7 @@ the CLI finds this worktree's instance.
 `process-compose process logs` is the current view of a service's output.
 Copies are also written to `.dev/logs/`, but those are flushed as output
 accumulates, so a quiet process may lag behind. The supervisor log is
-`.dev/process-compose.log`; client commands use
+`.dev/process-compose.log`; lifecycle client commands use
 `.dev/process-compose-client.log` so they cannot truncate the supervisor log.
 
 ## The database
@@ -150,14 +149,11 @@ nothing else knows, and one less secret in the environment.
 | `mise run db:psql` | psql against the development database |
 | `mise run db:migrate` | run pending migrations |
 | `mise run db:reset` | drop both databases and rebuild from migrations |
-| `mise run db:init` | create the cluster if absent, then migrate |
 
-Database tasks acquire the `db` service profile, and test tasks acquire the
-`test` profile. Both reuse the development supervisor when it is running or
-use a temporary supervisor otherwise, so `mise run test` works with or without
-`mise run dev`. PostgreSQL is always a child of process-compose. To throw the
-cluster away entirely, run `mise run dev:down` and delete
-`.dev/<platform>/postgres`.
+These commands require `mise run dev` to be running and fail with a startup
+hint when it is not. PostgreSQL is always a child of that process-compose
+project. To throw the cluster away entirely, run `mise run dev:down` and delete
+`.dev/<platform>/postgres`; the next `mise run dev` recreates it.
 
 ## Tests
 
@@ -167,13 +163,16 @@ mise run test:backend   # Go
 mise run test:browser   # Playwright
 ```
 
+All three commands require the development stack to be ready. They do not
+start PostgreSQL. This makes repeated human test runs cheap and keeps service
+ownership visible; automation starts the stack explicitly as shown above.
+
 The browser suite starts its own backend and Vite on the worktree's reserved
 test ports, against the worktree's own `logger4life_test`.
 
-The test commands themselves remain mise tasks; process-compose knows only the
-services in the `test` profile and their readiness relationships. Adding Redis,
-NATS, or another test dependency means adding it to that profile, without
-changing the task wrapper.
+The test commands themselves remain mise tasks. If Redis, NATS, or another
+shared dependency is added later, it belongs in the development graph and is
+started by the same `mise run dev` command.
 
 Go tests that reach PostgreSQL run concurrently. `mise run test:prepare` migrates
 the primary test database once, installs `pgundolog`, and clones it eight
@@ -200,7 +199,7 @@ differences, or stronger isolation. Use native macOS for the fast inner loop.
 repository (shared through git)     worktree-local (git-ignored)
   mise.toml, tasks                    .port-tamer.env
   port-tamer.toml                     .dev/ PostgreSQL cluster
-  process-compose.yaml, profiles      .dev/ process-compose logs
+  process-compose.yaml, service graph .dev/ process-compose logs
   mise.toml, finite tasks             build output
   scripts/ and source
 ```

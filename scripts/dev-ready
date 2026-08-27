@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Require this worktree's process-compose development stack to be ready.
+# This is a precondition only: it never starts services.
+
+set -euo pipefail
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+case "${1:-}" in
+    '')
+        ;;
+    --wait)
+        ;;
+    *)
+        echo "usage: scripts/dev-ready [--wait]" >&2
+        exit 2
+        ;;
+esac
+
+not_ready() {
+    cat >&2 <<'EOF'
+The development environment is not running and ready.
+
+Start it in another terminal with:
+    mise run dev
+EOF
+    exit 1
+}
+
+[ -f .port-tamer.env ] || not_ready
+. scripts/dev-env.sh
+process-compose project is-ready "$@" >/dev/null 2>&1 || not_ready

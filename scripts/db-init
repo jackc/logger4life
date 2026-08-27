@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-#
-# Ensure this worktree's PostgreSQL cluster, databases, and schema exist.
-# PostgreSQL itself is always launched by process-compose.
-
-set -euo pipefail
-cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-
-exec scripts/with-services db -- true

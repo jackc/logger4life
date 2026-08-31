@@ -85,6 +85,12 @@ description = "Print this worktree's ports and URLs"
 dir = "{{config_root}}"
 run = "scripts/dev-urls"
 
+[tasks."dev:browser"]
+description = "Open this worktree's frontend in the default browser"
+dir = "{{config_root}}"
+depends = ["dev:ready"]
+run = "scripts/dev-browser"
+
 [tasks."dev:ports:reset"]
 description = "Choose a new port group for this worktree (stop its services first)"
 dir = "{{config_root}}"

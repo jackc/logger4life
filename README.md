@@ -99,6 +99,7 @@ the environment is put together.
 | `mise run dev:wait` | Wait for a detached stack to become ready |
 | `mise run dev:down` | Stop a detached stack |
 | `mise run dev:urls` | Print this checkout's ports and URLs |
+| `mise run dev:browser` | Open the frontend in the default browser |
 | `mise run db:psql` | psql against the development database |
 | `mise run db:reset` | Drop and rebuild the databases |
 | `mise run build` | Build everything (frontend assets + Go binary) |

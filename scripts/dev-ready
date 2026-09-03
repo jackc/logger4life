@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 # Require this worktree's process-compose development stack to be ready.
 # This is a precondition only: it never starts services.
+#
+# Without arguments it answers immediately. With --wait it polls until the
+# project is ready, but gives up as soon as a service has stopped for good
+# (exited non-zero with no restart pending, or skipped because a dependency
+# failed), printing the exited service's last output, and after
+# DEV_READY_TIMEOUT seconds (default 300) in any case. A broken stack
+# therefore fails fast in CI or under an agent instead of blocking until an
+# outer timeout fires.
 
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
+wait=false
 case "${1:-}" in
     '')
         ;;
     --wait)
+        wait=true
         ;;
     *)
         echo "usage: scripts/dev-ready [--wait]" >&2
@@ -16,16 +26,111 @@ case "${1:-}" in
         ;;
 esac
 
+timeout="${DEV_READY_TIMEOUT:-300}"
+
 not_ready() {
-    cat >&2 <<'EOF'
+    cat >&2 <<'EOF2'
 The development environment is not running and ready.
 
 Start it in another terminal with:
     mise run dev
-EOF
+EOF2
     exit 1
 }
 
 [ -f .port-tamer.env ] || not_ready
 . scripts/dev-env.sh
-process-compose project is-ready "$@" >/dev/null 2>&1 || not_ready
+
+# is-ready cannot tell an absent supervisor from a project that is still
+# starting; listing processes can.
+reachable() {
+    process-compose process list -o json >/dev/null 2>&1
+}
+
+ready() {
+    process-compose project is-ready >/dev/null 2>&1
+}
+
+# One "exited NAME" line per process that stopped and will not run again --
+# process-compose reports Restarting while a restart is pending -- and one
+# "skipped NAME" line per process it never started because a dependency failed.
+failed_processes() {
+    process-compose process list -o json 2>/dev/null | node -e '
+        const processes = JSON.parse(require("fs").readFileSync(0, "utf8"));
+        for (const p of processes) {
+            if (p.status === "Error" || (p.status === "Completed" && p.exit_code !== 0)) {
+                console.log("exited", p.name);
+            } else if (p.status === "Skipped") {
+                console.log("skipped", p.name);
+            }
+        }'
+}
+
+report_failed() {
+    local kind name skipped
+    echo "The development environment failed to start." >&2
+    while read -r kind name; do
+        [ "$kind" = exited ] || continue
+        echo >&2
+        echo "==> $name exited; its last 20 lines (process-compose process logs $name):" >&2
+        process-compose process logs "$name" -n 20 >&2 || true
+    done <<<"$1"
+    skipped="$(awk '$1 == "skipped" { printf "%s%s", sep, $2; sep = ", " }' <<<"$1")"
+    if [ -n "$skipped" ]; then
+        echo >&2
+        echo "Skipped because a dependency failed: $skipped" >&2
+    fi
+    cat >&2 <<'EOF2'
+
+Fix the failure, then restart the stack:
+    mise run dev:down
+    mise run dev
+EOF2
+    exit 1
+}
+
+report_timeout() {
+    echo "The development environment was not ready after ${timeout}s (DEV_READY_TIMEOUT)." >&2
+    echo >&2
+    process-compose process list -o wide >&2 || true
+    echo >&2
+    echo "Inspect a service with 'process-compose process logs <name>'." >&2
+    exit 1
+}
+
+if ! $wait; then
+    if reachable; then
+        failed="$(failed_processes)"
+        [ -z "$failed" ] || report_failed "$failed"
+        ready && exit 0
+    fi
+    not_ready
+fi
+
+# A detached `mise run dev -- -D` returns before its supervisor listens, so the
+# supervisor is allowed a moment to appear; once seen, its disappearance is
+# final.
+start="$(date +%s)"
+deadline="$((start + timeout))"
+grace="$((start + 15))"
+seen=false
+previous=""
+echo "Waiting for the development environment (timeout ${timeout}s)..."
+while :; do
+    now="$(date +%s)"
+    if reachable; then
+        seen=true
+        ready && exit 0
+        # The same failure on two consecutive polls is conclusive; a single
+        # observation is not trusted to have caught a settled state.
+        failed="$(failed_processes)"
+        if [ -n "$failed" ] && [ "$failed" = "$previous" ]; then
+            report_failed "$failed"
+        fi
+        previous="$failed"
+    elif $seen || [ "$now" -ge "$grace" ]; then
+        not_ready
+    fi
+    [ "$now" -lt "$deadline" ] || report_timeout
+    sleep 1
+done

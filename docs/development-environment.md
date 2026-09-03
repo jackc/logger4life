@@ -90,6 +90,11 @@ the backend waits for that to complete; Vite waits until the backend answers
 `/health`. Process Compose watches the backend's Go source and module files,
 so editing them rebuilds and restarts the backend.
 
+Every service, test, and database command runs with `LANG` defaulting to
+`en_US.UTF-8` when the calling shell sets no locale, as agents and CI often do
+not; PostgreSQL on macOS refuses to start without one. A locale already in the
+environment is respected.
+
 There is one process-compose supervisor per running worktree, and `mise run
 dev` is its only launcher. The foreground terminal owns the stack until it is
 interrupted. Tests, migrations, reset, and `psql` only connect to this running
@@ -109,7 +114,11 @@ mise run dev:down
 ```
 
 `dev:wait` prevents tests from racing cluster initialization, migrations, or
-application readiness. CI must put `dev:down` in an unconditional cleanup
+application readiness. It fails as soon as a service has stopped for good —
+exited with no restart pending, or skipped because a dependency failed —
+printing that service's last log lines, and gives up after `DEV_READY_TIMEOUT`
+seconds (default 300) otherwise, so a broken stack never blocks a job
+indefinitely. CI must put `dev:down` in an unconditional cleanup
 step, and agents must run it when they finish. An interrupted agent can leave
 a detached stack behind, but it remains owned by a discoverable process-compose
 supervisor and `mise run dev:down` cleans it up.
@@ -141,8 +150,10 @@ PostgreSQL, and one worktree may be opened both ways).
 
 It holds `logger4life_dev`, the browser-test database `logger4life_test`, and
 eight `logger4life_test_N` copies used by parallel Go tests. It listens only
-on loopback and uses trust authentication — safe for a cluster whose port
-nothing else knows, and one less secret in the environment.
+on loopback, over TCP alone — no Unix-domain socket, whose path would exceed
+the operating system's limit under a deeply nested worktree — and uses trust
+authentication: safe for a cluster whose port nothing else knows, and one less
+secret in the environment.
 
 | Command | Description |
 |---------|-------------|

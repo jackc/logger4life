@@ -26,8 +26,12 @@ fi
 mkdir -p "$(dirname "$PC_POSTGRES_PID_FILE")"
 printf '%s\n' "$$" > "$PC_POSTGRES_PID_FILE"
 
+# No Unix-domain socket (-k ''): every client in this project connects over
+# TCP to 127.0.0.1, and a socket path under a deeply nested worktree, such as
+# .claude/worktrees/<name>/.dev/..., exceeds the 103-byte limit macOS places
+# on socket paths, so PostgreSQL would refuse to start there.
 exec "$PGBIN/postgres" \
     -D "$PGDATA" \
     -p "$PGPORT" \
-    -k "$PGSOCKETDIR" \
+    -k '' \
     -h "$PGHOST"

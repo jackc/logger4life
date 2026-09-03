@@ -18,7 +18,7 @@ build, and release commands remain mise tasks and never start services. See
 
 - `mise run dev:init` — Prepare a checkout: ports and dependencies
 - `mise run dev` — Run PostgreSQL, the backend, and Vite under process-compose
-- `mise run dev -- -D` / `mise run dev:wait` — Start the stack detached and wait until it is ready (CI and agent worktrees)
+- `mise run dev -- -D` / `mise run dev:wait` — Start the stack detached and wait until it is ready (CI and agent worktrees); `dev:wait` fails fast when a service dies and gives up after `DEV_READY_TIMEOUT` seconds (default 300)
 - `mise run dev:urls` — Print this checkout's ports and URLs
 - `mise run dev:down` — Stop a detached development stack; agents must run this when finished
 - `process-compose process list` / `process-compose process logs backend` / `process-compose process restart backend` — Inspect and control services without the TUI; no flags needed, `PC_PORT_NUM` is in the environment
@@ -179,7 +179,7 @@ migrations in `db/migrations/jed/` expose the same logical tables:
 - **mise** (`.mise.toml`) manages tool versions, the worktree environment, and the task interface
 - **Port Tamer** (`port-tamer.toml`) allocates the named port group persisted in `.port-tamer.env`
 - **process-compose** (`process-compose.yaml`) owns the single development service graph and is launched only by `mise run dev`
-- **scripts/dev-ready** checks the running project without starting it; **scripts/dev-down** stops a detached project
+- **scripts/dev-ready** checks the running project without starting it (`--wait` polls with fail-fast and a timeout); **scripts/dev-down** stops a detached project
 - **scripts/** also holds `dev-env.sh` (environment assembly), `dev-urls` (project URL display), `dev-exec` (fresh environment command wrapper), `postgres` / `postgres-ready` / `db-bootstrap` (service lifecycle), `build-release`, `dev-init`, `dev-up`, `db-reset`, and `pgbin`
 - Dev container setup in `.devcontainer/` (Ubuntu 24.04 + PostgreSQL 18 binaries + mise); it is a thin Linux shell that runs the same `mise run dev:init` / `mise run dev` as native macOS
 - **fd** and **rg** (ripgrep) are available in the dev container — use them instead of `find` and `grep`

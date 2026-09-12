@@ -27,7 +27,8 @@ env: {}
 provision:
   - mode: data
     path: /usr/local/share/devwright/setup-host-ubuntu
-    file: ../scripts/setup-host-ubuntu
+    # Lima rejects '..' in file locators; this symlink shares the native script.
+    file: setup-host-ubuntu
     overwrite: true
   - mode: data
     path: /etc/codex/requirements.toml

@@ -69,9 +69,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!doctype htm
 
 func renderConsentPage(w http.ResponseWriter, _ *http.Request, data consentData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// We rely on SameSite=Lax cookies + the form posting same-origin to
-	// prevent CSRF: a cross-origin attacker cannot read the consent page or
-	// the user's session cookie, so they cannot construct a valid POST.
+	// handleAuthorize enforces the form's Origin and denies framing.
 	if err := consentTemplate.Execute(w, data); err != nil {
 		http.Error(w, "render consent page", http.StatusInternalServerError)
 	}

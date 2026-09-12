@@ -126,12 +126,24 @@ normalize only scheme/host for resource comparisons. Keep the RFC 9207
 issuer value exact. Validate that `MCP_CANONICAL_URL` is the documented
 public origin at startup rather than accepting arbitrary paths or queries.
 
-The consent page still relies on SameSite=Lax cookies, without an explicit
-CSRF mechanism or framing restrictions. SameSite does not distinguish an
-untrusted sibling origin on the same site. Add an origin/Fetch Metadata
-check or session-bound CSRF token to consent submission and deny framing
-of the consent page. The decision-injection fix above addresses a separate,
-confirmed bug.
+**Consent protection — resolved.** A Chromium reproduction confirmed that
+an untrusted sibling origin could submit approval using the user's
+SameSite=Lax session and obtain working access and refresh tokens without
+displaying consent. Secure and HttpOnly cookie attributes did not prevent
+this attack. The sibling origin could also frame the consent page.
+
+Authorization POSTs now require exactly one `Origin` header matching the
+configured public origin, independently of proxy Host or forwarded headers.
+Missing, null, duplicate, and foreign origins fail with an inline 403 before
+authorization processing. Initial cross-origin GET navigation remains
+supported. All authorization responses deny framing with CSP
+`frame-ancestors 'none'` and `X-Frame-Options: DENY`. Automated consent
+submissions must send the canonical Origin, just as a browser does.
+Regressions cover approval and denial, forged provenance, proxy hosts,
+framing headers, and failure before code issuance. The decision-injection
+fix above addresses a separate bug. Chromium verification confirms the
+forged POSTs and framing are blocked while explicit approval still yields
+a working token and a successful MCP tool call.
 
 ### 6. Bound large tool results — resolved; metadata caching remains optional
 

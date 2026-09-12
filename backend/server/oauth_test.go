@@ -249,7 +249,7 @@ func TestOAuthEndToEnd(t *testing.T) {
 			return http.ErrUseLastResponse
 		},
 	}
-	resp, err = noFollow.PostForm(srv.URL+"/oauth/authorize", authValues)
+	resp, err = postOAuthConsent(noFollow, srv.URL+"/oauth/authorize", authValues)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
 	loc, err := url.Parse(resp.Header.Get("Location"))
@@ -373,7 +373,7 @@ func TestOAuthConsentDecisionCannotBeSuppliedByAuthorizationURL(t *testing.T) {
 	assert.NotContains(t, string(body), `<input type="hidden" name="approve"`)
 
 	values.Set("approve", "false")
-	resp, err = client.PostForm(srv.URL+"/oauth/authorize?approve=true", values)
+	resp, err = postOAuthConsent(client, srv.URL+"/oauth/authorize?approve=true", values)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
@@ -385,7 +385,7 @@ func TestOAuthConsentDecisionCannotBeSuppliedByAuthorizationURL(t *testing.T) {
 
 	// Ambiguous form decisions must never issue a code.
 	values["approve"] = []string{"true", "false"}
-	resp, err = client.PostForm(srv.URL+"/oauth/authorize", values)
+	resp, err = postOAuthConsent(client, srv.URL+"/oauth/authorize", values)
 	require.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -441,7 +441,7 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 	v.Set("state", "reuse-test-state")
 	v.Set("resource", srv.URL)
 	v.Set("approve", "true")
-	resp, err = noFollow.PostForm(srv.URL+"/oauth/authorize", v)
+	resp, err = postOAuthConsent(noFollow, srv.URL+"/oauth/authorize", v)
 	require.NoError(t, err)
 	loc, _ := url.Parse(resp.Header.Get("Location"))
 	resp.Body.Close()
@@ -558,7 +558,7 @@ func TestAuthorizeRejectsInvalidScopeOrAudience(t *testing.T) {
 					if method == http.MethodGet {
 						resp, err = noFollow.Get(srv.URL + "/oauth/authorize?" + v.Encode())
 					} else {
-						resp, err = noFollow.PostForm(srv.URL+"/oauth/authorize", v)
+						resp, err = postOAuthConsent(noFollow, srv.URL+"/oauth/authorize", v)
 					}
 					require.NoError(t, err)
 					defer resp.Body.Close()

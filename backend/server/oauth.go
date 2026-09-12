@@ -159,6 +159,23 @@ func parseAuthorizeParams(values url.Values) core.OAuthAuthorizationParams {
 
 func (p *oauthProvider) handleAuthorize() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Protect consent, login bounces, and errors from being framed. CSRF
+		// protection alone cannot prevent a user being tricked into clicking
+		// the real consent form inside an attacker's frame.
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		w.Header().Set("X-Frame-Options", "DENY")
+		if r.Method == http.MethodPost {
+			// Consent is a browser form submission. Require its explicit public
+			// origin, including behind a reverse proxy; Host and forwarded
+			// headers are not a trust source. SameSite cookies also accompany
+			// requests from untrusted sibling origins. Fail closed if Origin
+			// is absent, null, or ambiguous rather than trusting those cookies.
+			origins := r.Header.Values("Origin")
+			if len(origins) != 1 || origins[0] != p.canonicalURL {
+				http.Error(w, "invalid consent origin", http.StatusForbidden)
+				return
+			}
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "invalid form", http.StatusBadRequest)
 			return

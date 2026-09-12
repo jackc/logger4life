@@ -14,9 +14,10 @@ import (
 )
 
 type mcpServer struct {
-	server  *mcp.Server
-	handler *mcp.StreamableHTTPHandler
-	oauth   *oauthProvider
+	server   *mcp.Server
+	handler  *mcp.StreamableHTTPHandler
+	oauth    *oauthProvider
+	requests *keyedRateLimiter
 }
 
 // listLogsInput is the (empty) input schema for the list_logs tool.
@@ -221,7 +222,7 @@ func newMCPServer(app *core.Core, oauth *oauthProvider) *mcpServer {
 			DisableLocalhostProtection: true,
 		},
 	)
-	return &mcpServer{server: srv, handler: handler, oauth: oauth}
+	return &mcpServer{server: srv, handler: handler, oauth: oauth, requests: newKeyedRateLimiter(60, 10)}
 }
 
 // requireBearerToken validates an OAuth access token on each request to the
@@ -256,6 +257,15 @@ func (m *mcpServer) requireBearerToken() func(http.Handler) http.Handler {
 				return
 			}
 			ctx := context.WithValue(r.Context(), userContextKey, user)
+			// Count every authenticated POST, including legacy calls whose
+			// method is only in the body. No header or token rotation can
+			// bypass the user's allowance; discovery GETs remain available.
+			if r.Method == http.MethodPost {
+				if retry := m.requests.allow(user.ID); retry > 0 {
+					writeRateLimit(w, retry)
+					return
+				}
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

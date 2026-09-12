@@ -88,6 +88,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.MCPEnabled() {
 		oauth := newOAuthProvider(app, cfg.MCPCanonicalURL)
 		mcpSrv := newMCPServer(app, oauth)
+		mcpSrv.requests = newKeyedRateLimiter(limitOrDefault(cfg.MCPRequestsPerMinute, 60), limitOrDefault(cfg.MCPRequestBurst, 10))
 
 		r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
 		r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
@@ -188,6 +189,9 @@ type persistence interface {
 // commands can exercise the same composition root.
 func BuildBackend(ctx context.Context, cfg Config, logger *slog.Logger) (*core.Core, HealthCheck, func(), error) {
 	noop := func() {}
+	if err := cfg.validateLimits(); err != nil {
+		return nil, nil, noop, err
+	}
 	var wan *webauthn.WebAuthn
 	var err error
 	if cfg.PasskeysEnabled() {

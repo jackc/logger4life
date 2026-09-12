@@ -1,9 +1,11 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -16,32 +18,36 @@ type Config struct {
 	DatabaseBackend string
 	DatabaseURL     string
 	// JedDataDir holds logger4life.jed and is required by the jed and both backends.
-	JedDataDir        string
-	BindAddress       string
-	Port              string
-	AllowRegistration bool
-	WebAuthnRPID      string
-	WebAuthnOrigin    string
-	LogLevel          string
-	LogFormat         string
-	MCPCanonicalURL   string
-	SecureCookies     bool
+	JedDataDir           string
+	BindAddress          string
+	Port                 string
+	AllowRegistration    bool
+	WebAuthnRPID         string
+	WebAuthnOrigin       string
+	LogLevel             string
+	LogFormat            string
+	MCPCanonicalURL      string
+	SecureCookies        bool
+	MCPRequestsPerMinute int
+	MCPRequestBurst      int
 }
 
 func DefaultConfig() Config {
 	return Config{
-		DatabaseBackend:   "postgresql",
-		DatabaseURL:       "postgres://postgres:postgres@localhost:5432/logger4life_dev",
-		JedDataDir:        "",
-		BindAddress:       "127.0.0.1",
-		Port:              "4000",
-		AllowRegistration: false,
-		WebAuthnRPID:      "",
-		WebAuthnOrigin:    "",
-		LogLevel:          "info",
-		LogFormat:         "json",
-		MCPCanonicalURL:   "",
-		SecureCookies:     false,
+		DatabaseBackend:      "postgresql",
+		DatabaseURL:          "postgres://postgres:postgres@localhost:5432/logger4life_dev",
+		JedDataDir:           "",
+		BindAddress:          "127.0.0.1",
+		Port:                 "4000",
+		AllowRegistration:    false,
+		WebAuthnRPID:         "",
+		WebAuthnOrigin:       "",
+		LogLevel:             "info",
+		LogFormat:            "json",
+		MCPCanonicalURL:      "",
+		SecureCookies:        false,
+		MCPRequestsPerMinute: 60,
+		MCPRequestBurst:      10,
 	}
 }
 
@@ -99,8 +105,37 @@ func ConfigFromEnv() Config {
 	if v := os.Getenv("SECURE_COOKIES"); v == "true" {
 		cfg.SecureCookies = true
 	}
+	readLimitEnv("MCP_REQUESTS_PER_MINUTE", &cfg.MCPRequestsPerMinute)
+	readLimitEnv("MCP_REQUEST_BURST", &cfg.MCPRequestBurst)
 
 	return cfg
+}
+
+func readLimitEnv(name string, target *int) {
+	if value, ok := os.LookupEnv(name); ok {
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > 1000000 {
+			*target = -1 // Report invalid configuration before opening the database.
+		} else {
+			*target = n
+		}
+	}
+}
+
+func (c Config) validateLimits() error {
+	for name, value := range map[string]int{"MCP_REQUESTS_PER_MINUTE": c.MCPRequestsPerMinute, "MCP_REQUEST_BURST": c.MCPRequestBurst} {
+		if value < 0 || value > 1000000 {
+			return fmt.Errorf("%s must be an integer between 1 and 1000000", name)
+		}
+	}
+	return nil
+}
+
+func limitOrDefault(value, fallback int) int {
+	if value == 0 {
+		return fallback
+	}
+	return value
 }
 
 func (c Config) SlogLevel() slog.Level {

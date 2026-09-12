@@ -11,7 +11,7 @@ require (
 	github.com/jackc/pgsqlarbiter-go v0.1.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jackc/testdb v0.0.0-20221015161059-a3705a386fe0
-	github.com/modelcontextprotocol/go-sdk v1.6.1
+	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	github.com/systemd/slog-journal v0.1.2
@@ -43,5 +43,6 @@ require (
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.50.0 // indirect
 )

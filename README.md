@@ -171,7 +171,7 @@ VERNA_APP = "logger4life"
 
 ## MCP (Model Context Protocol)
 
-Logger4Life can expose a `list_logs` tool to AI assistants over the
+Logger4Life exposes five read-only tools to AI assistants over the
 [Model Context Protocol](https://modelcontextprotocol.io). Set
 `MCP_CANONICAL_URL` to enable the OAuth 2.1 authorization server
 (`/oauth/...`) and the MCP endpoint (`/mcp`):
@@ -183,6 +183,18 @@ verna app env set MCP_CANONICAL_URL=https://logger4life.example.com
 The value must be the public origin without a trailing slash. It is used
 as both the OAuth issuer and the RFC 8707 audience binding for issued
 access tokens.
+
+The tools are `list_logs`, `get_sql_schema`, `run_sql`,
+`list_saved_queries`, and `run_saved_query`. SQL queries are restricted to
+the caller's data and capped at 1000 rows and 1 MiB of result values.
+
+The endpoint supports protocol `2026-07-28` using stateless Streamable HTTP
+with JSON responses, and retains compatibility with earlier clients using
+`initialize`. Every request needs an OAuth bearer token. Browser requests
+that include `Origin` must match `MCP_CANONICAL_URL` exactly.
+
+See the [MCP implementation review](docs/mcp-review.md) for the migration
+details and remaining recommendations.
 
 When adding the connector in a client (e.g. claude.ai → Settings →
 Connectors → Add custom connector), provide the **full MCP endpoint

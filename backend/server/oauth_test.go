@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
@@ -108,6 +109,7 @@ func TestAuthorizationServerMetadata(t *testing.T) {
 	assert.Equal(t, srv.URL+"/oauth/token", body["token_endpoint"])
 	assert.Equal(t, srv.URL+"/oauth/register", body["registration_endpoint"])
 	assert.Equal(t, []any{"S256"}, body["code_challenge_methods_supported"])
+	assert.Equal(t, true, body["authorization_response_iss_parameter_supported"])
 }
 
 func TestDynamicClientRegistration(t *testing.T) {
@@ -153,6 +155,8 @@ func TestMCPRequiresBearerToken(t *testing.T) {
 
 	wwwAuth := resp.Header.Get("WWW-Authenticate")
 	assert.Contains(t, wwwAuth, `Bearer resource_metadata="`+srv.URL+`/.well-known/oauth-protected-resource"`)
+	assert.Contains(t, wwwAuth, `scope="mcp"`)
+	assert.NotContains(t, wwwAuth, "invalid_token")
 }
 
 func TestMCPRejectsInvalidToken(t *testing.T) {
@@ -252,6 +256,7 @@ func TestOAuthEndToEnd(t *testing.T) {
 	resp.Body.Close()
 	require.NoError(t, err)
 	require.Equal(t, "deadbeef-state", loc.Query().Get("state"))
+	require.Equal(t, srv.URL, loc.Query().Get("iss"))
 	code := loc.Query().Get("code")
 	require.NotEmpty(t, code, "expected code in redirect; got %s", resp.Header.Get("Location"))
 
@@ -266,6 +271,8 @@ func TestOAuthEndToEnd(t *testing.T) {
 	resp, err = http.PostForm(srv.URL+"/oauth/token", tokValues)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "no-store", resp.Header.Get("Cache-Control"))
+	assert.Equal(t, "no-cache", resp.Header.Get("Pragma"))
 	var tok map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tok))
 	resp.Body.Close()
@@ -285,6 +292,27 @@ func TestOAuthEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	defer initResp.Body.Close()
 	assert.Equal(t, http.StatusOK, initResp.StatusCode)
+	assert.Empty(t, initResp.Header.Get("Mcp-Session-Id"))
+
+	// The same token also works with the handshake-free protocol. Exercise
+	// a real tool through the OAuth middleware and the selected store.
+	modernReq := newMCPHTTPRequest(t, "2026-07-28", "tools/call", map[string]any{
+		"name": "list_logs", "arguments": map[string]any{},
+	})
+	modernReq.URL, err = url.Parse(srv.URL + "/mcp")
+	require.NoError(t, err)
+	modernReq.RequestURI = ""
+	modernReq.Header.Set("Authorization", "Bearer "+access)
+	modernResp, err := http.DefaultClient.Do(modernReq)
+	require.NoError(t, err)
+	defer modernResp.Body.Close()
+	require.Equal(t, http.StatusOK, modernResp.StatusCode)
+	var modernBody map[string]any
+	require.NoError(t, json.NewDecoder(modernResp.Body).Decode(&modernBody))
+	result := modernBody["result"].(map[string]any)
+	assert.Equal(t, "complete", result["resultType"])
+	assert.NotEqual(t, true, result["isError"])
+	assert.Equal(t, []any{}, result["structuredContent"].(map[string]any)["logs"])
 
 	// Replaying the consumed authorization code should fail (defense in
 	// depth even though PKCE alone would catch this).
@@ -306,6 +334,72 @@ func TestOAuthEndToEnd(t *testing.T) {
 	var refreshed map[string]any
 	require.NoError(t, json.NewDecoder(refreshResp.Body).Decode(&refreshed))
 	assert.NotEqual(t, access, refreshed["access_token"], "refreshed token should differ")
+	assert.Equal(t, "no-store", refreshResp.Header.Get("Cache-Control"))
+}
+
+func TestOAuthConsentDecisionCannotBeSuppliedByAuthorizationURL(t *testing.T) {
+	t.Parallel()
+	srv, _ := setupOAuthTestServer(t)
+	jar, err := cookiejar.New(nil)
+	require.NoError(t, err)
+	client := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Post(srv.URL+"/api/register", "application/json",
+		strings.NewReader(`{"username":"consent_user","password":"password123"}`))
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	resp, err = client.Post(srv.URL+"/oauth/register", "application/json",
+		strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
+	require.NoError(t, err)
+	var dcr map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
+	resp.Body.Close()
+	_, challenge := pkceParams(t)
+	values := url.Values{
+		"response_type": {"code"}, "client_id": {dcr["client_id"].(string)},
+		"redirect_uri": {"http://localhost/cb"}, "code_challenge": {challenge},
+		"code_challenge_method": {"S256"}, "state": {"consent-state"}, "resource": {srv.URL},
+		"approve": {"true"},
+	}
+	resp, err = client.Get(srv.URL + "/oauth/authorize?" + values.Encode())
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.NoError(t, err)
+	assert.NotContains(t, string(body), `<input type="hidden" name="approve"`)
+
+	values.Set("approve", "false")
+	resp, err = client.PostForm(srv.URL+"/oauth/authorize?approve=true", values)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	loc, err := url.Parse(resp.Header.Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "access_denied", loc.Query().Get("error"))
+	assert.Equal(t, srv.URL, loc.Query().Get("iss"))
+	assert.Empty(t, loc.Query().Get("code"))
+
+	// Ambiguous form decisions must never issue a code.
+	values["approve"] = []string{"true", "false"}
+	resp, err = client.PostForm(srv.URL+"/oauth/authorize", values)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Empty(t, resp.Header.Get("Location"))
+
+	// Redirectable validation errors carry the issuer too.
+	values.Set("response_type", "token")
+	resp, err = client.Get(srv.URL + "/oauth/authorize?" + values.Encode())
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	loc, err = url.Parse(resp.Header.Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "unsupported_response_type", loc.Query().Get("error"))
+	assert.Equal(t, srv.URL, loc.Query().Get("iss"))
 }
 
 // TestRefreshTokenReuseRevokesFamily verifies OAuth 2.1 BCP §4.14.2: when

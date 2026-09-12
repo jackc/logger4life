@@ -1,12 +1,21 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/domain"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mcpUserSQLExecutor struct {
@@ -116,5 +125,244 @@ func TestMCPToolErrorOnlyExposesExplicitlySafeErrors(t *testing.T) {
 	internal := mcpToolError(context.Background(), errors.New("database host is secret.internal"))
 	if internal.Error() != "internal error" {
 		t.Fatalf("internal error = %q", internal)
+	}
+}
+
+type mcpOAuthStore struct{ core.OAuthStore }
+
+func (mcpOAuthStore) GetGrantByAccessToken(_ context.Context, hash []byte) (core.OAuthGrant, error) {
+	for _, userID := range []string{"alice", "bob"} {
+		if bytes.Equal(hash, domain.HashToken(userID+"-token")) {
+			return core.OAuthGrant{UserID: userID, Username: userID, Audience: "https://logs.example.com", Scope: core.OAuthScopeMCP}, nil
+		}
+	}
+	return core.OAuthGrant{}, core.ErrOAuthRecordNotFound
+}
+
+func newMCPHTTPTestHandler(executor core.UserSQLExecutor) http.Handler {
+	app := core.New(core.Config{
+		OAuth: mcpOAuthStore{}, OAuthIssuer: "https://logs.example.com", UserSQL: executor,
+		SavedQueries: mcpSavedQueryStore{saved: core.SavedQuery{Name: "saved", QueryText: "SELECT 1"}},
+	})
+	server := newMCPServer(app, newOAuthProvider(app, "https://logs.example.com"))
+	return server.requireBearerToken()(server.handler)
+}
+
+func newMCPHTTPRequest(t *testing.T, version, method string, params map[string]any) *http.Request {
+	t.Helper()
+	if params == nil {
+		params = map[string]any{}
+	}
+	if version == "2026-07-28" {
+		params["_meta"] = map[string]any{
+			"io.modelcontextprotocol/protocolVersion":    version,
+			"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+			"io.modelcontextprotocol/clientInfo":         map[string]any{"name": "test", "version": "0.1"},
+		}
+	}
+	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "https://logs.example.com/mcp", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer alice-token")
+	req.Header.Set("MCP-Protocol-Version", version)
+	if version == "2026-07-28" {
+		req.Header.Set("Mcp-Method", method)
+		if name, ok := params["name"].(string); ok {
+			req.Header.Set("Mcp-Name", name)
+		}
+	}
+	return req
+}
+
+func serveMCPJSON(t *testing.T, handler http.Handler, req *http.Request) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body), "status %d: %s", w.Code, w.Body.String())
+	assert.Empty(t, w.Header().Get("Mcp-Session-Id"))
+	return w, body
+}
+
+func TestMCPHTTPProtocolCompatibility(t *testing.T) {
+	for _, version := range []string{"2025-06-18", "2025-11-25", "2026-07-28"} {
+		t.Run(version, func(t *testing.T) {
+			executor := &mcpUserSQLExecutor{}
+			handler := newMCPHTTPTestHandler(executor)
+			if version == "2026-07-28" {
+				w, body := serveMCPJSON(t, handler, newMCPHTTPRequest(t, version, "server/discover", nil))
+				require.Equal(t, http.StatusOK, w.Code, "%v", body)
+				result := body["result"].(map[string]any)
+				assert.Contains(t, result["supportedVersions"], version)
+				assert.Equal(t, "complete", result["resultType"])
+			} else {
+				w, body := serveMCPJSON(t, handler, newMCPHTTPRequest(t, version, "initialize", map[string]any{
+					"protocolVersion": version, "capabilities": map[string]any{},
+					"clientInfo": map[string]any{"name": "legacy-test", "version": "0.1"},
+				}))
+				require.Equal(t, http.StatusOK, w.Code, "%v", body)
+				assert.Equal(t, version, body["result"].(map[string]any)["protocolVersion"])
+			}
+
+			w, body := serveMCPJSON(t, handler, newMCPHTTPRequest(t, version, "tools/list", nil))
+			require.Equal(t, http.StatusOK, w.Code, "%v", body)
+			result := body["result"].(map[string]any)
+			if version == "2026-07-28" {
+				assert.Equal(t, "complete", result["resultType"])
+				assert.Equal(t, "public", result["cacheScope"])
+				assert.Equal(t, float64(0), result["ttlMs"])
+			}
+			tools := result["tools"].([]any)
+			require.Len(t, tools, 5)
+			names := make([]string, 0, len(tools))
+			for _, item := range tools {
+				tool := item.(map[string]any)
+				names = append(names, tool["name"].(string))
+				assert.NotEmpty(t, tool["title"])
+				assert.NotNil(t, tool["inputSchema"])
+				assert.NotNil(t, tool["outputSchema"])
+				annotations := tool["annotations"].(map[string]any)
+				assert.Equal(t, true, annotations["readOnlyHint"])
+				assert.Equal(t, false, annotations["destructiveHint"])
+				assert.Equal(t, true, annotations["idempotentHint"])
+				assert.Equal(t, false, annotations["openWorldHint"])
+			}
+			assert.True(t, slices.IsSorted(names), "tool order: %v", names)
+
+			for _, userID := range []string{"alice", "bob"} {
+				req := newMCPHTTPRequest(t, version, "tools/call", map[string]any{
+					"name": "run_sql", "arguments": map[string]any{"query": "SELECT 1"},
+				})
+				req.Header.Set("Authorization", "bEaReR "+userID+"-token")
+				// A stale or fabricated session ID must not bind the request to
+				// another user or require the client to reinitialize.
+				req.Header.Set("Mcp-Session-Id", "same-session")
+				w, body = serveMCPJSON(t, handler, req)
+				require.Equal(t, http.StatusOK, w.Code, "%v", body)
+				result = body["result"].(map[string]any)
+				assert.NotEqual(t, true, result["isError"], "%v", result)
+				structured := result["structuredContent"].(map[string]any)
+				assert.Equal(t, float64(1), structured["row_count"])
+				content := result["content"].([]any)[0].(map[string]any)
+				var textResult map[string]any
+				require.NoError(t, json.Unmarshal([]byte(content["text"].(string)), &textResult))
+				assert.Equal(t, structured, textResult)
+			}
+			assert.Equal(t, []string{"alice", "bob"}, executor.userIDs)
+
+			w, body = serveMCPJSON(t, handler, newMCPHTTPRequest(t, version, "tools/call", map[string]any{
+				"name": "run_sql", "arguments": map[string]any{"query": " "},
+			}))
+			require.Equal(t, http.StatusOK, w.Code, "%v", body)
+			assert.Equal(t, true, body["result"].(map[string]any)["isError"])
+			assert.Contains(t, w.Body.String(), "query is required")
+
+			_, body = serveMCPJSON(t, handler, newMCPHTTPRequest(t, version, "tools/call", map[string]any{
+				"name": "unknown", "arguments": map[string]any{},
+			}))
+			assert.Equal(t, float64(-32602), body["error"].(map[string]any)["code"])
+		})
+	}
+}
+
+func TestMCPHTTPRejectsMismatchedHeaders(t *testing.T) {
+	handler := newMCPHTTPTestHandler(&mcpUserSQLExecutor{})
+	for _, header := range []string{"Mcp-Method", "Mcp-Name", "MCP-Protocol-Version"} {
+		t.Run(header, func(t *testing.T) {
+			req := newMCPHTTPRequest(t, "2026-07-28", "tools/call", map[string]any{
+				"name": "run_sql", "arguments": map[string]any{"query": "SELECT 1"},
+			})
+			value := "wrong"
+			if header == "MCP-Protocol-Version" {
+				value = "2025-11-25"
+			}
+			req.Header.Set(header, value)
+			w, body := serveMCPJSON(t, handler, req)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, float64(-32020), body["error"].(map[string]any)["code"])
+		})
+	}
+}
+
+func TestMCPHTTPOriginAndAuthentication(t *testing.T) {
+	handler := newMCPHTTPTestHandler(&mcpUserSQLExecutor{})
+	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+		for _, origin := range []string{"", "https://logs.example.com", "https://evil.example", "null"} {
+			t.Run(method+"/"+origin, func(t *testing.T) {
+				req := newMCPHTTPRequest(t, "2026-07-28", "tools/list", nil)
+				req.Method = method
+				if origin != "" {
+					req.Header.Set("Origin", origin)
+				}
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, req)
+				switch {
+				case origin != "" && origin != "https://logs.example.com":
+					assert.Equal(t, http.StatusForbidden, w.Code)
+				case method != http.MethodPost:
+					assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+					assert.Equal(t, "POST", w.Header().Get("Allow"))
+				default:
+					assert.Equal(t, http.StatusOK, w.Code)
+				}
+			})
+		}
+		for _, authorization := range []string{"", "Basic abc", "Bearer ", "Bearer invalid"} {
+			req := newMCPHTTPRequest(t, "2026-07-28", "tools/list", nil)
+			req.Method = method
+			req.Header.Set("Authorization", authorization)
+			// A cookie user must never stand in for an OAuth bearer token.
+			req = req.WithContext(context.WithValue(req.Context(), userContextKey, &AuthUser{ID: "cookie-user"}))
+			w, _ := serveMCPJSON(t, handler, req)
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Contains(t, w.Header().Get("WWW-Authenticate"), `scope="mcp"`)
+			if authorization == "" || authorization == "Basic abc" {
+				assert.NotContains(t, w.Header().Get("WWW-Authenticate"), "invalid_token")
+			} else {
+				assert.Contains(t, w.Header().Get("WWW-Authenticate"), "invalid_token")
+			}
+		}
+	}
+}
+
+type cancellingMCPExecutor struct{ started, cancelled chan struct{} }
+
+func (e *cancellingMCPExecutor) ExecuteUserSQL(ctx context.Context, _, _ string) (core.UserSQLResult, error) {
+	close(e.started)
+	<-ctx.Done()
+	close(e.cancelled)
+	return core.UserSQLResult{}, ctx.Err()
+}
+
+func TestMCPHTTPDisconnectCancelsTool(t *testing.T) {
+	executor := &cancellingMCPExecutor{started: make(chan struct{}), cancelled: make(chan struct{})}
+	handler := newMCPHTTPTestHandler(executor)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req := newMCPHTTPRequest(t, "2026-07-28", "tools/call", map[string]any{
+		"name": "run_sql", "arguments": map[string]any{"query": "SELECT 1"},
+	}).WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+	}()
+	select {
+	case <-executor.started:
+	case <-ctx.Done():
+		t.Fatal("tool did not start")
+	}
+	cancel() // net/http cancels this context when the client disconnects.
+	select {
+	case <-executor.cancelled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("request cancellation did not reach the SQL executor")
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP handler did not return after cancellation")
 	}
 }

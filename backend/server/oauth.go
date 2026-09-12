@@ -50,16 +50,17 @@ func (p *oauthProvider) handleAuthorizationServerMetadata() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		writeJSON(w, http.StatusOK, map[string]any{
-			"issuer":                                p.canonicalURL,
-			"authorization_endpoint":                p.canonicalURL + "/oauth/authorize",
-			"token_endpoint":                        p.canonicalURL + "/oauth/token",
-			"registration_endpoint":                 p.canonicalURL + "/oauth/register",
-			"revocation_endpoint":                   p.canonicalURL + "/oauth/revoke",
-			"response_types_supported":              []string{"code"},
-			"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
-			"code_challenge_methods_supported":      []string{"S256"},
-			"token_endpoint_auth_methods_supported": []string{"none"},
-			"scopes_supported":                      []string{core.OAuthScopeMCP},
+			"issuer":                                         p.canonicalURL,
+			"authorization_endpoint":                         p.canonicalURL + "/oauth/authorize",
+			"token_endpoint":                                 p.canonicalURL + "/oauth/token",
+			"registration_endpoint":                          p.canonicalURL + "/oauth/register",
+			"revocation_endpoint":                            p.canonicalURL + "/oauth/revoke",
+			"response_types_supported":                       []string{"code"},
+			"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
+			"code_challenge_methods_supported":               []string{"S256"},
+			"token_endpoint_auth_methods_supported":          []string{"none"},
+			"scopes_supported":                               []string{core.OAuthScopeMCP},
+			"authorization_response_iss_parameter_supported": true,
 		})
 	}
 }
@@ -133,57 +134,68 @@ func (p *oauthProvider) handleAuthorize() http.HandlerFunc {
 			http.Error(w, "invalid form", http.StatusBadRequest)
 			return
 		}
-		params := parseAuthorizeParams(r.Form)
+		values := r.URL.Query()
+		if r.Method == http.MethodPost {
+			// OAuth authorization and the user's decision must come from
+			// the submitted form, never from query parameters merged into it.
+			values = r.PostForm
+		}
+		params := parseAuthorizeParams(values)
 
 		// Validate before anything else, including the login bounce, so a
 		// malformed request is reported rather than surviving a round trip
 		// through the login page.
 		req, err := core.PrepareOAuthAuthorization.Call(r.Context(), p.app, params)
 		if err != nil {
-			writeAuthorizeError(w, r, params, err)
+			p.writeAuthorizeError(w, r, params, err)
 			return
 		}
 
 		user := userFromContext(r.Context())
 		if user == nil {
-			returnTo := "/oauth/authorize?" + r.Form.Encode()
+			returnTo := "/oauth/authorize?" + values.Encode()
 			http.Redirect(w, r, "/login?return_to="+url.QueryEscape(returnTo), http.StatusSeeOther)
 			return
 		}
 
-		approved := r.Method == http.MethodPost && r.Form.Get("approve") == "true"
-		denied := r.Method == http.MethodPost && r.Form.Get("approve") == "false"
+		decision := r.PostForm["approve"]
+		approved := r.Method == http.MethodPost && len(decision) == 1 && decision[0] == "true"
+		denied := r.Method == http.MethodPost && len(decision) == 1 && decision[0] == "false"
 
 		if denied {
-			redirectAuthorizeError(w, r, params, "access_denied", "user denied the request")
+			p.redirectAuthorizeError(w, r, params, "access_denied", "user denied the request")
 			return
 		}
 		if !approved {
+			// Only the clicked button may supply the decision. Reflecting an
+			// incoming approve field would let it override a later Deny click.
+			delete(values, "approve")
 			renderConsentPage(w, r, consentData{
 				Username:    user.Username,
 				ClientID:    req.Client.ID,
 				ClientName:  req.Client.ClientName,
 				RedirectURI: params.RedirectURI,
 				Scopes:      strings.Fields(req.Scope),
-				FormFields:  r.Form,
+				FormFields:  values,
 			})
 			return
 		}
 
 		result, err := core.CreateOAuthAuthorizationCode.Call(core.WithUserID(r.Context(), user.ID), p.app, params)
 		if err != nil {
-			writeAuthorizeError(w, r, params, err)
+			p.writeAuthorizeError(w, r, params, err)
 			return
 		}
-		redirectAuthorizeSuccess(w, r, params, result.Code)
+		p.redirectAuthorizeSuccess(w, r, params, result.Code)
 	}
 }
 
-func redirectAuthorizeSuccess(w http.ResponseWriter, r *http.Request, p core.OAuthAuthorizationParams, code string) {
+func (provider *oauthProvider) redirectAuthorizeSuccess(w http.ResponseWriter, r *http.Request, p core.OAuthAuthorizationParams, code string) {
 	u, _ := url.Parse(p.RedirectURI)
 	q := u.Query()
 	q.Set("code", code)
 	q.Set("state", p.State)
+	q.Set("iss", provider.canonicalURL)
 	u.RawQuery = q.Encode()
 	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
@@ -192,7 +204,7 @@ func redirectAuthorizeSuccess(w http.ResponseWriter, r *http.Request, p core.OAu
 // before the redirect URI was confirmed to belong to the client cannot be
 // redirected anywhere, so it is rendered inline; everything else goes back to
 // the client per OAuth 2.1.
-func writeAuthorizeError(w http.ResponseWriter, r *http.Request, p core.OAuthAuthorizationParams, err error) {
+func (provider *oauthProvider) writeAuthorizeError(w http.ResponseWriter, r *http.Request, p core.OAuthAuthorizationParams, err error) {
 	var oauthErr *core.OAuthError
 	if !errors.As(err, &oauthErr) {
 		internalError(w, r, err)
@@ -203,10 +215,10 @@ func writeAuthorizeError(w http.ResponseWriter, r *http.Request, p core.OAuthAut
 		writeOAuthError(w, http.StatusBadRequest, oauthErr.Code, oauthErr.Description)
 		return
 	}
-	redirectAuthorizeError(w, r, p, oauthErr.Code, oauthErr.Description)
+	provider.redirectAuthorizeError(w, r, p, oauthErr.Code, oauthErr.Description)
 }
 
-func redirectAuthorizeError(w http.ResponseWriter, r *http.Request, p core.OAuthAuthorizationParams, code, desc string) {
+func (provider *oauthProvider) redirectAuthorizeError(w http.ResponseWriter, r *http.Request, p core.OAuthAuthorizationParams, code, desc string) {
 	httplog.SetError(r.Context(), errors.New(code+": "+desc))
 	if p.RedirectURI == "" {
 		writeOAuthError(w, http.StatusBadRequest, code, desc)
@@ -220,6 +232,7 @@ func redirectAuthorizeError(w http.ResponseWriter, r *http.Request, p core.OAuth
 	q := u.Query()
 	q.Set("error", code)
 	q.Set("error_description", desc)
+	q.Set("iss", provider.canonicalURL)
 	if p.State != "" {
 		q.Set("state", p.State)
 	}
@@ -267,6 +280,8 @@ func (p *oauthProvider) handleToken() http.HandlerFunc {
 }
 
 func writeTokenResponse(w http.ResponseWriter, t core.OAuthTokens) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token":  t.AccessToken,
 		"refresh_token": t.RefreshToken,

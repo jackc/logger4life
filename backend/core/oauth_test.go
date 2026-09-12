@@ -24,7 +24,8 @@ type fakeOAuthStore struct {
 	consumedCode     OAuthAuthorizationCode
 	consumeCodeErr   error
 
-	pair OAuthTokenPair
+	pair    OAuthTokenPair
+	pairErr error
 
 	accessHash []byte
 	grant      OAuthGrant
@@ -58,7 +59,7 @@ func (s *fakeOAuthStore) ConsumeAuthorizationCode(_ context.Context, hash []byte
 
 func (s *fakeOAuthStore) CreateTokenPair(_ context.Context, pair OAuthTokenPair) error {
 	s.pair = pair
-	return nil
+	return s.pairErr
 }
 
 func (s *fakeOAuthStore) GetGrantByAccessToken(_ context.Context, hash []byte) (OAuthGrant, error) {
@@ -378,6 +379,27 @@ func TestRefreshOAuthTokenRejectsOtherClient(t *testing.T) {
 	}
 	if store.pair.AccessTokenHash != nil {
 		t.Fatal("a refresh token must not be usable by another client")
+	}
+}
+
+func TestRefreshOAuthTokenHandlesRevocationBetweenConsumptionAndIssuance(t *testing.T) {
+	store := &fakeOAuthStore{
+		grant:   OAuthGrant{ClientID: "client-1", UserID: "user-1", Audience: testIssuer, FamilyID: "family-1"},
+		pairErr: ErrOAuthRefreshReuse,
+	}
+	app := New(Config{OAuth: store, OAuthIssuer: testIssuer})
+	tokens, err := RefreshOAuthToken.Call(context.Background(), app, RefreshOAuthTokenParams{
+		ClientID: "client-1", RefreshToken: "l4l_rt_x",
+	})
+	oauthErr := oauthErrorFrom(t, err)
+	if oauthErr.Code != "invalid_grant" || oauthErr.Description != "refresh_token is invalid, expired, or revoked" {
+		t.Fatalf("error = %v, want the generic invalid grant response", err)
+	}
+	if !errors.Is(err, ErrOAuthRefreshReuse) {
+		t.Fatal("issuance rejection must retain the revocation cause")
+	}
+	if tokens.AccessToken != "" || tokens.RefreshToken != "" {
+		t.Fatal("a rejected replacement must not expose tokens")
 	}
 }
 

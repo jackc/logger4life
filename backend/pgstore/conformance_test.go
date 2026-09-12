@@ -18,3 +18,8 @@ func TestStoreConformance(t *testing.T) {
 	pool := acquireTestPool(t)
 	storetest.Run(t, New(pool))
 }
+
+func TestOAuthFamilyRevocationConcurrency(t *testing.T) {
+	t.Parallel()
+	storetest.RunOAuthFamilyRevocationConcurrency(t, newTestStore(t))
+}

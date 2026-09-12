@@ -22,31 +22,36 @@ new revision while preserving older protocols. [SDK release notes](https://githu
 The transport changes follow the current [Streamable HTTP requirements](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
 Scope guidance and issuer responses follow the current [authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization).
 
-## Remaining findings, in priority order
+## Review findings and follow-up
 
-### 1. Fix refresh rotation and family revocation atomically
+### 1. Refresh-token family revocation — resolved
 
-**High priority; reproduced on the jed adapter.**
-`RefreshOAuthToken` in `backend/core/oauth.go` calls `ConsumeRefreshToken`
-and `issueTokenPair` separately. Both stores commit consumption before
-replacement issuance. This permits the following interleaving:
+The original high-priority finding was reproduced on the jed adapter.
+`RefreshOAuthToken` calls `ConsumeRefreshToken` and `issueTokenPair`
+separately. Previously, revocation affected only existing token rows, which
+permitted the following interleaving:
 
 1. Request A consumes refresh token R and pauses before creating its replacement.
 2. Request B replays R. The store detects reuse and revokes the family's existing rows.
 3. A resumes and inserts a fresh, valid pair into that same family.
 
-A deterministic probe using the real jed store confirmed that the new access
-token is accepted after reuse detection. The PostgreSQL implementation has
-the same transaction boundary; its concurrent interleaving was identified
-by inspection rather than reproduced against PostgreSQL. Existing tests
-cover reuse after the replacement is already persisted.
+Both adapters now persist revocation in `oauth_token_families` and check it
+during issuance and authentication. PostgreSQL locks the family row before
+touching token rows; jed's write transaction provides serialization. Reuse
+of an ancestor and issuance of a descendant therefore share the same
+revocation boundary. Explicit refresh-token revocation also revokes the
+family, including replacements that are still pending.
 
-Move rotation and issuance into one store operation with appropriate
-locking, or persist a family revocation state checked during issuance and
-authentication. Preserve committed revocation when returning the expected
-reuse error. Simply wrapping the current action in a transaction would
-roll that revocation back on an error unless error handling also changes.
-Add a coordinated concurrency test to the shared store suite.
+Issuance into a revoked family returns the same generic OAuth
+`invalid_grant` response as reuse during consumption. Revocation commits
+before the expected error is returned. Shared regression tests cover the
+three interleavings, while concurrent tests exercise each real adapter
+separately. Migration tests preserve existing tokens and check revocation
+across reopening the embedded database.
+
+PostgreSQL migration 014 must run before deploying the updated server.
+Embedded databases apply migration 002 automatically on open. Existing
+families are backfilled without requiring users to reconnect.
 
 ### 2. Bound request rate, concurrency, and registration growth
 
@@ -162,9 +167,11 @@ ever varies by authorization, revisit its cache policy before caching.
   request cancellation reaching the SQL executor.
 - OAuth integration coverage includes a real modern tool call, issuer
   responses, token cache headers, and the consent decision regression.
-- The refresh-token interleaving probe reproduced the remaining finding;
-  the passing race-detector run checks Go data races, not this transactional
-  ordering bug.
+- The original refresh-token probe reproduced the finding. Follow-up
+  regressions now exercise pending issuance after current-token replay,
+  ancestor replay, and explicit revocation. Concurrent revocation and
+  migration tests run on both storage adapters; the Go race detector
+  complements these transaction-level checks.
 
 Live external connector interoperability and full upstream conformance
 certification were not run.

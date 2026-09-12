@@ -151,7 +151,7 @@ build, and release commands remain mise tasks and never start services. See
 
 ### Database Schema
 
-The 13 PostgreSQL migrations in `postgresql/migrations/` and the embedded jed
+The 14 PostgreSQL migrations in `postgresql/migrations/` and the embedded jed
 migrations in `db/migrations/jed/` expose the same logical tables:
 
 | Table | Key Columns | Notes |
@@ -164,7 +164,7 @@ migrations in `db/migrations/jed/` expose the same logical tables:
 | `folders`, `user_log_placements` | user_id, parent/log/folder IDs, positions | Per-user organization and home pin order |
 | `passkeys`, `webauthn_challenges` | credential/challenge IDs, user_id | WebAuthn credentials and one-time ceremony state |
 | `saved_sql_queries` | id, user_id, name, query_text | Per-user named queries |
-| `oauth_*` | hashed codes/tokens, client_id, user_id, family_id | OAuth clients, grants, rotation, and revocation |
+| `oauth_*` | hashed codes/tokens, client_id, user_id, family_id | OAuth clients, grants, rotation, and persistent family revocation |
 
 ### Testing
 - **Backend**: Go tests with **testify** in `backend/server/` (adapter and end-to-end coverage) and `backend/core/` (action unit tests over fake ports). `backend/pgstore/`, `backend/jedstore/`, and `backend/dualstore/` run the same store conformance suite. `mise run test:prepare` migrates `logger4life_test`, installs `pgundolog`, and clones eight databases. PostgreSQL tests run in parallel and exclusively check out a clone through `github.com/jackc/testdb`; `pgundolog` resets the clone on reuse. `mise run test:backend` runs the server suite against `postgresql`, `jed`, and the fail-stop `both` adapter.

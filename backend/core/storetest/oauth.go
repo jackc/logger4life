@@ -3,11 +3,83 @@ package storetest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/jackc/logger4life/backend/core"
 )
+
+// RunOAuthFamilyRevocationConcurrency runs against each adapter separately:
+// a dual comparison store cannot promise identical scheduling of concurrent
+// operations on its two independent databases.
+func RunOAuthFamilyRevocationConcurrency(t *testing.T, ports Ports) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	user := newUser(t, ports)
+	client := core.OAuthClient{ID: newClientID(), RedirectURIs: []string{"https://example.com/cb"}}
+	if err := ports.CreateOAuthClient(ctx, client); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 20 {
+		label := fmt.Sprintf("concurrent-%s-%d", user.Username, i)
+		pair := core.OAuthTokenPair{
+			Grant: core.OAuthGrant{ClientID: client.ID, UserID: user.ID, Scope: core.OAuthScopeMCP,
+				Audience: "https://example.com", FamilyID: testUUID(label)},
+			AccessTokenHash: []byte(label + "-access-1"), RefreshTokenHash: []byte(label + "-refresh-1"),
+			AccessExpiresAt: time.Now().Add(time.Hour), RefreshExpiresAt: time.Now().Add(time.Hour),
+		}
+		if err := ports.CreateTokenPair(ctx, pair); err != nil {
+			t.Fatal(err)
+		}
+		ancestor := pair.RefreshTokenHash
+		if _, err := ports.ConsumeRefreshToken(ctx, ancestor); err != nil {
+			t.Fatal(err)
+		}
+		pair.AccessTokenHash, pair.RefreshTokenHash = []byte(label+"-access-2"), []byte(label+"-refresh-2")
+		if err := ports.CreateTokenPair(ctx, pair); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ports.ConsumeRefreshToken(ctx, pair.RefreshTokenHash); err != nil {
+			t.Fatal(err)
+		}
+		pair.AccessTokenHash, pair.RefreshTokenHash = []byte(label+"-access-3"), []byte(label+"-refresh-3")
+		start := make(chan struct{})
+		issued, revoked := make(chan error, 1), make(chan error, 1)
+		go func() {
+			<-start
+			issued <- ports.CreateTokenPair(ctx, pair)
+		}()
+		go func() {
+			<-start
+			_, err := ports.ConsumeRefreshToken(ctx, ancestor)
+			revoked <- err
+		}()
+		close(start)
+		select {
+		case err := <-issued:
+			if err != nil && !errors.Is(err, core.ErrOAuthRefreshReuse) {
+				t.Fatalf("replacement issuance = %v", err)
+			}
+		case <-ctx.Done():
+			t.Fatal("replacement issuance did not complete")
+		}
+		select {
+		case err := <-revoked:
+			if !errors.Is(err, core.ErrOAuthRefreshReuse) {
+				t.Fatalf("ancestor replay = %v, want ErrOAuthRefreshReuse", err)
+			}
+		case <-ctx.Done():
+			t.Fatal("ancestor revocation did not complete")
+		}
+		if _, err := ports.GetGrantByAccessToken(ctx, pair.AccessTokenHash); !errors.Is(err, core.ErrOAuthRecordNotFound) {
+			t.Fatalf("replacement access token survived ancestor revocation: %v", err)
+		}
+		if _, err := ports.ConsumeRefreshToken(ctx, pair.RefreshTokenHash); !errors.Is(err, core.ErrOAuthRecordNotFound) && !errors.Is(err, core.ErrOAuthRefreshReuse) {
+			t.Fatalf("replacement refresh token survived ancestor revocation: %v", err)
+		}
+	}
+}
 
 // RunOAuthStore checks the port behind the OAuth 2.1 flow that lets an MCP
 // client act for a user.
@@ -263,6 +335,68 @@ func RunOAuthStore(t *testing.T, ports Ports) {
 			t.Errorf("the family's live refresh token survived the reuse: %v", err)
 		}
 	})
+
+	// Reproduce the split between consumption and replacement issuance in
+	// RefreshOAuthToken. Revocation must also reject future inserts from a
+	// grant already returned to another in-flight request.
+	for _, revoke := range []string{"replay current token", "replay ancestor", "explicit revocation"} {
+		t.Run("rejects pending replacement after "+revoke, func(t *testing.T) {
+			client := newClient(t, "pending")
+			user := newUser(t, ports)
+			grant := newGrant(client, user, "pending-"+user.Username)
+			pair := core.OAuthTokenPair{
+				Grant: grant, AccessTokenHash: []byte("pending-access-1-" + user.Username),
+				RefreshTokenHash: []byte("pending-refresh-1-" + user.Username),
+				AccessExpiresAt:  time.Now().Add(time.Hour), RefreshExpiresAt: time.Now().Add(time.Hour),
+			}
+			if err := ports.CreateTokenPair(ctx, pair); err != nil {
+				t.Fatal(err)
+			}
+			first := pair.RefreshTokenHash
+			pendingGrant, err := ports.ConsumeRefreshToken(ctx, first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if revoke == "replay ancestor" {
+				pair.AccessTokenHash = []byte("pending-access-2-" + user.Username)
+				pair.RefreshTokenHash = []byte("pending-refresh-2-" + user.Username)
+				if err := ports.CreateTokenPair(ctx, pair); err != nil {
+					t.Fatal(err)
+				}
+				pendingGrant, err = ports.ConsumeRefreshToken(ctx, pair.RefreshTokenHash)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if revoke == "explicit revocation" {
+				if err := ports.RevokeRefreshToken(ctx, first); err != nil {
+					t.Fatal(err)
+				}
+			} else if _, err := ports.ConsumeRefreshToken(ctx, first); !errors.Is(err, core.ErrOAuthRefreshReuse) {
+				t.Fatalf("replay = %v, want ErrOAuthRefreshReuse", err)
+			}
+
+			pair.Grant = pendingGrant
+			pair.AccessTokenHash = []byte("pending-access-3-" + user.Username)
+			pair.RefreshTokenHash = []byte("pending-refresh-3-" + user.Username)
+			if err := ports.CreateTokenPair(ctx, pair); !errors.Is(err, core.ErrOAuthRefreshReuse) {
+				t.Errorf("issuing into a revoked family = %v, want ErrOAuthRefreshReuse", err)
+			}
+			if _, err := ports.GetGrantByAccessToken(ctx, pair.AccessTokenHash); !errors.Is(err, core.ErrOAuthRecordNotFound) {
+				t.Errorf("pending access token survived revocation: %v", err)
+			}
+			if _, err := ports.ConsumeRefreshToken(ctx, pair.RefreshTokenHash); !errors.Is(err, core.ErrOAuthRecordNotFound) {
+				t.Errorf("pending refresh token survived revocation: %v", err)
+			}
+
+			// Revocation belongs to one authorization, not the entire client
+			// or user. A fresh authorization can still issue tokens.
+			pair.Grant.FamilyID = testUUID("fresh-family-" + user.Username)
+			if err := ports.CreateTokenPair(ctx, pair); err != nil {
+				t.Fatalf("fresh authorization = %v", err)
+			}
+		})
+	}
 
 	t.Run("refuses an expired or unknown refresh token", func(t *testing.T) {
 		client := newClient(t, "expiredrefresh")

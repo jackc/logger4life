@@ -128,8 +128,11 @@ type OAuthTokens struct {
 
 // OAuthStore is the driven persistence port for OAuth clients, authorization
 // codes, and token families. Implementations must consume codes and refresh
-// tokens atomically so a replay cannot succeed, and must report a missing or
-// invalidated row as ErrOAuthRecordNotFound.
+// tokens atomically so a replay cannot succeed. Family revocation must be
+// durable: CreateTokenPair must return ErrOAuthRefreshReuse for a revoked
+// family, including when consumption succeeded before concurrent revocation.
+// RevokeRefreshToken revokes the entire authorization family, preventing an
+// in-flight rotation from issuing a replacement after explicit revocation.
 type OAuthStore interface {
 	CreateOAuthClient(context.Context, OAuthClient) error
 	GetOAuthClient(context.Context, string) (OAuthClient, error)
@@ -379,16 +382,7 @@ var RefreshOAuthToken = Define(ActionDef[RefreshOAuthTokenParams, OAuthTokens]{
 		}
 		grant, err := c.oauth.ConsumeRefreshToken(ctx, domain.HashToken(p.RefreshToken))
 		if err != nil {
-			if errors.Is(err, ErrOAuthRecordNotFound) || errors.Is(err, ErrOAuthRefreshReuse) {
-				// Reuse keeps its cause so adapters can log the detection,
-				// but the client sees the same answer either way.
-				return OAuthTokens{}, &OAuthError{
-					Code:        "invalid_grant",
-					Description: "refresh_token is invalid, expired, or revoked",
-					cause:       err,
-				}
-			}
-			return OAuthTokens{}, err
+			return OAuthTokens{}, refreshOAuthError(err)
 		}
 		if grant.ClientID != p.ClientID {
 			return OAuthTokens{}, inlineOAuthError("invalid_grant", "refresh_token was issued to a different client")
@@ -396,9 +390,23 @@ var RefreshOAuthToken = Define(ActionDef[RefreshOAuthTokenParams, OAuthTokens]{
 		if p.Resource != "" && !domain.SameCanonicalURL(p.Resource, grant.Audience) {
 			return OAuthTokens{}, inlineOAuthError("invalid_target", "resource parameter does not match the original request")
 		}
-		return c.issueTokenPair(ctx, grant)
+		tokens, err := c.issueTokenPair(ctx, grant)
+		// Another request may revoke the family after consumption. The
+		// store rejects that issuance; report it as the same invalid grant.
+		return tokens, refreshOAuthError(err)
 	},
 })
+
+func refreshOAuthError(err error) error {
+	if errors.Is(err, ErrOAuthRecordNotFound) || errors.Is(err, ErrOAuthRefreshReuse) {
+		return &OAuthError{
+			Code:        "invalid_grant",
+			Description: "refresh_token is invalid, expired, or revoked",
+			cause:       err,
+		}
+	}
+	return err
+}
 
 type RevokeOAuthTokenParams struct {
 	Token         string `json:"token"`

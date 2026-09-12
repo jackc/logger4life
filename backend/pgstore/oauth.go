@@ -69,6 +69,20 @@ func (s *Store) CreateTokenPair(ctx context.Context, pair core.OAuthTokenPair) e
 	return s.InTx(ctx, func(ctx context.Context) error {
 		conn := s.conn(ctx)
 		if _, err := conn.Exec(ctx,
+			`INSERT INTO oauth_token_families (id, client_id, user_id)
+			 VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`,
+			pair.Grant.FamilyID, pair.Grant.ClientID, pair.Grant.UserID,
+		); err != nil {
+			return err
+		}
+		revoked, err := s.lockOAuthTokenFamily(ctx, pair.Grant.FamilyID)
+		if err != nil {
+			return err
+		}
+		if revoked {
+			return core.ErrOAuthRefreshReuse
+		}
+		if _, err := conn.Exec(ctx,
 			`INSERT INTO oauth_refresh_tokens
 			   (token_hash, client_id, user_id, family_id, scope, audience, expires_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -77,7 +91,7 @@ func (s *Store) CreateTokenPair(ctx context.Context, pair core.OAuthTokenPair) e
 		); err != nil {
 			return err
 		}
-		_, err := conn.Exec(ctx,
+		_, err = conn.Exec(ctx,
 			`INSERT INTO oauth_access_tokens
 			   (token_hash, client_id, user_id, refresh_token_hash, family_id, scope, audience, expires_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -94,7 +108,8 @@ func (s *Store) GetGrantByAccessToken(ctx context.Context, tokenHash []byte) (co
 		`SELECT a.client_id, a.user_id, u.username, a.scope, a.audience, a.family_id
 		   FROM oauth_access_tokens a
 		   JOIN users u ON u.id = a.user_id
-		  WHERE a.token_hash = $1 AND a.expires_at > now()`,
+		   JOIN oauth_token_families f ON f.id = a.family_id
+		  WHERE a.token_hash = $1 AND a.expires_at > now() AND f.revoked = false`,
 		tokenHash,
 	).Scan(&g.ClientID, &g.UserID, &g.Username, &g.Scope, &g.Audience, &g.FamilyID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -116,9 +131,26 @@ func (s *Store) ConsumeRefreshToken(ctx context.Context, tokenHash []byte) (core
 	var reuse bool
 	err := s.InTx(ctx, func(ctx context.Context) error {
 		conn := s.conn(ctx)
+		// Lock the family before any token row. Replays of ancestors and
+		// issuance of descendants must serialize on the same record.
+		var familyID string
+		if err := conn.QueryRow(ctx, `SELECT family_id FROM oauth_refresh_tokens WHERE token_hash = $1`, tokenHash).Scan(&familyID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return core.ErrOAuthRecordNotFound
+			}
+			return err
+		}
+		familyRevoked, err := s.lockOAuthTokenFamily(ctx, familyID)
+		if err != nil {
+			return err
+		}
+		if familyRevoked {
+			reuse = true
+			return nil
+		}
 		var expiresAt time.Time
 		var revoked bool
-		err := conn.QueryRow(ctx,
+		err = conn.QueryRow(ctx,
 			`SELECT client_id, user_id, family_id, scope, audience, expires_at, revoked
 			   FROM oauth_refresh_tokens
 			  WHERE token_hash = $1
@@ -136,16 +168,7 @@ func (s *Store) ConsumeRefreshToken(ctx context.Context, tokenHash []byte) (core
 			// Reuse. Revoke every refresh token in the family and drop every
 			// access token belonging to them. The revocation must survive, so
 			// commit it and report the reuse to the caller afterward.
-			if _, err := conn.Exec(ctx,
-				`UPDATE oauth_refresh_tokens SET revoked = true WHERE family_id = $1`,
-				g.FamilyID,
-			); err != nil {
-				return err
-			}
-			if _, err := conn.Exec(ctx,
-				`DELETE FROM oauth_access_tokens WHERE family_id = $1`,
-				g.FamilyID,
-			); err != nil {
+			if err := s.revokeOAuthTokenFamily(ctx, g.FamilyID); err != nil {
 				return err
 			}
 			reuse = true
@@ -186,17 +209,42 @@ func (s *Store) RevokeAccessToken(ctx context.Context, tokenHash []byte) error {
 
 func (s *Store) RevokeRefreshToken(ctx context.Context, tokenHash []byte) error {
 	return s.InTx(ctx, func(ctx context.Context) error {
-		conn := s.conn(ctx)
-		if _, err := conn.Exec(ctx,
-			`UPDATE oauth_refresh_tokens SET revoked = true WHERE token_hash = $1`,
-			tokenHash,
-		); err != nil {
+		var familyID string
+		if err := s.conn(ctx).QueryRow(ctx, `SELECT family_id FROM oauth_refresh_tokens WHERE token_hash = $1`, tokenHash).Scan(&familyID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
 			return err
 		}
-		_, err := conn.Exec(ctx,
-			`DELETE FROM oauth_access_tokens WHERE refresh_token_hash = $1`,
-			tokenHash,
-		)
-		return err
+		if _, err := s.lockOAuthTokenFamily(ctx, familyID); err != nil {
+			return err
+		}
+		return s.revokeOAuthTokenFamily(ctx, familyID)
 	})
+}
+
+// lockOAuthTokenFamily must run in the transaction that issues, consumes,
+// or revokes tokens. The family record outlives individual token rotations.
+func (s *Store) lockOAuthTokenFamily(ctx context.Context, familyID string) (bool, error) {
+	var revoked bool
+	err := s.conn(ctx).QueryRow(ctx,
+		`SELECT revoked FROM oauth_token_families WHERE id = $1 FOR UPDATE`, familyID,
+	).Scan(&revoked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, core.ErrOAuthRecordNotFound
+	}
+	return revoked, err
+}
+
+// The caller holds the family lock until this revocation is committed.
+func (s *Store) revokeOAuthTokenFamily(ctx context.Context, familyID string) error {
+	conn := s.conn(ctx)
+	if _, err := conn.Exec(ctx, `UPDATE oauth_token_families SET revoked = true WHERE id = $1`, familyID); err != nil {
+		return err
+	}
+	if _, err := conn.Exec(ctx, `UPDATE oauth_refresh_tokens SET revoked = true WHERE family_id = $1`, familyID); err != nil {
+		return err
+	}
+	_, err := conn.Exec(ctx, `DELETE FROM oauth_access_tokens WHERE family_id = $1`, familyID)
+	return err
 }

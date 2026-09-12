@@ -60,19 +60,26 @@ Share your logs with other users so they can view and add entries:
 
 ### Prerequisites
 
-* [mise](https://mise.jdx.dev), which installs everything else the project
-  needs: Go, Node.js, Port Tamer, tern, and process-compose
-* PostgreSQL 18 binaries — `brew install postgresql@18` on macOS,
-  `apt-get install postgresql-18` on Debian/Ubuntu. No server or cluster needs
-  to be set up: each checkout runs its own.
+Run `scripts/setup-host` on macOS (with Homebrew installed) or Ubuntu to
+install PostgreSQL 18 and, on Ubuntu, Chromium's system dependencies. Ubuntu package
+installation requires root or sudo. No server or cluster needs to be set up:
+each checkout runs its own.
+
+Install [mise](https://mise.jdx.dev) separately as the development user if it
+is not already available.
 
 ### Getting Started
 
 ```sh
+scripts/setup-host  # host packages (once per machine)
 mise install        # tools
 mise run dev:init   # ports and dependencies
 mise run dev        # PostgreSQL + migrations + backend + Vite
 ```
+
+`dev:init` installs the project's npm dependencies and Playwright Chromium as
+the current user. On Ubuntu, `setup-host` installs Chromium's system libraries
+and fonts; the browser download does not require root.
 
 Ports are allocated per checkout rather than fixed, so several worktrees can
 run at once. `mise run dev:urls` prints this one's:

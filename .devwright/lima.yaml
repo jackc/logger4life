@@ -26,6 +26,10 @@ user:
 env: {}
 provision:
   - mode: data
+    path: /usr/local/share/devwright/setup-host-ubuntu
+    file: ../scripts/setup-host-ubuntu
+    overwrite: true
+  - mode: data
     path: /etc/codex/requirements.toml
     file: config/codex/requirements.toml
     overwrite: false

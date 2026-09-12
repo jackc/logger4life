@@ -37,7 +37,8 @@ chmod 440 /etc/sudoers.d/99-devwright-dev
 visudo -cf /etc/sudoers >/dev/null
 apt-get update -qq
 apt-get install -y --no-install-recommends ca-certificates curl git gh jq ripgrep build-essential gzip zsh unzip bubblewrap apparmor gnupg socat
-# Add project system packages and services here.
+# Project host packages are shared with native Ubuntu setup.
+bash /usr/local/share/devwright/setup-host-ubuntu
 install -d -o "$lima_user" -g "$lima_group" -m 700 "$lima_home/.codex" "$lima_home/.claude"
 if [ ! -e "$lima_home/.codex/config.toml" ]; then
   install -o "$lima_user" -g "$lima_group" -m 600 "$policy_dir/codex-config.toml" "$lima_home/.codex/config.toml"

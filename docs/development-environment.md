@@ -15,6 +15,7 @@ process-compose    = the development service graph and lifecycle
 ## Getting started
 
 ```sh
+scripts/setup-host  # PostgreSQL 18 and Ubuntu Chromium dependencies (once per machine)
 mise install        # tools: Go, Node, Port Tamer, tern, process-compose, ...
 mise run dev:init   # ports and dependencies
 mise run dev        # PostgreSQL + migrations + backend + Vite
@@ -24,15 +25,25 @@ mise run dev        # PostgreSQL + migrations + backend + Vite
 a tool or Node dependency. The PostgreSQL cluster is initialized lazily and
 migrations are applied when `mise run dev` starts.
 
-PostgreSQL itself is the one prerequisite mise does not install:
-
-```sh
-brew install postgresql@18      # macOS
-apt-get install postgresql-18   # Debian/Ubuntu; the dev container does this
-```
+`scripts/setup-host` installs host prerequisites on macOS (using Homebrew and
+`Brewfile`) and Ubuntu (using the signed PostgreSQL APT repository).
+Install mise separately as the development user before running the mise
+commands above. Host setup does not install project tools or initialize the
+checkout. Ubuntu installation temporarily suppresses creation of a system
+PostgreSQL cluster without changing the administrator's permanent policy.
 
 Only the binaries are needed. No machine-wide cluster or service is used —
 each worktree runs `initdb` into its own `.dev/` directory.
+
+`dev:init` installs Playwright Chromium as the current user, using Playwright's
+user cache or `PLAYWRIGHT_BROWSERS_PATH` when configured. The Ubuntu host
+installer supplies Chromium's system libraries and fonts without requiring
+Node or downloading a browser as root.
+
+Devwright copies `scripts/setup-host-ubuntu` into the VM and calls it during
+root system provisioning. Its project setup runs `mise install` and
+`mise run dev:init` as the development user. System provisioning changes
+require a new VM because devwright marks successful provisioning complete.
 
 ## Ports
 

@@ -188,3 +188,12 @@ test('duplicate passkey registration explains how to recover', async ({ page, re
 	await expect(page.getByRole('button', { name: 'Original Key', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Duplicate Key', exact: true })).toHaveCount(0);
 });
+
+
+test('registration prefers post-quantum algorithms with conventional fallbacks', async ({ page, request }) => {
+	await registerUser(page, request, uniqueUsername());
+	const response = await page.request.post('/api/me/passkeys/register/begin', { data: {} });
+	expect(response.ok()).toBeTruthy();
+	const { options } = await response.json();
+	expect(options.publicKey.pubKeyCredParams.map(({ alg }) => alg)).toEqual([-48, -49, -50, -8, -7, -257]);
+});

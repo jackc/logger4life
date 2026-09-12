@@ -218,6 +218,8 @@ var BeginPasskeyRegistration = Define(ActionDef[BeginPasskeyRegistrationParams, 
 			return PasskeyRegistrationOptions{}, err
 		}
 		creation, session, err := wan.BeginRegistration(user,
+			// Prefer post-quantum credentials while retaining conventional authenticators.
+			webauthn.WithCredentialParameters(webauthn.CredentialParametersPQCRecommendedL3()),
 			webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
 			webauthn.WithConveyancePreference(protocol.PreferNoAttestation),
 			webauthn.WithExclusions(webauthn.Credentials(user.credentials).CredentialDescriptors()),

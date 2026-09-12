@@ -61,3 +61,17 @@ Apply PostgreSQL migration 015 before deployment; jed applies migration 003
 automatically on open. These migrations add indexes and make client foreign keys reject deletion
 while grant history exists. Existing clients and tokens are preserved. Existing installations over quota keep their clients and
 reject new registrations until cleanup or operator action frees capacity.
+
+`list_logs` and `list_saved_queries` accept `limit` (default 50, maximum 100)
+and an opaque `cursor`. Pass a response's `next_cursor` to the same tool to
+continue; absence of `next_cursor` marks the end. Cursors are scoped to the
+user and collection. Pages sort by the database's lowercase name, then ID,
+so equal names have a stable order. Concurrent renames or inserts can change
+later pages; pagination does not hold a database snapshot between requests.
+
+The database fetches at most 101 records, under a five-second deadline.
+Each structured page stays below 256 KiB, including its cursor. This also
+keeps the MCP result below 1 MiB after JSON text/structured duplication.
+A page may contain fewer records than requested; its cursor always resumes
+after the last returned record. A single record that cannot fit produces an
+explicit tool error. Log summaries omit UI placement and share-token fields.

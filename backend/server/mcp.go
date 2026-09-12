@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 
 	"github.com/go-chi/httplog/v3"
@@ -20,15 +19,8 @@ type mcpServer struct {
 	requests *keyedRateLimiter
 }
 
-// listLogsInput is the (empty) input schema for the list_logs tool.
-// Even though we take no parameters, the MCP SDK requires a struct/map type
-// so an "object" JSON schema can be inferred.
-type listLogsInput struct{}
-
-// listLogsOutput mirrors the HTTP /api/logs response shape.
-type listLogsOutput struct {
-	Logs []core.Log `json:"logs" jsonschema:"the list of logs the authenticated user owns or has been shared on"`
-}
+type listLogsInput = core.CollectionPageParams
+type listLogsOutput = core.LogPage
 
 type getSQLSchemaInput struct{}
 
@@ -36,11 +28,8 @@ type getSQLSchemaOutput struct {
 	Views []*core.SQLSchemaView `json:"views" jsonschema:"views the user can query in the sql_query schema, with their columns and comments"`
 }
 
-type listSavedQueriesInput struct{}
-
-type listSavedQueriesOutput struct {
-	Queries []core.SavedQuery `json:"queries" jsonschema:"the user's saved SQL queries, ordered alphabetically by name"`
-}
+type listSavedQueriesInput = core.CollectionPageParams
+type listSavedQueriesOutput = core.SavedQueryPage
 
 type runSavedQueryInput struct {
 	Name string `json:"name" jsonschema:"name of the saved query to run (case-sensitive, as returned by list_saved_queries)"`
@@ -106,23 +95,17 @@ func newMCPServer(app *core.Core, oauth *oauthProvider) *mcpServer {
 		Name:        "list_logs",
 		Title:       "List logs",
 		Annotations: readOnlyMCPAnnotations(),
-		Description: "List all logs the authenticated user owns or has been shared on, ordered alphabetically.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listLogsInput) (*mcp.CallToolResult, listLogsOutput, error) {
+		Description: "List an alphabetical page of logs the authenticated user owns or has been shared on. Defaults to 50 records, maximum 100; pass next_cursor as cursor to continue. Pages may be shortened to fit the response size limit.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listLogsInput) (*mcp.CallToolResult, listLogsOutput, error) {
 		user, err := requireMCPUser(ctx)
 		if err != nil {
 			return nil, listLogsOutput{}, err
 		}
-		logs, err := core.ListLogs.Call(core.WithUserID(ctx, user.ID), app, core.ListLogsParams{})
+		page, err := core.ListLogsPage.Call(core.WithUserID(ctx, user.ID), app, in)
 		if err != nil {
 			return nil, listLogsOutput{}, mcpToolError(ctx, err)
 		}
-		// The action returns rows in user-organized (folder, position)
-		// order for the SPA. The MCP contract promises alphabetical, so sort
-		// here rather than coupling the tool to UI organization.
-		sort.SliceStable(logs, func(i, j int) bool {
-			return strings.ToLower(logs[i].Name) < strings.ToLower(logs[j].Name)
-		})
-		return nil, listLogsOutput{Logs: logs}, nil
+		return nil, page, nil
 	})
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -162,17 +145,17 @@ func newMCPServer(app *core.Core, oauth *oauthProvider) *mcpServer {
 		Name:        "list_saved_queries",
 		Title:       "List saved queries",
 		Annotations: readOnlyMCPAnnotations(),
-		Description: "List the authenticated user's saved SQL queries, ordered alphabetically by name. Each entry includes the query text so a follow-up run_sql call can execute or adapt it.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listSavedQueriesInput) (*mcp.CallToolResult, listSavedQueriesOutput, error) {
+		Description: "List an alphabetical page of the authenticated user's saved SQL queries, including query text. Defaults to 50 records, maximum 100; pass next_cursor as cursor to continue. Pages may be shortened to fit the response size limit.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listSavedQueriesInput) (*mcp.CallToolResult, listSavedQueriesOutput, error) {
 		user, err := requireMCPUser(ctx)
 		if err != nil {
 			return nil, listSavedQueriesOutput{}, err
 		}
-		queries, err := core.ListSavedQueries.Call(core.WithUserID(ctx, user.ID), app, core.ListSavedQueriesParams{})
+		page, err := core.ListSavedQueriesPage.Call(core.WithUserID(ctx, user.ID), app, in)
 		if err != nil {
 			return nil, listSavedQueriesOutput{}, mcpToolError(ctx, err)
 		}
-		return nil, listSavedQueriesOutput{Queries: queries}, nil
+		return nil, page, nil
 	})
 
 	mcp.AddTool(srv, &mcp.Tool{

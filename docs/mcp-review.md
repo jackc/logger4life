@@ -124,15 +124,21 @@ check or session-bound CSRF token to consent submission and deny framing
 of the consent page. The decision-injection fix above addresses a separate,
 confirmed bug.
 
-### 6. Bound large tool results and improve metadata caching
+### 6. Bound large tool results — resolved; metadata caching remains optional
 
-**Optional scalability work.** `list_logs` and `list_saved_queries` return
-the complete collection. The SDK's `tools/list` pagination only paginates
-tool definitions; it does not paginate records returned by these tools.
-Add explicit cursor/limit arguments and output-size limits if collections
-can grow substantially. Dedicated MCP DTOs could omit UI placement fields
-and the unused `share_token` schema property; neither store currently
-selects share tokens for `ListLogs`.
+`list_logs` and `list_saved_queries` now accept cursor/limit arguments, default
+to 50 records, and cap requests at 100. Both adapters fetch a bounded page
+using a stable lowercase-name/ID key and the authenticated user's visibility
+rules. Core enforces a five-second database deadline and a 256 KiB page budget,
+including the continuation cursor. The SDK's duplicated text and structured
+representation stays below 1 MiB. A record that cannot fit returns a tool
+error; shortened pages resume after the last returned row. Dedicated log
+summaries omit UI placement and share-token properties.
+
+Regression tests cover equal-name page boundaries, scoped cursors, revoked
+sharing, byte-driven truncation, malformed input, and the serialized MCP
+response and schemas. The web UI's collection endpoints keep their existing
+response contract.
 
 The fixed tool catalog can use a positive cache TTL. The SDK currently
 emits `cacheScope="public"` and `ttlMs=0`; this is appropriate for the
@@ -166,6 +172,9 @@ ever varies by authorization, revisit its cache policy before caching.
 
 ## Validation
 
+- Resource-limit regressions cover bursts and refill, bounded limiter state,
+  shared SQL concurrency and cancellation, registration input and IP trust,
+  concurrent client quotas and retention, and database-backed list pagination.
 - `mise run test:backend`: passed, including PostgreSQL, jed, and dual-store
   server suites.
 - Affected MCP/OAuth tests with `go test -race`: passed.

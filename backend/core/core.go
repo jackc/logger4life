@@ -11,6 +11,7 @@ import (
 )
 
 type Core struct {
+	collections     CollectionStore
 	oauthMaxClients int
 	users           UserStore
 	sessions        SessionStore
@@ -33,6 +34,7 @@ type Core struct {
 }
 
 type Config struct {
+	Collections           CollectionStore
 	OAuthMaxClients       int
 	Users                 UserStore
 	Sessions              SessionStore
@@ -66,7 +68,7 @@ func New(cfg Config) *Core {
 	if maxClients <= 0 {
 		maxClients = OAuthDefaultMaxClients
 	}
-	return &Core{oauthMaxClients: maxClients, users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sqlConcurrency: newSQLConcurrency(cfg.SQLConcurrencyPerUser, cfg.SQLConcurrencyGlobal), sharing: cfg.Sharing, oauth: cfg.OAuth, oauthIssuer: strings.TrimRight(cfg.OAuthIssuer, "/"), middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{collections: cfg.Collections, oauthMaxClients: maxClients, users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sqlConcurrency: newSQLConcurrency(cfg.SQLConcurrencyPerUser, cfg.SQLConcurrencyGlobal), sharing: cfg.Sharing, oauth: cfg.OAuth, oauthIssuer: strings.TrimRight(cfg.OAuthIssuer, "/"), middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 
 // Transactor is the driven port for transaction boundaries. Store calls made

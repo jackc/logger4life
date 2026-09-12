@@ -38,6 +38,7 @@ type Ports interface {
 	core.UserStore
 	core.SessionStore
 	core.LogStore
+	core.CollectionStore
 	core.LogEntryStore
 	core.LogPlacementStore
 	core.FolderStore
@@ -116,6 +117,7 @@ func Run(t *testing.T, ports Ports) {
 	t.Run("FolderStore", func(t *testing.T) { RunFolderStore(t, ports) })
 	t.Run("LogPlacementStore", func(t *testing.T) { RunLogPlacementStore(t, ports) })
 	t.Run("SavedQueryStore", func(t *testing.T) { RunSavedQueryStore(t, ports) })
+	t.Run("CollectionPages", func(t *testing.T) { RunCollectionPages(t, ports) })
 	t.Run("SharingStore", func(t *testing.T) { RunSharingStore(t, ports) })
 	t.Run("PasskeyStore", func(t *testing.T) { RunPasskeyStore(t, ports) })
 	t.Run("PasskeyChallengeStore", func(t *testing.T) { RunPasskeyChallengeStore(t, ports) })

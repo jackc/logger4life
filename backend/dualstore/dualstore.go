@@ -20,6 +20,7 @@ type Backend interface {
 	core.PasskeyStore
 	core.PasskeyChallengeStore
 	core.LogStore
+	core.CollectionStore
 	core.LogEntryStore
 	core.LogPlacementStore
 	core.FolderStore

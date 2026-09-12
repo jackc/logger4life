@@ -117,3 +117,74 @@ test('edit passkey description', async ({ page, request }) => {
 
 	await expect(page.getByRole('button', { name: 'New Name' })).toBeVisible();
 });
+
+// Reject one browser prompt, then restore the real API so the retry exercises
+// SimpleWebAuthn and the backend with the virtual authenticator.
+async function rejectNextPrompt(page, method, name) {
+	await page.evaluate(({ method, name }) => {
+		const original = navigator.credentials[method].bind(navigator.credentials);
+		navigator.credentials[method] = async (...args) => {
+			navigator.credentials[method] = original;
+			throw new DOMException('Raw browser error details', name);
+		};
+	}, { method, name });
+}
+
+for (const name of ['NotAllowedError', 'AbortError']) {
+	const message = name === 'AbortError'
+		? 'The passkey request was canceled. Please try again.'
+		: 'The passkey request was canceled, timed out, or was not allowed. Please try again.';
+
+	test(`passkey registration can retry after ${name}`, async ({ page, request }) => {
+		await addVirtualAuthenticator(page);
+		await registerUser(page, request, uniqueUsername());
+		await page.goto('/me');
+		await page.fill('input[name="passkey-description"]', 'Retry Key');
+		await rejectNextPrompt(page, 'create', name);
+		const add = page.getByRole('button', { name: 'Add passkey' });
+		await add.click();
+		await expect(page.getByText(message, { exact: true })).toBeVisible();
+		await expect(add).toBeEnabled();
+		await expect(page.locator('input[name="passkey-description"]')).toHaveValue('Retry Key');
+		await expect(page.getByText('No passkeys registered yet.')).toBeVisible();
+		await add.click();
+		await expect(page.getByText('Passkey added.')).toBeVisible();
+		await expect(page.getByText(message, { exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Retry Key', exact: true })).toBeVisible();
+	});
+
+	test(`passkey login can retry after ${name}`, async ({ page, request }) => {
+		await addVirtualAuthenticator(page);
+		await registerUser(page, request, uniqueUsername());
+		await page.goto('/me');
+		await page.getByRole('button', { name: 'Add passkey' }).click();
+		await expect(page.getByText('Passkey added.')).toBeVisible();
+		await page.getByRole('button', { name: 'Logout' }).click();
+		await page.goto('/login');
+		await rejectNextPrompt(page, 'get', name);
+		const login = page.getByRole('button', { name: 'Sign in with passkey' });
+		await login.click();
+		await expect(page.getByText(message, { exact: true })).toBeVisible();
+		await expect(login).toBeEnabled();
+		await expect(page).toHaveURL(/\/login$/);
+		await login.click();
+		await page.waitForURL('/logs');
+		await expect(page.getByRole('heading', { name: 'My Logs' })).toBeVisible();
+	});
+}
+
+test('duplicate passkey registration explains how to recover', async ({ page, request }) => {
+	await addVirtualAuthenticator(page);
+	await registerUser(page, request, uniqueUsername());
+	await page.goto('/me');
+	await page.fill('input[name="passkey-description"]', 'Original Key');
+	const add = page.getByRole('button', { name: 'Add passkey' });
+	await add.click();
+	await expect(page.getByText('Passkey added.')).toBeVisible();
+	await page.fill('input[name="passkey-description"]', 'Duplicate Key');
+	await add.click();
+	await expect(page.getByText('This passkey is already registered to your account. Try a different passkey.')).toBeVisible();
+	await expect(add).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Original Key', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Duplicate Key', exact: true })).toHaveCount(0);
+});

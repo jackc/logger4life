@@ -6,7 +6,6 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/httplog/v3 v3.4.0
 	github.com/go-webauthn/webauthn v0.18.1
-	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/jackc/jed/impl/go v0.2.1-0.20260718172232-ba6f04dcd6b4
 	github.com/jackc/jed/migrate/go v0.0.0-20260718172232-ba6f04dcd6b4
 	github.com/jackc/pgsqlarbiter-go v0.1.0

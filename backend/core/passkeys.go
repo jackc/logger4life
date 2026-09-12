@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+	"uuid"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/gofrs/uuid/v5"
 )
 
 const maxPasskeyDescriptionLength = 100
@@ -97,7 +97,7 @@ func loadWebAuthnUser(ctx context.Context, c *Core, userID string) (*webAuthnUse
 	if err != nil {
 		return nil, err
 	}
-	uid, err := uuid.FromString(user.ID)
+	uid, err := uuid.Parse(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("parse WebAuthn user ID: %w", err)
 	}
@@ -120,7 +120,7 @@ func loadWebAuthnUser(ctx context.Context, c *Core, userID string) (*webAuthnUse
 			},
 		}
 	}
-	return &webAuthnUser{user: user, id: uid.Bytes(), credentials: credentials}, nil
+	return &webAuthnUser{user: user, id: uid[:], credentials: credentials}, nil
 }
 
 func currentPasskeyUser(ctx context.Context, c *Core) (*webAuthnUser, error) {
@@ -157,10 +157,7 @@ func storePasskeyChallenge(ctx context.Context, c *Core, userID *string, session
 	if err := c.challenges.DeleteExpiredPasskeyChallenges(ctx, now); err != nil {
 		return "", err
 	}
-	id, err := uuid.NewV4()
-	if err != nil {
-		return "", err
-	}
+	id := uuid.NewV4()
 	challenge := PasskeyChallenge{
 		ID: id.String(), UserID: userID, SessionData: data, Kind: kind,
 		ExpiresAt: session.Expires.UTC().Truncate(time.Microsecond),
@@ -363,11 +360,11 @@ var FinishPasskeyLogin = Define(ActionDef[FinishPasskeyLoginParams, AuthSession]
 		var resolved *webAuthnUser
 		var resolveErr error
 		resolve := func(_ []byte, userHandle []byte) (webauthn.User, error) {
-			uid, err := uuid.FromBytes(userHandle)
-			if err != nil {
+			if len(userHandle) != len(uuid.UUID{}) {
 				resolveErr = ErrUserNotFound
 				return nil, ErrUserNotFound
 			}
+			uid := uuid.UUID(userHandle)
 			user, err := loadWebAuthnUser(ctx, c, uid.String())
 			if err != nil {
 				resolveErr = err

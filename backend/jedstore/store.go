@@ -9,8 +9,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	jed "github.com/jackc/jed/impl/go"
 	migrate "github.com/jackc/jed/migrate/go"
 	jedmigrations "github.com/jackc/logger4life/db/migrations/jed"
@@ -66,11 +66,9 @@ func (s *Store) Ping(ctx context.Context) error {
 }
 
 func newUserID() (string, error) {
-	id, err := uuid.NewV4()
-	return id.String(), err
+	return uuid.NewV4().String(), nil
 }
 
 func newID() (string, error) {
-	id, err := uuid.NewV7()
-	return id.String(), err
+	return uuid.NewV7().String(), nil
 }

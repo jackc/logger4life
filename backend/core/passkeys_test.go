@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -203,3 +204,16 @@ func TestPasskeyParamsValidateDescriptionAndIDs(t *testing.T) {
 }
 
 func stringPointer(value string) *string { return &value }
+
+func TestWebAuthnUserHandlePreservesUUIDBytes(t *testing.T) {
+	const id = "018f47a0-7b5c-7e8d-9f01-23456789abcd"
+	app := New(Config{Users: &fakeUserStore{user: User{ID: id}}, Passkeys: &fakePasskeyStore{}})
+	user, err := loadWebAuthnUser(context.Background(), app, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []byte{0x01, 0x8f, 0x47, 0xa0, 0x7b, 0x5c, 0x7e, 0x8d, 0x9f, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd}
+	if !bytes.Equal(user.WebAuthnID(), want) {
+		t.Fatalf("user handle = %x, want %x", user.WebAuthnID(), want)
+	}
+}

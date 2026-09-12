@@ -24,8 +24,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
 )
@@ -64,10 +64,7 @@ const UnknownID = "00000000-0000-4000-8000-0000000000ff"
 // the rows whose ID the caller supplies rather than the store minting it.
 func testUUID(label string) string {
 	sum := sha256.Sum256([]byte(label))
-	id, err := uuid.FromBytes(sum[:16])
-	if err != nil {
-		panic(err)
-	}
+	id := uuid.UUID(sum[:16])
 	return id.String()
 }
 

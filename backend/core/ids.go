@@ -2,8 +2,7 @@ package core
 
 import (
 	"fmt"
-
-	"github.com/gofrs/uuid/v5"
+	"uuid"
 )
 
 // validID rejects an identifier that cannot name a record. Every ID a caller
@@ -11,7 +10,7 @@ import (
 // one names nothing. Rejecting it here keeps a bad path segment from reaching
 // a persistence adapter as a database-specific cast error.
 func validID(field, id string) error {
-	if _, err := uuid.FromString(id); err != nil {
+	if _, err := uuid.Parse(id); err != nil {
 		return fmt.Errorf("%s is invalid", field)
 	}
 	return nil
@@ -25,11 +24,9 @@ func validOptionalID(field string, id *string) error {
 }
 
 func newUserID() (string, error) {
-	id, err := uuid.NewV4()
-	return id.String(), err
+	return uuid.NewV4().String(), nil
 }
 
 func newID() (string, error) {
-	id, err := uuid.NewV7()
-	return id.String(), err
+	return uuid.NewV7().String(), nil
 }

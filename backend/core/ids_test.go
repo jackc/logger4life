@@ -3,8 +3,7 @@ package core
 import (
 	"crypto/sha256"
 	"testing"
-
-	"github.com/gofrs/uuid/v5"
+	"uuid"
 )
 
 // testID turns a readable label into a stable, well-formed identifier.
@@ -13,16 +12,16 @@ import (
 // while a bare UUID literal in every assertion would be unreadable.
 func testID(label string) string {
 	sum := sha256.Sum256([]byte(label))
-	id, err := uuid.FromBytes(sum[:16])
-	if err != nil {
-		panic(err)
-	}
+	id := uuid.UUID(sum[:16])
 	return id.String()
 }
 
 func TestValidIDAcceptsOnlyWellFormedIdentifiers(t *testing.T) {
 	accepted := []string{
 		testID("log-1"),
+		"{0190a1b2-c3d4-7000-8000-000000000001}",
+		"urn:uuid:0190a1b2-c3d4-7000-8000-000000000001",
+		"0190a1b2c3d470008000000000000001",
 		"00000000-0000-0000-0000-000000000000",
 		"0190A1B2-C3D4-7000-8000-000000000001", // upper case is still a UUID
 	}
@@ -67,5 +66,30 @@ func TestValidOptionalIDAllowsAbsence(t *testing.T) {
 	bad := "not-a-uuid"
 	if err := validOptionalID("parent_folder_id", &bad); err == nil {
 		t.Error("validOptionalID accepted a malformed ID")
+	}
+}
+
+func TestGeneratedIDVersions(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		generate func() (string, error)
+		version  byte
+	}{
+		{"user", newUserID, 4},
+		{"record", newID, 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := tc.generate()
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, err := uuid.Parse(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if id[6]>>4 != tc.version || id[8]>>6 != 2 {
+				t.Fatalf("unexpected UUID version or variant: %s", s)
+			}
+		})
 	}
 }

@@ -7,8 +7,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/logger4life/backend/domain"
 )
 
@@ -168,10 +168,7 @@ var RegisterOAuthClient = Define(ActionDef[RegisterOAuthClientParams, OAuthClien
 				return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri must be https or http://localhost")
 			}
 		}
-		id, err := uuid.NewV7()
-		if err != nil {
-			return OAuthClient{}, err
-		}
+		id := uuid.NewV7()
 		client := OAuthClient{ID: id.String(), RedirectURIs: p.RedirectURIs, ClientName: p.ClientName}
 		if err := c.oauth.CreateOAuthClient(ctx, client); err != nil {
 			return OAuthClient{}, err
@@ -357,10 +354,7 @@ var ExchangeOAuthCode = Define(ActionDef[ExchangeOAuthCodeParams, OAuthTokens]{
 		if p.Resource != "" && !domain.SameCanonicalURL(p.Resource, stored.Audience) {
 			return OAuthTokens{}, inlineOAuthError("invalid_target", "resource parameter does not match the original request")
 		}
-		familyID, err := uuid.NewV7()
-		if err != nil {
-			return OAuthTokens{}, err
-		}
+		familyID := uuid.NewV7()
 		return c.issueTokenPair(ctx, OAuthGrant{
 			ClientID: stored.ClientID,
 			UserID:   stored.UserID,

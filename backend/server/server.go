@@ -87,6 +87,9 @@ func Run(ctx context.Context, cfg Config) error {
 	// 8707 audience binding for issued access tokens).
 	if cfg.MCPEnabled() {
 		oauth := newOAuthProvider(app, cfg.MCPCanonicalURL)
+		oauth.registrationIPs = newKeyedRateLimiter(limitOrDefault(cfg.OAuthRegistrationPerIP, 5), 5)
+		oauth.registrations = newKeyedRateLimiter(limitOrDefault(cfg.OAuthRegistrationGlobal, 30), 10)
+		oauth.trustedProxies, _ = parseTrustedProxies(cfg.TrustedProxyCIDRs)
 		mcpSrv := newMCPServer(app, oauth)
 		mcpSrv.requests = newKeyedRateLimiter(limitOrDefault(cfg.MCPRequestsPerMinute, 60), limitOrDefault(cfg.MCPRequestBurst, 10))
 

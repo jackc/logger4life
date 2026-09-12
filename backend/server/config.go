@@ -13,8 +13,11 @@ import (
 )
 
 type Config struct {
-	SQLConcurrencyPerUser int
-	SQLConcurrencyGlobal  int
+	OAuthRegistrationPerIP  int
+	OAuthRegistrationGlobal int
+	TrustedProxyCIDRs       string
+	SQLConcurrencyPerUser   int
+	SQLConcurrencyGlobal    int
 	// DatabaseBackend selects "postgresql" (default), "jed", or the
 	// fail-stop comparison harness "both".
 	DatabaseBackend string
@@ -36,22 +39,24 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		SQLConcurrencyPerUser: 2,
-		SQLConcurrencyGlobal:  8,
-		DatabaseBackend:       "postgresql",
-		DatabaseURL:           "postgres://postgres:postgres@localhost:5432/logger4life_dev",
-		JedDataDir:            "",
-		BindAddress:           "127.0.0.1",
-		Port:                  "4000",
-		AllowRegistration:     false,
-		WebAuthnRPID:          "",
-		WebAuthnOrigin:        "",
-		LogLevel:              "info",
-		LogFormat:             "json",
-		MCPCanonicalURL:       "",
-		SecureCookies:         false,
-		MCPRequestsPerMinute:  60,
-		MCPRequestBurst:       10,
+		OAuthRegistrationPerIP:  5,
+		OAuthRegistrationGlobal: 30,
+		SQLConcurrencyPerUser:   2,
+		SQLConcurrencyGlobal:    8,
+		DatabaseBackend:         "postgresql",
+		DatabaseURL:             "postgres://postgres:postgres@localhost:5432/logger4life_dev",
+		JedDataDir:              "",
+		BindAddress:             "127.0.0.1",
+		Port:                    "4000",
+		AllowRegistration:       false,
+		WebAuthnRPID:            "",
+		WebAuthnOrigin:          "",
+		LogLevel:                "info",
+		LogFormat:               "json",
+		MCPCanonicalURL:         "",
+		SecureCookies:           false,
+		MCPRequestsPerMinute:    60,
+		MCPRequestBurst:         10,
 	}
 }
 
@@ -111,6 +116,9 @@ func ConfigFromEnv() Config {
 	}
 	readLimitEnv("SQL_CONCURRENCY_PER_USER", &cfg.SQLConcurrencyPerUser)
 	readLimitEnv("SQL_CONCURRENCY_GLOBAL", &cfg.SQLConcurrencyGlobal)
+	cfg.TrustedProxyCIDRs = os.Getenv("TRUSTED_PROXY_CIDRS")
+	readLimitEnv("OAUTH_REGISTRATION_PER_IP", &cfg.OAuthRegistrationPerIP)
+	readLimitEnv("OAUTH_REGISTRATION_GLOBAL", &cfg.OAuthRegistrationGlobal)
 	readLimitEnv("MCP_REQUESTS_PER_MINUTE", &cfg.MCPRequestsPerMinute)
 	readLimitEnv("MCP_REQUEST_BURST", &cfg.MCPRequestBurst)
 
@@ -129,7 +137,10 @@ func readLimitEnv(name string, target *int) {
 }
 
 func (c Config) validateLimits() error {
-	for name, value := range map[string]int{"SQL_CONCURRENCY_PER_USER": c.SQLConcurrencyPerUser, "SQL_CONCURRENCY_GLOBAL": c.SQLConcurrencyGlobal, "MCP_REQUESTS_PER_MINUTE": c.MCPRequestsPerMinute, "MCP_REQUEST_BURST": c.MCPRequestBurst} {
+	if _, err := parseTrustedProxies(c.TrustedProxyCIDRs); err != nil {
+		return err
+	}
+	for name, value := range map[string]int{"OAUTH_REGISTRATION_PER_IP": c.OAuthRegistrationPerIP, "OAUTH_REGISTRATION_GLOBAL": c.OAuthRegistrationGlobal, "SQL_CONCURRENCY_PER_USER": c.SQLConcurrencyPerUser, "SQL_CONCURRENCY_GLOBAL": c.SQLConcurrencyGlobal, "MCP_REQUESTS_PER_MINUTE": c.MCPRequestsPerMinute, "MCP_REQUEST_BURST": c.MCPRequestBurst} {
 		if value < 0 || value > 1000000 {
 			return fmt.Errorf("%s must be an integer between 1 and 1000000", name)
 		}

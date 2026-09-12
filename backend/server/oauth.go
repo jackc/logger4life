@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -24,12 +26,15 @@ import (
 // translation of core errors into OAuth error responses.
 
 type oauthProvider struct {
-	app          *core.Core
-	canonicalURL string
+	app             *core.Core
+	canonicalURL    string
+	registrationIPs *keyedRateLimiter
+	registrations   *keyedRateLimiter
+	trustedProxies  []netip.Prefix
 }
 
 func newOAuthProvider(app *core.Core, canonicalURL string) *oauthProvider {
-	return &oauthProvider{app: app, canonicalURL: strings.TrimRight(canonicalURL, "/")}
+	return &oauthProvider{app: app, canonicalURL: strings.TrimRight(canonicalURL, "/"), registrationIPs: newKeyedRateLimiter(5, 5), registrations: newKeyedRateLimiter(30, 10)}
 }
 
 // ===== Discovery / metadata endpoints =====
@@ -80,9 +85,33 @@ type dcrResponse struct {
 
 func (p *oauthProvider) handleDynamicClientRegistration() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if retry := p.registrationIPs.allow(requestClientIP(r, p.trustedProxies)); retry > 0 {
+			writeRateLimit(w, retry)
+			return
+		}
+		if retry := p.registrations.allow("global"); retry > 0 {
+			writeRateLimit(w, retry)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
+		decoder := json.NewDecoder(r.Body)
 		var params core.RegisterOAuthClientParams
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-			writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "could not parse request body")
+		err := decoder.Decode(&params)
+		if err == nil {
+			var trailing any
+			if err = decoder.Decode(&trailing); err == io.EOF {
+				err = nil
+			} else if err == nil {
+				err = errors.New("multiple JSON documents")
+			}
+		}
+		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				writeOAuthError(w, http.StatusRequestEntityTooLarge, "invalid_client_metadata", "registration body exceeds 32 KiB")
+			} else {
+				writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "expected one JSON object")
+			}
 			return
 		}
 		client, err := core.RegisterOAuthClient.Call(r.Context(), p.app, params)

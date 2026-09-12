@@ -6,11 +6,35 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/logger4life/backend/domain"
 )
+
+func TestRegisterOAuthClientLimits(t *testing.T) {
+	for _, params := range []RegisterOAuthClientParams{
+		{ClientName: strings.Repeat("x", 257), RedirectURIs: []string{"https://example.com"}},
+		{RedirectURIs: make([]string, 11)},
+		{RedirectURIs: []string{"https://example.com/" + strings.Repeat("x", 2048)}},
+	} {
+		store := &fakeOAuthStore{}
+		_, err := RegisterOAuthClient.Call(context.Background(), New(Config{OAuth: store}), params)
+		var oauthErr *OAuthError
+		if !errors.As(err, &oauthErr) || store.createdClient.ID != "" {
+			t.Fatalf("invalid metadata reached storage: %v", err)
+		}
+	}
+	store := &fakeOAuthStore{}
+	params := RegisterOAuthClientParams{ClientName: strings.Repeat("x", 256)}
+	for range 10 {
+		params.RedirectURIs = append(params.RedirectURIs, "https://example.com/"+strings.Repeat("x", 2048-len("https://example.com/")))
+	}
+	if _, err := RegisterOAuthClient.Call(context.Background(), New(Config{OAuth: store}), params); err != nil {
+		t.Fatal(err)
+	}
+}
 
 type fakeOAuthStore struct {
 	client        OAuthClient

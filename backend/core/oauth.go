@@ -19,7 +19,10 @@ import (
 // the HTTP adapter.
 
 const (
-	OAuthScopeMCP = "mcp"
+	OAuthScopeMCP            = "mcp"
+	OAuthMaxClientNameBytes  = 256
+	OAuthMaxRedirectURIs     = 10
+	OAuthMaxRedirectURIBytes = 2048
 
 	OAuthAccessTokenLifespan       = time.Hour
 	OAuthRefreshTokenLifespan      = 30 * 24 * time.Hour
@@ -163,10 +166,19 @@ type RegisterOAuthClientParams struct {
 var RegisterOAuthClient = Define(ActionDef[RegisterOAuthClientParams, OAuthClient]{
 	Name: "register_oauth_client", Public: true, Description: "Register an OAuth client (RFC 7591 dynamic client registration).", Mutating: true,
 	Handler: func(ctx context.Context, c *Core, p RegisterOAuthClientParams) (OAuthClient, error) {
+		if len(p.ClientName) > OAuthMaxClientNameBytes {
+			return OAuthClient{}, inlineOAuthError("invalid_client_metadata", "client_name exceeds 256 bytes")
+		}
+		if len(p.RedirectURIs) > OAuthMaxRedirectURIs {
+			return OAuthClient{}, inlineOAuthError("invalid_client_metadata", "redirect_uris exceeds 10 entries")
+		}
 		if len(p.RedirectURIs) == 0 {
 			return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uris is required")
 		}
 		for _, u := range p.RedirectURIs {
+			if len(u) > OAuthMaxRedirectURIBytes {
+				return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri exceeds 2048 bytes")
+			}
 			if !domain.ValidRedirectURI(u) {
 				return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri must be https or http://localhost")
 			}

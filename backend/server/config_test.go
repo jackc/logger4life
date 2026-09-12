@@ -17,6 +17,21 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Contains(t, cfg.DatabaseURL, "logger4life_dev")
 }
 
+func TestLimitConfigValidation(t *testing.T) {
+	for _, name := range []string{"MCP_REQUESTS_PER_MINUTE", "MCP_REQUEST_BURST", "SQL_CONCURRENCY_PER_USER", "SQL_CONCURRENCY_GLOBAL", "OAUTH_REGISTRATION_PER_IP", "OAUTH_REGISTRATION_GLOBAL"} {
+		t.Run(name, func(t *testing.T) {
+			for _, value := range []string{"", "0", "-1", "lots", "1000001"} {
+				t.Setenv(name, value)
+				assert.ErrorContains(t, ConfigFromEnv().validateLimits(), name)
+			}
+			t.Setenv(name, "12")
+			assert.NoError(t, ConfigFromEnv().validateLimits())
+		})
+	}
+	t.Setenv("TRUSTED_PROXY_CIDRS", "localhost")
+	assert.ErrorContains(t, ConfigFromEnv().validateLimits(), "TRUSTED_PROXY_CIDRS")
+}
+
 func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("DATABASE_BACKEND", "jed")
 	t.Setenv("DATABASE_URL", "postgres://localhost/mydb")

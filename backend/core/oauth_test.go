@@ -143,9 +143,13 @@ func oauthErrorFrom(t *testing.T, err error) *OAuthError {
 
 func TestRegisterOAuthClientRejectsUnusableRedirects(t *testing.T) {
 	for name, uris := range map[string][]string{
-		"none":       nil,
-		"plain http": {"http://evil.example.com/cb"},
-		"fragment":   {"https://example.com/cb#frag"},
+		"none":           nil,
+		"plain http":     {"http://evil.example.com/cb"},
+		"fragment":       {"https://example.com/cb#frag"},
+		"opaque":         {"https:callback"},
+		"no host":        {"https:///callback"},
+		"empty fragment": {"https://example.com/cb#"},
+		"credentials":    {"https://user:pass@example.com/cb"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := &fakeOAuthStore{}
@@ -157,6 +161,74 @@ func TestRegisterOAuthClientRejectsUnusableRedirects(t *testing.T) {
 			}
 			if store.createdClient.ID != "" {
 				t.Fatal("rejected registration must not reach the store")
+			}
+		})
+	}
+}
+
+func TestOAuthRejectsPreviouslyRegisteredMalformedRedirect(t *testing.T) {
+	for _, uri := range []string{"https:callback", "https:///callback", "https://example.com/cb#"} {
+		t.Run(uri, func(t *testing.T) {
+			client := registeredClient()
+			client.RedirectURIs = []string{uri}
+			store := &fakeOAuthStore{client: client}
+			app := New(Config{OAuth: store, OAuthIssuer: testIssuer})
+			params := validAuthorizationParams()
+			params.RedirectURI = uri
+			ctx := WithUserID(context.Background(), "user-1")
+			_, previewErr := PrepareOAuthAuthorization.Call(ctx, app, params)
+			_, approvalErr := CreateOAuthAuthorizationCode.Call(ctx, app, params)
+			for _, err := range []error{previewErr, approvalErr} {
+				oauthErr := oauthErrorFrom(t, err)
+				if oauthErr.Code != "invalid_redirect_uri" || oauthErr.Redirectable {
+					t.Fatalf("malformed registered callback must fail inline: %+v", oauthErr)
+				}
+			}
+			if store.codeHash != nil {
+				t.Fatal("malformed registered callback received an authorization code")
+			}
+		})
+	}
+}
+
+func TestOAuthResourceURLBoundaries(t *testing.T) {
+	for _, tc := range []struct{ issuer, resource string }{
+		{testIssuer + "/Resource", testIssuer + "/resource"},
+		{testIssuer + "/Resource/", testIssuer + "/Resource"},
+		{testIssuer + "/?key=A", testIssuer + "/?key=a"},
+		{testIssuer, testIssuer + "///"},
+		{testIssuer, testIssuer + "#"},
+	} {
+		t.Run(tc.resource, func(t *testing.T) {
+			store := &fakeOAuthStore{client: registeredClient()}
+			app := New(Config{OAuth: store, OAuthIssuer: tc.issuer})
+			params := validAuthorizationParams()
+			params.Resource = tc.resource
+			ctx := WithUserID(context.Background(), "user-1")
+			_, previewErr := PrepareOAuthAuthorization.Call(ctx, app, params)
+			_, approvalErr := CreateOAuthAuthorizationCode.Call(ctx, app, params)
+			verifier, _ := pkcePair()
+			store.consumedCode = storedCode()
+			store.consumedCode.Audience = tc.issuer
+			_, exchangeErr := ExchangeOAuthCode.Call(ctx, app, ExchangeOAuthCodeParams{
+				ClientID: "client-1", Code: "code", RedirectURI: "http://localhost/cb", CodeVerifier: verifier, Resource: tc.resource,
+			})
+			store.grant = OAuthGrant{ClientID: "client-1", UserID: "user-1", Audience: tc.issuer, Scope: OAuthScopeMCP}
+			_, refreshErr := RefreshOAuthToken.Call(ctx, app, RefreshOAuthTokenParams{
+				ClientID: "client-1", RefreshToken: "refresh", Resource: tc.resource,
+			})
+			for _, err := range []error{previewErr, approvalErr, exchangeErr, refreshErr} {
+				if oauthErrorFrom(t, err).Code != "invalid_target" {
+					t.Fatalf("resource mismatch error = %v, want invalid_target", err)
+				}
+			}
+			store.grant.Audience = tc.resource
+			_, err := AuthenticateOAuthToken.Call(ctx, app, AuthenticateOAuthTokenParams{Token: "access"})
+			if !errors.Is(err, ErrOAuthTokenAudienceMismatch) {
+				t.Fatalf("stored audience mismatch = %v", err)
+			}
+			if store.codeHash != nil || store.pair.AccessTokenHash != nil {
+				t.Fatal("mismatched resource caused grant issuance")
 			}
 		})
 	}
@@ -204,7 +276,7 @@ func TestPrepareOAuthAuthorizationRejections(t *testing.T) {
 
 func TestPrepareOAuthAuthorizationDefaults(t *testing.T) {
 	store := &fakeOAuthStore{client: registeredClient()}
-	app := New(Config{OAuth: store, OAuthIssuer: testIssuer + "/"})
+	app := New(Config{OAuth: store, OAuthIssuer: testIssuer})
 	params := validAuthorizationParams()
 	params.Scope = ""
 

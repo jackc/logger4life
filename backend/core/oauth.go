@@ -189,7 +189,7 @@ var RegisterOAuthClient = Define(ActionDef[RegisterOAuthClientParams, OAuthClien
 				return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri exceeds 2048 bytes")
 			}
 			if !domain.ValidRedirectURI(u) {
-				return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri must be https or http://localhost")
+				return OAuthClient{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri must be an absolute https URL or http loopback URL without credentials or a fragment")
 			}
 		}
 		id := uuid.NewV7()
@@ -239,8 +239,8 @@ func (c *Core) validateAuthorization(ctx context.Context, p OAuthAuthorizationPa
 	}
 	// Until the redirect URI is known to be registered to this client we
 	// cannot safely redirect anything to it, including errors.
-	if !domain.RedirectURIRegistered(client.RedirectURIs, p.RedirectURI) {
-		return OAuthAuthorizationRequest{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri does not match a registered URI")
+	if !domain.ValidRedirectURI(p.RedirectURI) || !domain.RedirectURIRegistered(client.RedirectURIs, p.RedirectURI) {
+		return OAuthAuthorizationRequest{}, inlineOAuthError("invalid_redirect_uri", "redirect_uri is invalid or does not match a registered URI")
 	}
 	if p.ResponseType != "code" {
 		return OAuthAuthorizationRequest{}, redirectableOAuthError("unsupported_response_type", "only response_type=code is supported")

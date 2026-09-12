@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/domain"
 	slogjournal "github.com/systemd/slog-journal"
 )
 
@@ -114,7 +115,7 @@ func ConfigFromEnv() Config {
 		cfg.LogFormat = v
 	}
 	if v := os.Getenv("MCP_CANONICAL_URL"); v != "" {
-		cfg.MCPCanonicalURL = strings.TrimRight(v, "/")
+		cfg.MCPCanonicalURL = v
 	}
 	if v := os.Getenv("SECURE_COOKIES"); v == "true" {
 		cfg.SecureCookies = true
@@ -130,6 +131,18 @@ func ConfigFromEnv() Config {
 	readLimitEnv("MCP_REQUEST_BURST", &cfg.MCPRequestBurst)
 
 	return cfg
+}
+
+func (c *Config) normalizeMCPCanonicalURL() error {
+	if !c.MCPEnabled() {
+		return nil
+	}
+	origin, ok := domain.OAuthCanonicalOrigin(c.MCPCanonicalURL)
+	if !ok {
+		return fmt.Errorf("MCP_CANONICAL_URL must be an absolute HTTPS origin without credentials, a path, query, or fragment (HTTP is allowed only on loopback hosts)")
+	}
+	c.MCPCanonicalURL = origin
+	return nil
 }
 
 func readLimitEnv(name string, target *int) {

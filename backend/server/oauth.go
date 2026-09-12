@@ -34,7 +34,7 @@ type oauthProvider struct {
 }
 
 func newOAuthProvider(app *core.Core, canonicalURL string) *oauthProvider {
-	return &oauthProvider{app: app, canonicalURL: strings.TrimRight(canonicalURL, "/"), registrationIPs: newKeyedRateLimiter(5, 5), registrations: newKeyedRateLimiter(30, 10)}
+	return &oauthProvider{app: app, canonicalURL: canonicalURL, registrationIPs: newKeyedRateLimiter(5, 5), registrations: newKeyedRateLimiter(30, 10)}
 }
 
 // ===== Discovery / metadata endpoints =====

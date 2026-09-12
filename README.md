@@ -180,9 +180,18 @@ Logger4Life exposes five read-only tools to AI assistants over the
 verna app env set MCP_CANONICAL_URL=https://logger4life.example.com
 ```
 
-The value must be the public origin without a trailing slash. It is used
-as both the OAuth issuer and the RFC 8707 audience binding for issued
-access tokens.
+The value must be the public HTTPS origin, with no credentials, path, query,
+or fragment. HTTP is allowed only on loopback hosts for local development
+(`localhost`, IPv4 loopback, or `[::1]`). Startup rejects invalid values before
+opening the database. A single trailing root slash is accepted and removed;
+scheme/host case and default ports are normalized. The resulting origin is
+used as both the OAuth issuer and the RFC 8707 audience binding for issued
+access tokens, and is emitted exactly in OAuth issuer responses. International
+hostnames must use their ASCII (punycode) form.
+
+Consent POSTs require exactly one `Origin` header matching that public
+origin; missing or foreign origins receive 403. Normal browser approval
+forms supply this header automatically. Authorization pages deny framing.
 
 The tools are `list_logs`, `get_sql_schema`, `run_sql`,
 `list_saved_queries`, and `run_saved_query`. SQL queries are restricted to
@@ -191,7 +200,7 @@ the caller's data and capped at 1000 rows and 1 MiB of result values.
 The endpoint supports protocol `2026-07-28` using stateless Streamable HTTP
 with JSON responses, and retains compatibility with earlier clients using
 `initialize`. Every request needs an OAuth bearer token. Browser requests
-that include `Origin` must match `MCP_CANONICAL_URL` exactly.
+that include `Origin` must match the normalized public origin exactly.
 
 See [resource limits](docs/resource-limits.md) for MCP throttling, SQL
 concurrency, registration quotas, retention, and trusted proxy settings.

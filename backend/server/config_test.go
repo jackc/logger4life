@@ -1,10 +1,53 @@
 package server
 
 import (
+	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestMCPCanonicalURL(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"", ""},
+		{"https://logs.example.com", "https://logs.example.com"},
+		{"HTTPS://LOGS.example.com:443/", "https://logs.example.com"},
+		{"https://logs.example.com:8443", "https://logs.example.com:8443"},
+		{"http://localhost:4000/", "http://localhost:4000"},
+		{"http://127.0.0.1:4000", "http://127.0.0.1:4000"},
+		{"http://[::1]:4000/", "http://[::1]:4000"},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.MCPCanonicalURL = tc.raw
+			require.NoError(t, cfg.normalizeMCPCanonicalURL())
+			assert.Equal(t, tc.want, cfg.MCPCanonicalURL)
+			require.NoError(t, cfg.normalizeMCPCanonicalURL())
+			assert.Equal(t, tc.want, cfg.MCPCanonicalURL)
+		})
+	}
+	for _, raw := range []string{
+		"not-a-url", " ", "https:callback", "https://", "https://:443", "//logs.example.com",
+		"https://user:pass@logs.example.com", "https://logs.example.com/tenant", "https://logs.example.com///",
+		"https://logs.example.com/%2F", "https://logs.example.com?tenant=one", "https://logs.example.com?",
+		"https://logs.example.com#fragment", "https://logs.example.com#", "https://logs.example.com:99999",
+		"http://public.example.com", "http://localhost.attacker.test", "https://[not-an-ip]",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("MCP_CANONICAL_URL", raw)
+			cfg := ConfigFromEnv()
+			assert.Equal(t, raw, cfg.MCPCanonicalURL, "environment parsing must not hide malformed URLs")
+			// An invalid backend would fail if URL validation happened too late.
+			cfg.DatabaseBackend = "must-not-open"
+			_, _, cleanup, err := BuildBackend(context.Background(), cfg, slog.New(slog.DiscardHandler))
+			cleanup()
+			require.ErrorContains(t, err, "MCP_CANONICAL_URL")
+			require.ErrorContains(t, Run(context.Background(), cfg), "MCP_CANONICAL_URL")
+		})
+	}
+}
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()

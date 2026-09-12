@@ -116,15 +116,35 @@ Ignoring `application_type` is acceptable here because this authorization
 server does not implement OIDC; the new requirement primarily concerns
 clients and OIDC registration constraints. [Client registration requirements](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration)
 
-### 5. Tighten OAuth URL and consent boundaries
+### 5. Tighten OAuth URL and consent boundaries — resolved
 
-**Medium priority; existing hardening work.** `ValidRedirectURI` accepts
-HTTPS strings with no hostname, including `https:callback`, and omits IPv6
-loopback support. `SameCanonicalURL` ignores case across the entire URI,
-including case-sensitive paths. Validate absolute redirect URIs explicitly;
-normalize only scheme/host for resource comparisons. Keep the RFC 9207
-issuer value exact. Validate that `MCP_CANONICAL_URL` is the documented
-public origin at startup rather than accepting arbitrary paths or queries.
+**URL validation — resolved.** Redirect URIs must be absolute hierarchical
+HTTPS URLs or HTTP loopback URLs with a hostname and valid port. Credentials,
+fragments (including an empty `#`), and malformed authorities are rejected.
+IPv6 loopback callbacks are supported. Authorization also revalidates stored
+callbacks so malformed registrations created before the fix cannot issue
+new codes or redirect errors. Callback matching remains exact.
+
+Resource comparisons normalize scheme/host, default ports, and an empty
+root path, while preserving case-sensitive escaped paths and query strings.
+They no longer equate `/Resource` with `/resource` or `/` with `///`.
+`MCP_CANONICAL_URL` is validated before opening a database and must be an
+HTTPS origin (HTTP is allowed only on loopback for local development).
+Credentials, non-root paths, queries, and fragments are rejected. A single
+root slash, scheme/host case, and default ports are normalized once into
+the public origin used by discovery, consent checks, and core OAuth actions.
+The RFC 9207 `iss` value is emitted exactly as advertised; it never uses the
+resource comparison helper.
+
+Regressions cover URL parsing, IPv4/IPv6 loopback, old malformed client
+records, exact callback binding, rejection before database startup, and
+resource mismatches at consent, code issuance/exchange, refresh, and bearer
+authentication. The backend suite passes for PostgreSQL, jed, and the dual
+adapter. Chromium also verifies normalized startup configuration, exact
+issuer responses, and an approved MCP tool call. Focused OAuth/URL tests
+also pass under the Go race detector. No database migration is needed.
+Deployments with invalid canonical URLs must correct their configuration;
+clients with malformed callbacks must register again with valid URLs.
 
 **Consent protection — resolved.** A Chromium reproduction confirmed that
 an untrusted sibling origin could submit approval using the user's

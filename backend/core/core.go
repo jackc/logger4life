@@ -5,7 +5,6 @@ package core
 
 import (
 	"context"
-	"strings"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 )
@@ -53,8 +52,9 @@ type Config struct {
 	SQLConcurrencyGlobal  int
 	Sharing               SharingStore
 	OAuth                 OAuthStore
-	// OAuthIssuer is this server's canonical URL. It is the OAuth issuer and
-	// the RFC 8707 audience every access token is bound to.
+	// OAuthIssuer is this server's validated canonical URL, supplied by the
+	// composition root. It is the OAuth issuer and the RFC 8707 audience
+	// every access token is bound to.
 	OAuthIssuer string
 	Middleware  []Middleware
 }
@@ -68,7 +68,7 @@ func New(cfg Config) *Core {
 	if maxClients <= 0 {
 		maxClients = OAuthDefaultMaxClients
 	}
-	return &Core{collections: cfg.Collections, oauthMaxClients: maxClients, users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sqlConcurrency: newSQLConcurrency(cfg.SQLConcurrencyPerUser, cfg.SQLConcurrencyGlobal), sharing: cfg.Sharing, oauth: cfg.OAuth, oauthIssuer: strings.TrimRight(cfg.OAuthIssuer, "/"), middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{collections: cfg.Collections, oauthMaxClients: maxClients, users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sqlConcurrency: newSQLConcurrency(cfg.SQLConcurrencyPerUser, cfg.SQLConcurrencyGlobal), sharing: cfg.Sharing, oauth: cfg.OAuth, oauthIssuer: cfg.OAuthIssuer, middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 
 // Transactor is the driven port for transaction boundaries. Store calls made

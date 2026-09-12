@@ -2,7 +2,6 @@ package backend
 
 import (
 	"context"
-	"strings"
 
 	"github.com/jackc/logger4life/backend/server"
 	"github.com/spf13/cobra"
@@ -81,7 +80,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		cfg.LogFormat = flagLogFormat
 	}
 	if cmd.Flags().Changed("mcp-canonical-url") {
-		cfg.MCPCanonicalURL = strings.TrimRight(flagMCPCanonicalURL, "/")
+		cfg.MCPCanonicalURL = flagMCPCanonicalURL
 	}
 	if cmd.Flags().Changed("secure-cookies") {
 		cfg.SecureCookies = flagSecureCookies

@@ -28,6 +28,9 @@ type HealthCheck func(ctx context.Context) error
 // API until the process exits. The composition root lives here: one store and
 // one core.Core, injected into every adapter.
 func Run(ctx context.Context, cfg Config) error {
+	if err := cfg.normalizeMCPCanonicalURL(); err != nil {
+		return err
+	}
 	secureCookies = cfg.SecureCookies
 
 	handler, err := cfg.SlogHandler()
@@ -194,6 +197,9 @@ type persistence interface {
 // commands can exercise the same composition root.
 func BuildBackend(ctx context.Context, cfg Config, logger *slog.Logger) (*core.Core, HealthCheck, func(), error) {
 	noop := func() {}
+	if err := cfg.normalizeMCPCanonicalURL(); err != nil {
+		return nil, nil, noop, err
+	}
 	if err := cfg.validateLimits(); err != nil {
 		return nil, nil, noop, err
 	}

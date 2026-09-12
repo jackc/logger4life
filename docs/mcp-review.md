@@ -100,21 +100,48 @@ Regressions cover authorization preview and approval, normalized scope in the
 token response, exact scope membership, denial before resource dispatch even
 with a browser session, and the distinction between 401 and 403 challenges.
 
-### 4. Add Client ID Metadata Documents
+### 4. Add Client ID Metadata Documents — resolved
 
-**Recommended protocol modernization.** Registration currently supports
-only database-backed DCR clients. The new spec recommends Client ID
-Metadata Documents (CIMD), and deprecates DCR while retaining it for
-compatibility. Keep DCR while introducing HTTPS URL client IDs, metadata
-validation, redirect binding, bounded fetching, SSRF protection, and HTTP
-cache handling. Advertise `client_id_metadata_document_supported` only
-after the implementation exists. Client IDs are already stored as text,
-but grants reference persisted client records; define how fetched clients
-and metadata refreshes fit that lifecycle.
+HTTPS URL client IDs now resolve Client ID Metadata Documents (CIMD), and
+discovery advertises `client_id_metadata_document_supported: true`. DCR
+remains available. Documents require exact `client_id` equality, a nonempty
+`client_name`, validated `redirect_uris`, and the supported public-client
+authentication method `none`. JSON member names are case-sensitive and
+duplicates are rejected. Authorization binds callbacks by exact string
+comparison. Consent displays the URL hostname alongside the self-reported
+name; no remote logos or other metadata resources are loaded.
 
-Ignoring `application_type` is acceptable here because this authorization
-server does not implement OIDC; the new requirement primarily concerns
-clients and OIDC registration constraints. [Client registration requirements](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration)
+The dedicated HTTPS fetcher rejects redirects, verifies TLS, excludes proxies
+and cookies, and validates every DNS answer against special-use IP ranges
+before connecting to a checked literal. This prevents a second resolution
+from bypassing the address checks. Fetches are bounded by time, headers,
+body size, concurrency, and rate. A bounded memory cache respects HTTP
+freshness directives; expired or uncacheable documents are fetched again,
+and errors never fall back to stale metadata. See [CIMD limits and lifecycle](resource-limits.md#client-id-metadata-documents).
+
+The URL identity is persisted only when approval creates a code, atomically
+under the quota shared with DCR. Fetched names and callback lists are never
+stored as permanent registration metadata. URL clients always resolve fresh
+or HTTP-cached metadata for new authorization, including after restart.
+Existing codes and token families remain bound to their approved identity,
+callback, scope, audience, and grant policy. Metadata changes apply to new
+authorizations and cannot expand an existing grant. Documents that omit
+`refresh_token` from `grant_types` receive access tokens without refresh tokens.
+
+PostgreSQL migration **016** must run before deploying this version; jed
+applies migration **004** automatically. The added code-policy flag preserves
+refresh support for existing DCR codes. Regression coverage includes URL
+and metadata parsing, public-network/TLS enforcement, DNS rebinding, bounded
+fetching and caching, callback changes, inline errors, consent rendering,
+concurrent quota admission and cleanup, migration, and grant persistence.
+The full OAuth flow includes an MCP tool call for DCR, CIMD with refresh,
+and CIMD without refresh across all three adapters.
+The full backend suite, focused race checks, and migration/restart tests pass.
+
+`private_key_jwt` and embedded keys are unsupported and rejected. Ignoring
+`application_type` remains appropriate because this is not an OIDC server.
+The implementation follows the [MCP client registration requirements](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration)
+and the [CIMD draft's fetch and metadata security rules](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02).
 
 ### 5. Tighten OAuth URL and consent boundaries — resolved
 

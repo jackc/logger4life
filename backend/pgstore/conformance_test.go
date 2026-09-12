@@ -28,3 +28,8 @@ func TestOAuthClientLimits(t *testing.T) {
 	t.Parallel()
 	storetest.RunOAuthClientLimits(t, newTestStore(t))
 }
+
+func TestOAuthMetadataClientLimits(t *testing.T) {
+	t.Parallel()
+	storetest.RunOAuthMetadataClientLimits(t, newTestStore(t))
+}

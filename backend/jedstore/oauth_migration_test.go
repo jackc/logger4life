@@ -74,3 +74,43 @@ func TestOAuthFamilyMigrationPreservesTokensAndRevocation(t *testing.T) {
 	_, err = store.GetGrantByAccessToken(ctx, accessOnly.AccessTokenHash)
 	require.NoError(t, err, "revocation must not affect another family")
 }
+
+func TestOAuthCodeGrantMigrationPreservesCodes(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := Open(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if store != nil {
+			_ = store.Close()
+		}
+	})
+	user, err := store.CreateUser(ctx, uuid.NewV4().String(), "code_migration_user", nil, "hash")
+	require.NoError(t, err)
+	client := core.OAuthClient{ID: uuid.NewV7().String(), RedirectURIs: []string{"http://localhost/cb"}}
+	require.NoError(t, store.CreateOAuthClient(ctx, client))
+	code := core.OAuthAuthorizationCode{ClientID: client.ID, UserID: user.ID, RedirectURI: client.RedirectURIs[0], Scope: "mcp", Audience: "https://logs.example.com", CodeChallenge: "challenge", CodeChallengeMethod: "S256", ExpiresAt: time.Now().Add(time.Hour)}
+	require.NoError(t, store.CreateAuthorizationCode(ctx, []byte("old-code"), code))
+	migrations, err := migrate.LoadMigrationsFS(jedmigrations.FS, jedmigrations.Root)
+	require.NoError(t, err)
+	migrator, err := migrate.NewMigrator(store.db, migrations, migrate.Options{})
+	require.NoError(t, err)
+	require.NoError(t, migrator.MigrateTo(3))
+	migrator.Close()
+	require.NoError(t, store.Close())
+	store, err = Open(dir)
+	require.NoError(t, err)
+	old, err := store.ConsumeAuthorizationCode(ctx, []byte("old-code"))
+	require.NoError(t, err)
+	require.False(t, old.AuthorizationCodeOnly, "pre-migration DCR codes retain refresh support")
+	require.Equal(t, code.RedirectURI, old.RedirectURI)
+	code.ClientID = "https://example.com/client.json"
+	code.AuthorizationCodeOnly = true
+	require.NoError(t, store.CreateMetadataAuthorizationCode(ctx, []byte("new-code"), code, 10))
+	require.NoError(t, store.Close())
+	store, err = Open(dir)
+	require.NoError(t, err)
+	current, err := store.ConsumeAuthorizationCode(ctx, []byte("new-code"))
+	require.NoError(t, err)
+	require.True(t, current.AuthorizationCodeOnly, "approved grant policy survives restart without metadata cache")
+}

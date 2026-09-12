@@ -28,6 +28,22 @@ func ValidRedirectURI(s string) bool {
 	return ok && (u.Scheme == "https" || oauthLoopbackHost(u.Hostname()))
 }
 
+// ValidClientMetadataURL validates a CIMD identifier without normalizing its
+// identity. Resolution must additionally enforce a public network destination.
+func ValidClientMetadataURL(s string) bool {
+	u, ok := parseOAuthURL(s)
+	if !ok || u.Scheme != "https" || u.Path == "" || len(s) > 2048 {
+		return false
+	}
+	// Check decoded segments too, so escaped dots cannot bypass this rule.
+	for _, segment := range strings.Split(u.Path, "/") {
+		if segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
 func parseOAuthURL(s string) (*url.URL, bool) {
 	u, err := url.Parse(s)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") ||

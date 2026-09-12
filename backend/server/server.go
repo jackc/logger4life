@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/jackc/logger4life/backend/cimd"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/dualstore"
 	"github.com/jackc/logger4life/backend/jedstore"
@@ -196,6 +197,10 @@ type persistence interface {
 // into one core. It is separate from Run so integration tests and future CLI
 // commands can exercise the same composition root.
 func BuildBackend(ctx context.Context, cfg Config, logger *slog.Logger) (*core.Core, HealthCheck, func(), error) {
+	return buildBackend(ctx, cfg, logger, cimd.New())
+}
+
+func buildBackend(ctx context.Context, cfg Config, logger *slog.Logger, metadata core.OAuthClientMetadataResolver) (*core.Core, HealthCheck, func(), error) {
 	noop := func() {}
 	if err := cfg.normalizeMCPCanonicalURL(); err != nil {
 		return nil, nil, noop, err
@@ -217,7 +222,7 @@ func BuildBackend(ctx context.Context, cfg Config, logger *slog.Logger) (*core.C
 	}
 
 	buildCore := func(store persistence) *core.Core {
-		return core.New(core.Config{Collections: store, Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, SQLConcurrencyPerUser: cfg.SQLConcurrencyPerUser, SQLConcurrencyGlobal: cfg.SQLConcurrencyGlobal, Sharing: store, OAuth: store, OAuthIssuer: cfg.MCPCanonicalURL, OAuthMaxClients: cfg.OAuthMaxClients,
+		return core.New(core.Config{Collections: store, Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, SQLConcurrencyPerUser: cfg.SQLConcurrencyPerUser, SQLConcurrencyGlobal: cfg.SQLConcurrencyGlobal, Sharing: store, OAuth: store, OAuthMetadata: metadata, OAuthIssuer: cfg.MCPCanonicalURL, OAuthMaxClients: cfg.OAuthMaxClients,
 			// RequireUser is outermost so an anonymous caller is turned away
 			// before the audit trail records an attempt it never let through.
 			Middleware: []core.Middleware{core.RequireUser(), auditMiddleware(logger)}})

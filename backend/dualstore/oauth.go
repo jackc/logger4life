@@ -25,6 +25,12 @@ func (s *Store) CreateAuthorizationCode(ctx context.Context, codeHash []byte, co
 		func() error { return s.secondary.CreateAuthorizationCode(ctx, codeHash, code) })
 }
 
+func (s *Store) CreateMetadataAuthorizationCode(ctx context.Context, hash []byte, code core.OAuthAuthorizationCode, limit int) error {
+	return compareError("CreateMetadataAuthorizationCode",
+		func() error { return s.primary.CreateMetadataAuthorizationCode(ctx, hash, code, limit) },
+		func() error { return s.secondary.CreateMetadataAuthorizationCode(ctx, hash, code, limit) })
+}
+
 func (s *Store) ConsumeAuthorizationCode(ctx context.Context, codeHash []byte) (core.OAuthAuthorizationCode, error) {
 	return compareCall("ConsumeAuthorizationCode",
 		func() (core.OAuthAuthorizationCode, error) { return s.primary.ConsumeAuthorizationCode(ctx, codeHash) },

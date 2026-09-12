@@ -38,3 +38,12 @@ func TestOAuthClientLimits(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	storetest.RunOAuthClientLimits(t, store)
 }
+
+func TestOAuthMetadataClientLimits(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	storetest.RunOAuthMetadataClientLimits(t, store)
+}

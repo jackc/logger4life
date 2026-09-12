@@ -13,6 +13,7 @@ type consentData struct {
 	Username    string
 	ClientID    string
 	ClientName  string
+	ClientHost  string
 	RedirectURI string
 	Scopes      []string
 	FormFields  url.Values
@@ -49,6 +50,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!doctype htm
     <p class="warn">⚠ This application did not provide a name during registration. Only approve if you initiated this request.</p>
     {{end}}
     <p class="meta">The application name is self-reported and not verified by Logger4Life — only approve if you recognize and trust the source.</p>
+    {{if .ClientHost}}<p>Client website: <strong>{{.ClientHost}}</strong></p>{{end}}
     {{if .RedirectURI}}<p class="meta">Will redirect to: <code>{{.RedirectURI}}</code></p>{{end}}
     {{if .Scopes}}
     <p>Requested scopes:</p>

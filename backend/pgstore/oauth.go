@@ -76,12 +76,30 @@ func (s *Store) CreateAuthorizationCode(ctx context.Context, codeHash []byte, c 
 	_, err := s.conn(ctx).Exec(ctx,
 		`INSERT INTO oauth_authorization_codes
 		   (code_hash, client_id, user_id, redirect_uri, scope, audience,
-		    code_challenge, code_challenge_method, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		    code_challenge, code_challenge_method, expires_at, authorization_code_only)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		codeHash, c.ClientID, c.UserID, c.RedirectURI, c.Scope, c.Audience,
-		c.CodeChallenge, c.CodeChallengeMethod, c.ExpiresAt,
+		c.CodeChallenge, c.CodeChallengeMethod, c.ExpiresAt, c.AuthorizationCodeOnly,
 	)
 	return err
+}
+
+func (s *Store) CreateMetadataAuthorizationCode(ctx context.Context, hash []byte, code core.OAuthAuthorizationCode, limit int) error {
+	return s.InTx(ctx, func(ctx context.Context) error {
+		// Same lock as DCR quota admission; held through code insertion so
+		// cleanup cannot remove an identity between admission and issuance.
+		if _, err := s.conn(ctx).Exec(ctx, `LOCK TABLE oauth_clients IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+			return err
+		}
+		if _, err := s.GetOAuthClient(ctx, code.ClientID); errors.Is(err, core.ErrOAuthRecordNotFound) {
+			if err := s.CreateOAuthClientLimited(ctx, core.OAuthClient{ID: code.ClientID, RedirectURIs: []string{}}, limit); err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+		return s.CreateAuthorizationCode(ctx, hash, code)
+	})
 }
 
 // ConsumeAuthorizationCode atomically finds an unused, unexpired code and
@@ -94,10 +112,10 @@ func (s *Store) ConsumeAuthorizationCode(ctx context.Context, codeHash []byte) (
 		    SET used = true
 		  WHERE code_hash = $1 AND used = false AND expires_at > now()
 		  RETURNING client_id, user_id, redirect_uri, scope, audience,
-		            code_challenge, code_challenge_method, expires_at`,
+		            code_challenge, code_challenge_method, expires_at, authorization_code_only`,
 		codeHash,
 	).Scan(&c.ClientID, &c.UserID, &c.RedirectURI, &c.Scope, &c.Audience,
-		&c.CodeChallenge, &c.CodeChallengeMethod, &c.ExpiresAt)
+		&c.CodeChallenge, &c.CodeChallengeMethod, &c.ExpiresAt, &c.AuthorizationCodeOnly)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return core.OAuthAuthorizationCode{}, core.ErrOAuthRecordNotFound
 	}
@@ -124,14 +142,16 @@ func (s *Store) CreateTokenPair(ctx context.Context, pair core.OAuthTokenPair) e
 		if revoked {
 			return core.ErrOAuthRefreshReuse
 		}
-		if _, err := conn.Exec(ctx,
-			`INSERT INTO oauth_refresh_tokens
+		if len(pair.RefreshTokenHash) > 0 {
+			if _, err := conn.Exec(ctx,
+				`INSERT INTO oauth_refresh_tokens
 			   (token_hash, client_id, user_id, family_id, scope, audience, expires_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			pair.RefreshTokenHash, pair.Grant.ClientID, pair.Grant.UserID,
-			pair.Grant.FamilyID, pair.Grant.Scope, pair.Grant.Audience, pair.RefreshExpiresAt,
-		); err != nil {
-			return err
+				pair.RefreshTokenHash, pair.Grant.ClientID, pair.Grant.UserID,
+				pair.Grant.FamilyID, pair.Grant.Scope, pair.Grant.Audience, pair.RefreshExpiresAt,
+			); err != nil {
+				return err
+			}
 		}
 		_, err = conn.Exec(ctx,
 			`INSERT INTO oauth_access_tokens

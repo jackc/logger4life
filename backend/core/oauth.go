@@ -86,19 +86,31 @@ type OAuthClient struct {
 	ID           string   `json:"id"`
 	RedirectURIs []string `json:"redirect_uris"`
 	ClientName   string   `json:"client_name,omitempty"`
+	// AuthorizationCodeOnly is set by CIMD when refresh_token was not
+	// requested. DCR retains its existing authorization + refresh policy.
+	AuthorizationCodeOnly bool `json:"authorization_code_only,omitempty"`
 }
+
+// OAuthClientMetadataResolver is the driven port for validated, HTTP-cached
+// CIMD metadata. It must never return stale metadata after a fetch failure.
+type OAuthClientMetadataResolver interface {
+	ResolveOAuthClient(context.Context, string) (OAuthClient, error)
+}
+
+func (c *Core) SupportsOAuthClientMetadata() bool { return c.oauthMetadata != nil }
 
 // OAuthAuthorizationCode is the state bound to an issued authorization code.
 // The code itself is never stored — only its hash, supplied separately.
 type OAuthAuthorizationCode struct {
-	ClientID            string    `json:"client_id"`
-	UserID              string    `json:"user_id"`
-	RedirectURI         string    `json:"redirect_uri"`
-	Scope               string    `json:"scope"`
-	Audience            string    `json:"audience"`
-	CodeChallenge       string    `json:"code_challenge"`
-	CodeChallengeMethod string    `json:"code_challenge_method"`
-	ExpiresAt           time.Time `json:"expires_at"`
+	ClientID              string    `json:"client_id"`
+	UserID                string    `json:"user_id"`
+	RedirectURI           string    `json:"redirect_uri"`
+	Scope                 string    `json:"scope"`
+	Audience              string    `json:"audience"`
+	CodeChallenge         string    `json:"code_challenge"`
+	CodeChallengeMethod   string    `json:"code_challenge_method"`
+	ExpiresAt             time.Time `json:"expires_at"`
+	AuthorizationCodeOnly bool      `json:"authorization_code_only,omitempty"`
 }
 
 // OAuthGrant is the authorization a token pair was issued under. FamilyID
@@ -115,7 +127,8 @@ type OAuthGrant struct {
 }
 
 // OAuthTokenPair is the persisted form of an issued access + refresh pair.
-// Only hashes cross the store boundary.
+// Only hashes cross the store boundary. A nil RefreshTokenHash creates an
+// access-only grant; stores must not insert a refresh token in that case.
 type OAuthTokenPair struct {
 	Grant            OAuthGrant
 	AccessTokenHash  []byte
@@ -149,6 +162,10 @@ type OAuthStore interface {
 	PruneUnusedOAuthClients(context.Context, time.Time) (int64, error)
 	GetOAuthClient(context.Context, string) (OAuthClient, error)
 	CreateAuthorizationCode(context.Context, []byte, OAuthAuthorizationCode) error
+	// CreateMetadataAuthorizationCode atomically ensures the URL identity
+	// exists under the shared client quota and inserts its code. Persist only
+	// the identity (empty redirect_uris and name), never fetched metadata.
+	CreateMetadataAuthorizationCode(context.Context, []byte, OAuthAuthorizationCode, int) error
 	ConsumeAuthorizationCode(context.Context, []byte) (OAuthAuthorizationCode, error)
 	CreateTokenPair(context.Context, OAuthTokenPair) error
 	GetGrantByAccessToken(context.Context, []byte) (OAuthGrant, error)
@@ -230,7 +247,7 @@ type OAuthAuthorizationRequest struct {
 // must satisfy. Both authorization actions run it, so approving a request is
 // checked as thoroughly as previewing one.
 func (c *Core) validateAuthorization(ctx context.Context, p OAuthAuthorizationParams) (OAuthAuthorizationRequest, error) {
-	client, err := c.oauth.GetOAuthClient(ctx, p.ClientID)
+	client, err := c.resolveOAuthClient(ctx, p.ClientID)
 	if errors.Is(err, ErrOAuthRecordNotFound) {
 		return OAuthAuthorizationRequest{}, inlineOAuthError("invalid_client", "unknown client_id")
 	}
@@ -275,6 +292,23 @@ func (c *Core) validateAuthorization(ctx context.Context, p OAuthAuthorizationPa
 	return OAuthAuthorizationRequest{Client: client, Scope: scope, Audience: audience}, nil
 }
 
+func (c *Core) resolveOAuthClient(ctx context.Context, id string) (OAuthClient, error) {
+	// This server issues only UUID DCR IDs. URL IDs belong exclusively to
+	// CIMD, even after their identity is persisted for foreign-key references.
+	// Never fall back to a stored URL client's old redirect metadata.
+	if !strings.Contains(id, ":") {
+		return c.oauth.GetOAuthClient(ctx, id)
+	}
+	if c.oauthMetadata == nil || !domain.ValidClientMetadataURL(id) {
+		return OAuthClient{}, inlineOAuthError("invalid_client", "invalid client metadata URL")
+	}
+	client, err := c.oauthMetadata.ResolveOAuthClient(ctx, id)
+	if err != nil || client.ID != id {
+		return OAuthClient{}, inlineOAuthError("invalid_client", "client metadata could not be retrieved or validated")
+	}
+	return client, nil
+}
+
 var PrepareOAuthAuthorization = Define(ActionDef[OAuthAuthorizationParams, OAuthAuthorizationRequest]{
 	Name: "prepare_oauth_authorization", Public: true, Description: "Validate an OAuth authorization request and describe the client seeking consent.",
 	Handler: func(ctx context.Context, c *Core, p OAuthAuthorizationParams) (OAuthAuthorizationRequest, error) {
@@ -302,33 +336,45 @@ var CreateOAuthAuthorizationCode = Define(ActionDef[OAuthAuthorizationParams, OA
 			return OAuthAuthorizationCodeResult{}, err
 		}
 		record := OAuthAuthorizationCode{
-			ClientID:            req.Client.ID,
-			UserID:              userID,
-			RedirectURI:         p.RedirectURI,
-			Scope:               req.Scope,
-			Audience:            req.Audience,
-			CodeChallenge:       p.CodeChallenge,
-			CodeChallengeMethod: p.CodeChallengeMethod,
-			ExpiresAt:           time.Now().Add(OAuthAuthorizationCodeLifespan),
+			ClientID:              req.Client.ID,
+			UserID:                userID,
+			RedirectURI:           p.RedirectURI,
+			Scope:                 req.Scope,
+			Audience:              req.Audience,
+			CodeChallenge:         p.CodeChallenge,
+			CodeChallengeMethod:   p.CodeChallengeMethod,
+			ExpiresAt:             time.Now().Add(OAuthAuthorizationCodeLifespan),
+			AuthorizationCodeOnly: req.Client.AuthorizationCodeOnly,
 		}
-		if err := c.oauth.CreateAuthorizationCode(ctx, domain.HashToken(code), record); err != nil {
+		if domain.ValidClientMetadataURL(req.Client.ID) {
+			err = c.oauth.CreateMetadataAuthorizationCode(ctx, domain.HashToken(code), record, c.oauthMaxClients)
+		} else {
+			err = c.oauth.CreateAuthorizationCode(ctx, domain.HashToken(code), record)
+		}
+		if errors.Is(err, ErrOAuthClientLimit) {
+			return OAuthAuthorizationCodeResult{}, &OAuthError{Code: "temporarily_unavailable", Description: "client registration capacity reached; retry later", cause: err}
+		}
+		if err != nil {
 			return OAuthAuthorizationCodeResult{}, err
 		}
 		return OAuthAuthorizationCodeResult{Code: code}, nil
 	},
 })
 
-// issueTokenPair mints and persists a fresh access + refresh pair under an
-// existing grant. The family carries over so a later reuse detection can
-// revoke every token descended from the original authorization.
-func (c *Core) issueTokenPair(ctx context.Context, grant OAuthGrant) (OAuthTokens, error) {
+// issueTokenPair mints access and, if approved, refresh tokens under a grant.
+// The family carries over so later reuse detection can revoke every token
+// descended from the original authorization.
+func (c *Core) issueTokenPair(ctx context.Context, grant OAuthGrant, authorizationCodeOnly bool) (OAuthTokens, error) {
 	access, err := newOAuthToken(oauthAccessTokenPrefix)
 	if err != nil {
 		return OAuthTokens{}, err
 	}
-	refresh, err := newOAuthToken(oauthRefreshTokenPrefix)
-	if err != nil {
-		return OAuthTokens{}, err
+	var refresh string
+	if !authorizationCodeOnly {
+		refresh, err = newOAuthToken(oauthRefreshTokenPrefix)
+		if err != nil {
+			return OAuthTokens{}, err
+		}
 	}
 	now := time.Now()
 	pair := OAuthTokenPair{
@@ -337,6 +383,10 @@ func (c *Core) issueTokenPair(ctx context.Context, grant OAuthGrant) (OAuthToken
 		RefreshTokenHash: domain.HashToken(refresh),
 		AccessExpiresAt:  now.Add(OAuthAccessTokenLifespan),
 		RefreshExpiresAt: now.Add(OAuthRefreshTokenLifespan),
+	}
+	if authorizationCodeOnly {
+		pair.RefreshTokenHash = nil
+		pair.RefreshExpiresAt = time.Time{}
 	}
 	if err := c.oauth.CreateTokenPair(ctx, pair); err != nil {
 		return OAuthTokens{}, err
@@ -393,7 +443,7 @@ var ExchangeOAuthCode = Define(ActionDef[ExchangeOAuthCodeParams, OAuthTokens]{
 			Scope:    stored.Scope,
 			Audience: stored.Audience,
 			FamilyID: familyID.String(),
-		})
+		}, stored.AuthorizationCodeOnly)
 	},
 })
 
@@ -419,7 +469,7 @@ var RefreshOAuthToken = Define(ActionDef[RefreshOAuthTokenParams, OAuthTokens]{
 		if p.Resource != "" && !domain.SameCanonicalURL(p.Resource, grant.Audience) {
 			return OAuthTokens{}, inlineOAuthError("invalid_target", "resource parameter does not match the original request")
 		}
-		tokens, err := c.issueTokenPair(ctx, grant)
+		tokens, err := c.issueTokenPair(ctx, grant, false)
 		// Another request may revoke the family after consumption. The
 		// store rejects that issuance; report it as the same invalid grant.
 		return tokens, refreshOAuthError(err)

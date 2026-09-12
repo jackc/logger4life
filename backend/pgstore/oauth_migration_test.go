@@ -62,3 +62,34 @@ func TestOAuthFamilyMigrationBackfillsExistingTokens(t *testing.T) {
 		require.Equal(t, 1, count, "existing tokens must retain their family")
 	}
 }
+
+func TestOAuthCodeGrantMigrationPreservesCodes(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := newTestStore(t)
+	user, err := store.CreateUser(ctx, uuid.NewV4().String(), "code_migration_user", nil, "hash")
+	require.NoError(t, err)
+	client := core.OAuthClient{ID: uuid.NewV7().String(), RedirectURIs: []string{"http://localhost/cb"}}
+	require.NoError(t, store.CreateOAuthClient(ctx, client))
+	code := core.OAuthAuthorizationCode{ClientID: client.ID, UserID: user.ID, RedirectURI: client.RedirectURIs[0], Scope: "mcp", Audience: "https://logs.example.com", CodeChallenge: "challenge", CodeChallengeMethod: "S256", ExpiresAt: time.Now().Add(time.Hour)}
+	require.NoError(t, store.CreateAuthorizationCode(ctx, []byte("old-code"), code))
+	tx, err := store.pool.Begin(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `ALTER TABLE oauth_authorization_codes DROP COLUMN authorization_code_only`)
+	require.NoError(t, err)
+	migration, err := os.ReadFile("../../postgresql/migrations/016_oauth_code_grant_types.sql")
+	require.NoError(t, err)
+	up, _, found := strings.Cut(string(migration), "---- create above / drop below ----")
+	require.True(t, found)
+	_, err = tx.Exec(ctx, up)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, `SET LOCAL ROLE logger4life`)
+	require.NoError(t, err)
+	var codeOnly bool
+	var redirect string
+	err = tx.QueryRow(ctx, `SELECT authorization_code_only, redirect_uri FROM oauth_authorization_codes WHERE code_hash = $1`, []byte("old-code")).Scan(&codeOnly, &redirect)
+	require.NoError(t, err)
+	require.False(t, codeOnly, "pre-migration DCR codes retain refresh support")
+	require.Equal(t, code.RedirectURI, redirect)
+}

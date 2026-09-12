@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/backend/domain"
 )
 
 // HTTP adapter for the hand-rolled OAuth 2.1 authorization server, scoped to
@@ -31,10 +32,11 @@ type oauthProvider struct {
 	registrationIPs *keyedRateLimiter
 	registrations   *keyedRateLimiter
 	trustedProxies  []netip.Prefix
+	metadataIPs     *keyedRateLimiter
 }
 
 func newOAuthProvider(app *core.Core, canonicalURL string) *oauthProvider {
-	return &oauthProvider{app: app, canonicalURL: canonicalURL, registrationIPs: newKeyedRateLimiter(5, 5), registrations: newKeyedRateLimiter(30, 10)}
+	return &oauthProvider{app: app, canonicalURL: canonicalURL, registrationIPs: newKeyedRateLimiter(5, 5), registrations: newKeyedRateLimiter(30, 10), metadataIPs: newKeyedRateLimiter(30, 10)}
 }
 
 // ===== Discovery / metadata endpoints =====
@@ -66,6 +68,7 @@ func (p *oauthProvider) handleAuthorizationServerMetadata() http.HandlerFunc {
 			"token_endpoint_auth_methods_supported":          []string{"none"},
 			"scopes_supported":                               []string{core.OAuthScopeMCP},
 			"authorization_response_iss_parameter_supported": true,
+			"client_id_metadata_document_supported":          p.app.SupportsOAuthClientMetadata(),
 		})
 	}
 }
@@ -176,6 +179,7 @@ func (p *oauthProvider) handleAuthorize() http.HandlerFunc {
 				return
 			}
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "invalid form", http.StatusBadRequest)
 			return
@@ -187,6 +191,12 @@ func (p *oauthProvider) handleAuthorize() http.HandlerFunc {
 			values = r.PostForm
 		}
 		params := parseAuthorizeParams(values)
+		if strings.Contains(params.ClientID, ":") {
+			if retry := p.metadataIPs.allow(requestClientIP(r, p.trustedProxies)); retry > 0 {
+				writeRateLimit(w, retry)
+				return
+			}
+		}
 
 		// Validate before anything else, including the login bounce, so a
 		// malformed request is reported rather than surviving a round trip
@@ -216,10 +226,16 @@ func (p *oauthProvider) handleAuthorize() http.HandlerFunc {
 			// Only the clicked button may supply the decision. Reflecting an
 			// incoming approve field would let it override a later Deny click.
 			delete(values, "approve")
+			clientHost := ""
+			if domain.ValidClientMetadataURL(req.Client.ID) {
+				u, _ := url.Parse(req.Client.ID)
+				clientHost = u.Hostname()
+			}
 			renderConsentPage(w, r, consentData{
 				Username:    user.Username,
 				ClientID:    req.Client.ID,
 				ClientName:  req.Client.ClientName,
+				ClientHost:  clientHost,
 				RedirectURI: params.RedirectURI,
 				Scopes:      strings.Fields(req.Scope),
 				FormFields:  values,
@@ -251,6 +267,10 @@ func (provider *oauthProvider) redirectAuthorizeSuccess(w http.ResponseWriter, r
 // redirected anywhere, so it is rendered inline; everything else goes back to
 // the client per OAuth 2.1.
 func (provider *oauthProvider) writeAuthorizeError(w http.ResponseWriter, r *http.Request, p core.OAuthAuthorizationParams, err error) {
+	if errors.Is(err, core.ErrOAuthClientLimit) {
+		writeOAuthActionError(w, r, err)
+		return
+	}
 	var oauthErr *core.OAuthError
 	if !errors.As(err, &oauthErr) {
 		internalError(w, r, err)
@@ -328,13 +348,16 @@ func (p *oauthProvider) handleToken() http.HandlerFunc {
 func writeTokenResponse(w http.ResponseWriter, t core.OAuthTokens) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, map[string]any{
-		"access_token":  t.AccessToken,
-		"refresh_token": t.RefreshToken,
-		"token_type":    "Bearer",
-		"expires_in":    int(core.OAuthAccessTokenLifespan.Seconds()),
-		"scope":         t.Scope,
-	})
+	response := map[string]any{
+		"access_token": t.AccessToken,
+		"token_type":   "Bearer",
+		"expires_in":   int(core.OAuthAccessTokenLifespan.Seconds()),
+		"scope":        t.Scope,
+	}
+	if t.RefreshToken != "" {
+		response["refresh_token"] = t.RefreshToken
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 // ===== Revocation endpoint (RFC 7009) =====

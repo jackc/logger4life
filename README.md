@@ -193,6 +193,43 @@ Consent POSTs require exactly one `Origin` header matching that public
 origin; missing or foreign origins receive 403. Normal browser approval
 forms supply this header automatically. Authorization pages deny framing.
 
+Clients can use a publicly hosted HTTPS **Client ID Metadata Document** as
+their `client_id`, without calling `/oauth/register`. Discovery advertises
+`client_id_metadata_document_supported: true`; DCR remains available for
+existing clients. For example, serve this at
+`https://client.example.com/oauth/client.json` with status 200 and
+`Content-Type: application/json`:
+
+```json
+{
+  "client_id": "https://client.example.com/oauth/client.json",
+  "client_name": "Example MCP Client",
+  "redirect_uris": ["http://127.0.0.1:3000/callback"],
+  "token_endpoint_auth_method": "none",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"]
+}
+```
+
+The document URL must include a path, contain no credentials, fragment,
+or dot path segments, and match `client_id` exactly. Redirects also match
+exactly against the document. Metadata must explicitly declare the public
+client authentication method `none`; confidential authentication methods,
+secrets, and embedded keys are unsupported. Omitting `grant_types` defaults
+to `authorization_code` and produces no refresh token. Add `refresh_token`
+to receive refresh tokens. If supplied, `scope` must be `mcp`.
+
+Documents are fetched only over public HTTPS, including in local development;
+HTTP redirects and private/special-use destinations are rejected. Loopback
+**callbacks** remain supported. Names and hostnames are shown on consent,
+but remote logos and other linked resources are never loaded. Cache headers
+control reuse within a one-hour cap. See [CIMD limits and lifecycle](docs/resource-limits.md#client-id-metadata-documents).
+
+Apply PostgreSQL migration **016** before running this version; jed applies
+migration **004** automatically. Existing DCR codes and tokens keep their
+behavior. Metadata changes affect new authorizations; issued codes and token
+families keep their original URL identity, callback, scope, and grant policy.
+
 The tools are `list_logs`, `get_sql_schema`, `run_sql`,
 `list_saved_queries`, and `run_saved_query`. SQL queries are restricted to
 the caller's data and capped at 1000 rows and 1 MiB of result values.

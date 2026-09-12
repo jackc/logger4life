@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/logger4life/backend/cimd"
+	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
 	"github.com/jackc/logger4life/test/testutil"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +26,7 @@ import (
 // setupOAuthTestServer wires the OAuth + MCP routes against the test
 // database. The httptest server is started after the OAuth provider is
 // constructed using the eventual server URL, so audience binding works.
-func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider) {
+func setupOAuthTestServer(t *testing.T, metadata ...core.OAuthClientMetadataResolver) (*httptest.Server, *oauthProvider) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -43,7 +45,11 @@ func setupOAuthTestServer(t *testing.T) (*httptest.Server, *oauthProvider) {
 	if cfg.DatabaseBackend != "postgresql" {
 		cfg.JedDataDir = t.TempDir()
 	}
-	app, _, cleanup, err := BuildBackend(ctx, cfg, slog.New(slog.DiscardHandler))
+	var resolver core.OAuthClientMetadataResolver = cimd.New()
+	if len(metadata) > 0 {
+		resolver = metadata[0]
+	}
+	app, _, cleanup, err := buildBackend(ctx, cfg, slog.New(slog.DiscardHandler), resolver)
 	require.NoError(t, err)
 	t.Cleanup(cleanup)
 	oauth := newOAuthProvider(app, srv.URL)
@@ -110,6 +116,7 @@ func TestAuthorizationServerMetadata(t *testing.T) {
 	assert.Equal(t, srv.URL+"/oauth/register", body["registration_endpoint"])
 	assert.Equal(t, []any{"S256"}, body["code_challenge_methods_supported"])
 	assert.Equal(t, true, body["authorization_response_iss_parameter_supported"])
+	assert.Equal(t, true, body["client_id_metadata_document_supported"])
 }
 
 func TestDynamicClientRegistration(t *testing.T) {
@@ -207,8 +214,20 @@ func TestSameCanonicalURL(t *testing.T) {
 // pipeline including PKCE verification, code consumption, audience
 // binding, code-replay rejection, and refresh-token rotation.
 func TestOAuthEndToEnd(t *testing.T) {
-	t.Parallel()
-	srv, _ := setupOAuthTestServer(t)
+	for _, mode := range []string{"DCR", "CIMD", "CIMD code only"} {
+		t.Run(mode, func(t *testing.T) { t.Parallel(); testOAuthEndToEnd(t, mode) })
+	}
+}
+
+func testOAuthEndToEnd(t *testing.T, mode string) {
+	var srv *httptest.Server
+	if mode == "DCR" {
+		srv, _ = setupOAuthTestServer(t)
+	} else {
+		srv, _ = setupOAuthTestServer(t, metadataResolverFunc(func(context.Context, string) (core.OAuthClient, error) {
+			return core.OAuthClient{ID: "https://example.com/client.json", ClientName: "CIMD Client", RedirectURIs: []string{"http://localhost/cb"}, AuthorizationCodeOnly: mode == "CIMD code only"}, nil
+		}))
+	}
 
 	jar, err := cookiejar.New(nil)
 	require.NoError(t, err)
@@ -221,14 +240,17 @@ func TestOAuthEndToEnd(t *testing.T) {
 	resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	// DCR.
-	resp, err = client.Post(srv.URL+"/oauth/register", "application/json",
-		strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
-	require.NoError(t, err)
-	var dcr map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
-	resp.Body.Close()
-	clientID := dcr["client_id"].(string)
+	clientID := "https://example.com/client.json"
+	if mode == "DCR" {
+		// DCR.
+		resp, err = client.Post(srv.URL+"/oauth/register", "application/json",
+			strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
+		require.NoError(t, err)
+		var dcr map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
+		resp.Body.Close()
+		clientID = dcr["client_id"].(string)
+	}
 
 	verifier, challenge := pkceParams(t)
 	authValues := url.Values{}
@@ -277,9 +299,13 @@ func TestOAuthEndToEnd(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tok))
 	resp.Body.Close()
 	access := tok["access_token"].(string)
-	refresh := tok["refresh_token"].(string)
+	refresh, _ := tok["refresh_token"].(string)
 	require.NotEmpty(t, access)
-	require.NotEmpty(t, refresh)
+	if mode == "CIMD code only" {
+		require.NotContains(t, tok, "refresh_token")
+	} else {
+		require.NotEmpty(t, refresh)
+	}
 	assert.Equal(t, "Bearer", tok["token_type"])
 	assert.Equal(t, "mcp", tok["scope"])
 
@@ -321,6 +347,10 @@ func TestOAuthEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	defer replayResp.Body.Close()
 	assert.Equal(t, http.StatusBadRequest, replayResp.StatusCode)
+
+	if mode == "CIMD code only" {
+		return
+	}
 
 	// Refresh-token grant produces a fresh access token.
 	refreshValues := url.Values{}

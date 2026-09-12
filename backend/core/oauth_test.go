@@ -642,3 +642,112 @@ func TestAuthenticateOAuthTokenRequiresMCPScope(t *testing.T) {
 		})
 	}
 }
+
+type fakeMetadataResolver struct {
+	client OAuthClient
+	err    error
+	calls  int
+}
+
+func (r *fakeMetadataResolver) ResolveOAuthClient(context.Context, string) (OAuthClient, error) {
+	r.calls++
+	return r.client, r.err
+}
+func (s *fakeOAuthStore) CreateMetadataAuthorizationCode(ctx context.Context, hash []byte, code OAuthAuthorizationCode, _ int) error {
+	s.createdClient = OAuthClient{ID: code.ClientID, RedirectURIs: []string{}}
+	return s.CreateAuthorizationCode(ctx, hash, code)
+}
+
+func TestOAuthMetadataLifecycle(t *testing.T) {
+	const id = "https://example.com/client.json"
+	testVerifier, _ := pkcePair()
+	p := validAuthorizationParams()
+	p.ClientID = id
+	metadata := &fakeMetadataResolver{client: OAuthClient{ID: id, ClientName: "CIMD Client", RedirectURIs: []string{p.RedirectURI}, AuthorizationCodeOnly: true}}
+	// A persisted URL row is only an identity, never a fallback registration.
+	store := &fakeOAuthStore{client: OAuthClient{ID: id, RedirectURIs: []string{"https://attacker.example/cb"}}}
+	app := New(Config{OAuth: store, OAuthIssuer: testIssuer, OAuthMetadata: metadata})
+	preview, err := PrepareOAuthAuthorization.Call(context.Background(), app, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Client.ClientName != "CIMD Client" || store.createdClient.ID != "" {
+		t.Fatal("preview must resolve metadata without registering a client")
+	}
+	result, err := CreateOAuthAuthorizationCode.Call(WithUserID(context.Background(), "user"), app, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.createdClient.ID != id || len(store.createdClient.RedirectURIs) != 0 || !store.codeRecord.AuthorizationCodeOnly {
+		t.Fatal("persist identity and snapshot approved grant types")
+	}
+	store.consumedCode = store.codeRecord
+	metadata.client.RedirectURIs = []string{"https://client.example/new"}
+	if _, err := PrepareOAuthAuthorization.Call(context.Background(), app, p); oauthErrorFrom(t, err).Code != "invalid_redirect_uri" {
+		t.Fatal(err)
+	}
+	if _, err := CreateOAuthAuthorizationCode.Call(WithUserID(context.Background(), "user"), app, p); oauthErrorFrom(t, err).Code != "invalid_redirect_uri" {
+		t.Fatal(err)
+	}
+	metadata.err = errors.New("private DNS infrastructure error")
+	_, err = PrepareOAuthAuthorization.Call(context.Background(), app, p)
+	if e := oauthErrorFrom(t, err); e.Code != "invalid_client" || e.Redirectable || strings.Contains(e.Description, "DNS") {
+		t.Fatalf("fetch errors must fail inline, without details: %+v", e)
+	}
+	calls := metadata.calls
+	// Existing codes remain bound to the original URL, callback, PKCE and
+	// grant types. Metadata outages/changes do not rewrite an approved grant.
+	tokens, err := ExchangeOAuthCode.Call(context.Background(), app, ExchangeOAuthCodeParams{ClientID: id, Code: result.Code, RedirectURI: p.RedirectURI, CodeVerifier: testVerifier})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tokens.AccessToken == "" || tokens.RefreshToken != "" || store.pair.RefreshTokenHash != nil || metadata.calls != calls {
+		t.Fatal("code-only grants must issue access without a refresh token or metadata refetch")
+	}
+	store.consumedCode.AuthorizationCodeOnly = false
+	tokens, err = ExchangeOAuthCode.Call(context.Background(), app, ExchangeOAuthCodeParams{ClientID: id, Code: result.Code, RedirectURI: p.RedirectURI, CodeVerifier: testVerifier})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tokens.RefreshToken == "" {
+		t.Fatal("refresh-enabled grants must issue refresh tokens")
+	}
+	store.grant = store.pair.Grant
+	_, err = RefreshOAuthToken.Call(context.Background(), app, RefreshOAuthTokenParams{ClientID: id, RefreshToken: tokens.RefreshToken})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.calls != calls {
+		t.Fatal("refresh must use its bound grant, not newly published metadata")
+	}
+}
+
+func TestOAuthMetadataCannotReplaceDCR(t *testing.T) {
+	p := validAuthorizationParams()
+	store := &fakeOAuthStore{client: OAuthClient{ID: p.ClientID, RedirectURIs: []string{p.RedirectURI}}}
+	resolver := &fakeMetadataResolver{err: errors.New("must not resolve DCR")}
+	app := New(Config{OAuth: store, OAuthIssuer: testIssuer, OAuthMetadata: resolver})
+	if _, err := PrepareOAuthAuthorization.Call(context.Background(), app, p); err != nil {
+		t.Fatal(err)
+	}
+	if resolver.calls != 0 {
+		t.Fatal("DCR must stay database-backed")
+	}
+	for _, id := range []string{"https://example.com", "https:///client.json", "http://localhost/client.json"} {
+		p.ClientID = id
+		_, err := PrepareOAuthAuthorization.Call(context.Background(), app, p)
+		if oauthErrorFrom(t, err).Code != "invalid_client" {
+			t.Fatal(err)
+		}
+	}
+	if resolver.calls != 0 {
+		t.Fatal("invalid URLs must not reach metadata resolution")
+	}
+	p.ClientID = "https://example.com/client.json"
+	resolver.err = nil
+	resolver.client = OAuthClient{ID: "https://EXAMPLE.com/client.json", RedirectURIs: []string{p.RedirectURI}}
+	_, err := PrepareOAuthAuthorization.Call(context.Background(), app, p)
+	if oauthErrorFrom(t, err).Code != "invalid_client" {
+		t.Fatal("client IDs require exact identity")
+	}
+}

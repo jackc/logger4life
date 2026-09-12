@@ -75,3 +75,53 @@ keeps the MCP result below 1 MiB after JSON text/structured duplication.
 A page may contain fewer records than requested; its cursor always resumes
 after the last returned record. A single record that cannot fit produces an
 explicit tool error. Log summaries omit UI placement and share-token fields.
+
+## Client ID Metadata Documents
+
+URL client IDs accept up to 2,048 bytes. Metadata GETs have a five-second
+end-to-end deadline, with at most three seconds for DNS and connection
+attempts, TLS, or response headers. Response headers are capped at 8 KiB;
+uncompressed JSON documents at 5 KiB. Compressed responses are rejected.
+Names and redirects have the same field limits as DCR. Only HTTP 200 with
+`application/json` is accepted; redirects are never followed.
+
+The dedicated transport does not use environment proxies or a cookie jar.
+All DNS answers must be public before it dials any of them, and it connects
+to the validated IP literal while retaining the original TLS hostname.
+Special-use IPv4 and IPv6 networks, including mapped and translation ranges,
+are denied. Connection attempts recheck DNS and do not reuse connections.
+There is no loopback-fetch exception, even in development. Remote logos,
+keys, and other URLs mentioned in documents are not fetched or embedded.
+
+Each process admits eight concurrent fetches, with a global limit of 60
+new fetches per minute, burst ten. Concurrent requests for the same URL share
+one fetch. The authorize endpoint additionally limits URL client IDs to 30
+requests per minute per IP, burst ten, using the same trusted-proxy rules as
+DCR. Per-IP excess returns 429 with `Retry-After`; fetch capacity exhaustion
+fails authorization inline with `invalid_client`, without a callback redirect.
+Consent form bodies are capped at 32 KiB.
+
+The memory cache holds at most 1,024 valid documents, keyed by the exact
+client ID. Freshness follows `s-maxage`/`max-age`, `Age`, `Date`, and `Expires`,
+with a five-minute default and one-hour maximum. `no-store`, `private`,
+`no-cache`, `Pragma: no-cache`, and `Vary` prevent reuse. Expired entries are
+fetched again with an unconditional GET. No errors, invalid documents, or
+stale fallback responses are cached. Restarting clears the cache.
+
+Previewing or denying consent creates no database client record. Approval
+atomically persists the URL identity and its authorization code under the
+existing `OAUTH_MAX_CLIENTS` quota; DCR and CIMD share admission capacity.
+Concurrent approvals for the same identity do not consume additional client
+slots. Only the URL is retained in the client row: fetched names and redirect
+lists never become permanent registration metadata. New authorization always
+resolves HTTP-fresh metadata, even when that URL already has stored grants.
+
+Codes snapshot the approved callback, scope, audience, and whether refresh
+was requested in `grant_types`. Document changes or outages do not rewrite
+issued grants; token exchange and refresh rely on those grants and require
+no metadata fetch. A changed `client_id` URL is a different client, even if
+only its case or explicit default port differs. Existing grant history keeps
+URL identities protected from registration cleanup.
+
+PostgreSQL migration 016 and automatic jed migration 004 add the code's
+refresh-policy flag. Existing DCR codes default to retaining refresh support.

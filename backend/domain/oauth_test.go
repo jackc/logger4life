@@ -108,3 +108,16 @@ func TestRedirectURIRegisteredUsesExactStrings(t *testing.T) {
 		t.Fatal("the exact registered callback must match")
 	}
 }
+
+func TestValidClientMetadataURL(t *testing.T) {
+	for _, id := range []string{"https://example.com/client.json", "https://example.com/", "https://example.com:8443/client.json?v=1", "https://example.com/a%20b/client.json"} {
+		if !ValidClientMetadataURL(id) {
+			t.Errorf("rejected %q", id)
+		}
+	}
+	for _, id := range []string{"https://example.com", "http://localhost/client.json", "https:///client.json", "https:client.json", "https://example.com:0/client.json", "https://user@example.com/client.json", "https://example.com/client.json#", "https://example.com/./client.json", "https://example.com/a/../client.json", "https://example.com/%2e/client.json", "https://example.com/a/%2E%2e/client.json"} {
+		if ValidClientMetadataURL(id) {
+			t.Errorf("accepted %q", id)
+		}
+	}
+}

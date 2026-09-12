@@ -11,41 +11,44 @@ import (
 )
 
 type Core struct {
-	users        UserStore
-	sessions     SessionStore
-	passkeys     PasskeyStore
-	challenges   PasskeyChallengeStore
-	webAuthn     *webauthn.WebAuthn
-	tx           Transactor
-	logs         LogStore
-	entries      LogEntryStore
-	placements   LogPlacementStore
-	folders      FolderStore
-	savedQueries SavedQueryStore
-	sqlSchema    SQLSchemaStore
-	userSQL      UserSQLExecutor
-	sharing      SharingStore
-	oauth        OAuthStore
-	oauthIssuer  string
-	middleware   []Middleware
+	users          UserStore
+	sessions       SessionStore
+	passkeys       PasskeyStore
+	challenges     PasskeyChallengeStore
+	webAuthn       *webauthn.WebAuthn
+	tx             Transactor
+	logs           LogStore
+	entries        LogEntryStore
+	placements     LogPlacementStore
+	folders        FolderStore
+	savedQueries   SavedQueryStore
+	sqlSchema      SQLSchemaStore
+	userSQL        UserSQLExecutor
+	sqlConcurrency *sqlConcurrency
+	sharing        SharingStore
+	oauth          OAuthStore
+	oauthIssuer    string
+	middleware     []Middleware
 }
 
 type Config struct {
-	Users        UserStore
-	Sessions     SessionStore
-	Passkeys     PasskeyStore
-	Challenges   PasskeyChallengeStore
-	WebAuthn     *webauthn.WebAuthn
-	Tx           Transactor
-	Logs         LogStore
-	Entries      LogEntryStore
-	Placements   LogPlacementStore
-	Folders      FolderStore
-	SavedQueries SavedQueryStore
-	SQLSchema    SQLSchemaStore
-	UserSQL      UserSQLExecutor
-	Sharing      SharingStore
-	OAuth        OAuthStore
+	Users                 UserStore
+	Sessions              SessionStore
+	Passkeys              PasskeyStore
+	Challenges            PasskeyChallengeStore
+	WebAuthn              *webauthn.WebAuthn
+	Tx                    Transactor
+	Logs                  LogStore
+	Entries               LogEntryStore
+	Placements            LogPlacementStore
+	Folders               FolderStore
+	SavedQueries          SavedQueryStore
+	SQLSchema             SQLSchemaStore
+	UserSQL               UserSQLExecutor
+	SQLConcurrencyPerUser int
+	SQLConcurrencyGlobal  int
+	Sharing               SharingStore
+	OAuth                 OAuthStore
 	// OAuthIssuer is this server's canonical URL. It is the OAuth issuer and
 	// the RFC 8707 audience every access token is bound to.
 	OAuthIssuer string
@@ -57,7 +60,7 @@ func New(cfg Config) *Core {
 	if tx == nil {
 		tx = passthroughTx{}
 	}
-	return &Core{users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sharing: cfg.Sharing, oauth: cfg.OAuth, oauthIssuer: strings.TrimRight(cfg.OAuthIssuer, "/"), middleware: append([]Middleware(nil), cfg.Middleware...)}
+	return &Core{users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sqlConcurrency: newSQLConcurrency(cfg.SQLConcurrencyPerUser, cfg.SQLConcurrencyGlobal), sharing: cfg.Sharing, oauth: cfg.OAuth, oauthIssuer: strings.TrimRight(cfg.OAuthIssuer, "/"), middleware: append([]Middleware(nil), cfg.Middleware...)}
 }
 
 // Transactor is the driven port for transaction boundaries. Store calls made

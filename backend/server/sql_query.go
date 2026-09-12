@@ -31,6 +31,9 @@ func writeUserSQLError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.As(err, &validationErr):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": validationErr.Err.Error()})
+	case errors.As(err, &queryFailure) && queryFailure.Kind == core.UserSQLBusy:
+		w.Header().Set("Retry-After", "1")
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": queryFailure.Error()})
 	case errors.As(err, &queryFailure):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": queryFailure.Error()})
 	case errors.Is(err, core.ErrUnauthenticated):

@@ -13,6 +13,8 @@ import (
 )
 
 type Config struct {
+	SQLConcurrencyPerUser int
+	SQLConcurrencyGlobal  int
 	// DatabaseBackend selects "postgresql" (default), "jed", or the
 	// fail-stop comparison harness "both".
 	DatabaseBackend string
@@ -34,20 +36,22 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		DatabaseBackend:      "postgresql",
-		DatabaseURL:          "postgres://postgres:postgres@localhost:5432/logger4life_dev",
-		JedDataDir:           "",
-		BindAddress:          "127.0.0.1",
-		Port:                 "4000",
-		AllowRegistration:    false,
-		WebAuthnRPID:         "",
-		WebAuthnOrigin:       "",
-		LogLevel:             "info",
-		LogFormat:            "json",
-		MCPCanonicalURL:      "",
-		SecureCookies:        false,
-		MCPRequestsPerMinute: 60,
-		MCPRequestBurst:      10,
+		SQLConcurrencyPerUser: 2,
+		SQLConcurrencyGlobal:  8,
+		DatabaseBackend:       "postgresql",
+		DatabaseURL:           "postgres://postgres:postgres@localhost:5432/logger4life_dev",
+		JedDataDir:            "",
+		BindAddress:           "127.0.0.1",
+		Port:                  "4000",
+		AllowRegistration:     false,
+		WebAuthnRPID:          "",
+		WebAuthnOrigin:        "",
+		LogLevel:              "info",
+		LogFormat:             "json",
+		MCPCanonicalURL:       "",
+		SecureCookies:         false,
+		MCPRequestsPerMinute:  60,
+		MCPRequestBurst:       10,
 	}
 }
 
@@ -105,6 +109,8 @@ func ConfigFromEnv() Config {
 	if v := os.Getenv("SECURE_COOKIES"); v == "true" {
 		cfg.SecureCookies = true
 	}
+	readLimitEnv("SQL_CONCURRENCY_PER_USER", &cfg.SQLConcurrencyPerUser)
+	readLimitEnv("SQL_CONCURRENCY_GLOBAL", &cfg.SQLConcurrencyGlobal)
 	readLimitEnv("MCP_REQUESTS_PER_MINUTE", &cfg.MCPRequestsPerMinute)
 	readLimitEnv("MCP_REQUEST_BURST", &cfg.MCPRequestBurst)
 
@@ -123,7 +129,7 @@ func readLimitEnv(name string, target *int) {
 }
 
 func (c Config) validateLimits() error {
-	for name, value := range map[string]int{"MCP_REQUESTS_PER_MINUTE": c.MCPRequestsPerMinute, "MCP_REQUEST_BURST": c.MCPRequestBurst} {
+	for name, value := range map[string]int{"SQL_CONCURRENCY_PER_USER": c.SQLConcurrencyPerUser, "SQL_CONCURRENCY_GLOBAL": c.SQLConcurrencyGlobal, "MCP_REQUESTS_PER_MINUTE": c.MCPRequestsPerMinute, "MCP_REQUEST_BURST": c.MCPRequestBurst} {
 		if value < 0 || value > 1000000 {
 			return fmt.Errorf("%s must be an integer between 1 and 1000000", name)
 		}

@@ -14,3 +14,12 @@ When full, the map rejects new keys rather than resetting active allowances.
 
 Limit environment variables must be positive integers, at most 1,000,000;
 invalid values prevent startup.
+
+SQL execution admits at most `SQL_CONCURRENCY_PER_USER` queries per user
+(default 2) and `SQL_CONCURRENCY_GLOBAL` queries per application process
+(default 8). These limits cover both MCP SQL tools and the web SQL API.
+Requests are rejected immediately rather than queued. The API returns 429
+with `Retry-After: 1`; MCP returns a tool error asking the caller to retry.
+A slot is released only when the executor returns, including on cancellation
+or error. Size the global limit for the database's capacity and connection
+pool, leaving capacity for ordinary application operations.

@@ -34,6 +34,7 @@ const (
 	UserSQLRejected UserSQLFailureKind = "rejected"
 	UserSQLTimedOut UserSQLFailureKind = "timed_out"
 	UserSQLFailed   UserSQLFailureKind = "failed"
+	UserSQLBusy     UserSQLFailureKind = "busy"
 )
 
 // UserSQLFailure represents an expected query failure. Message is part of the
@@ -49,6 +50,8 @@ func (e *UserSQLFailure) Error() string {
 		return e.Message
 	}
 	switch e.Kind {
+	case UserSQLBusy:
+		return "too many concurrent queries; retry later"
 	case UserSQLTimedOut:
 		return "query timed out"
 	case UserSQLRejected:
@@ -80,6 +83,14 @@ var ExecuteUserSQL = Define(ActionDef[ExecuteUserSQLParams, UserSQLResult]{
 		if err != nil {
 			return UserSQLResult{}, err
 		}
+		if err := ctx.Err(); err != nil {
+			return UserSQLResult{}, err
+		}
+		if !c.sqlConcurrency.acquire(userID) {
+			return UserSQLResult{}, &UserSQLFailure{Kind: UserSQLBusy}
+		}
+		// Hold the slot until execution actually stops, even after cancellation.
+		defer c.sqlConcurrency.release(userID)
 		return c.userSQL.ExecuteUserSQL(ctx, userID, p.Query)
 	},
 })

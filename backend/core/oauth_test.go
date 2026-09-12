@@ -223,6 +223,50 @@ func TestPrepareOAuthAuthorizationDefaults(t *testing.T) {
 	}
 }
 
+func TestOAuthAuthorizationScope(t *testing.T) {
+	for _, tc := range []struct {
+		name, scope, wantScope string
+	}{
+		{name: "default", wantScope: OAuthScopeMCP},
+		{name: "mcp", scope: "mcp", wantScope: OAuthScopeMCP},
+		{name: "padded", scope: " \tmcp\n ", wantScope: OAuthScopeMCP},
+		{name: "repeated", scope: " mcp  mcp ", wantScope: "mcp mcp"},
+		{name: "spaces", scope: "   "},
+		{name: "whitespace", scope: "\t\n\r\u00a0"},
+		{name: "unrelated", scope: "admin"},
+		{name: "unsupported extra", scope: "mcp admin"},
+		{name: "case sensitive", scope: "MCP"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &fakeOAuthStore{client: registeredClient()}
+			app := New(Config{OAuth: store, OAuthIssuer: testIssuer})
+			params := validAuthorizationParams()
+			params.Scope = tc.scope
+			ctx := WithUserID(context.Background(), "user-1")
+			req, prepareErr := PrepareOAuthAuthorization.Call(ctx, app, params)
+			code, createErr := CreateOAuthAuthorizationCode.Call(ctx, app, params)
+			if tc.wantScope == "" {
+				for _, err := range []error{prepareErr, createErr} {
+					oauthErr := oauthErrorFrom(t, err)
+					if oauthErr.Code != "invalid_scope" || !oauthErr.Redirectable {
+						t.Fatalf("scope rejection = %+v, want redirectable invalid_scope", oauthErr)
+					}
+				}
+				if code.Code != "" || len(store.codeHash) != 0 {
+					t.Fatal("invalid scope must not issue or store an authorization code")
+				}
+				return
+			}
+			if prepareErr != nil || createErr != nil {
+				t.Fatalf("prepare = %v, create = %v", prepareErr, createErr)
+			}
+			if req.Scope != tc.wantScope || store.codeRecord.Scope != tc.wantScope {
+				t.Fatalf("consent scope = %q, stored scope = %q, want %q", req.Scope, store.codeRecord.Scope, tc.wantScope)
+			}
+		})
+	}
+}
+
 func TestCreateOAuthAuthorizationCodeStoresOnlyTheHash(t *testing.T) {
 	store := &fakeOAuthStore{client: registeredClient()}
 	app := New(Config{OAuth: store, OAuthIssuer: testIssuer})
@@ -459,7 +503,7 @@ func TestRevokeOAuthTokenTriesBothStores(t *testing.T) {
 }
 
 func TestAuthenticateOAuthToken(t *testing.T) {
-	store := &fakeOAuthStore{grant: OAuthGrant{UserID: "user-1", Username: "sam", Audience: testIssuer + "/"}}
+	store := &fakeOAuthStore{grant: OAuthGrant{UserID: "user-1", Username: "sam", Audience: testIssuer + "/", Scope: OAuthScopeMCP}}
 	app := New(Config{OAuth: store, OAuthIssuer: testIssuer})
 
 	user, err := AuthenticateOAuthToken.Call(context.Background(), app, AuthenticateOAuthTokenParams{Token: "l4l_at_x"})
@@ -490,5 +534,39 @@ func TestAuthenticateOAuthToken(t *testing.T) {
 	_, err = AuthenticateOAuthToken.Call(context.Background(), app, AuthenticateOAuthTokenParams{})
 	if !errors.Is(err, ErrOAuthInvalidToken) {
 		t.Fatalf("empty token err = %v, want ErrOAuthInvalidToken", err)
+	}
+}
+
+func TestAuthenticateOAuthTokenRequiresMCPScope(t *testing.T) {
+	for _, tc := range []struct {
+		scope  string
+		wantOK bool
+	}{
+		{scope: ""},
+		{scope: " \t\n\r\u00a0"},
+		{scope: "admin"},
+		{scope: "MCP"},
+		{scope: "mcp:read"},
+		{scope: "prefix_mcp"},
+		{scope: "admin,mcp"},
+		{scope: "mcp", wantOK: true},
+		{scope: " \tmcp\n ", wantOK: true},
+		{scope: "mcp mcp", wantOK: true},
+		{scope: "other mcp extra", wantOK: true},
+	} {
+		t.Run(tc.scope, func(t *testing.T) {
+			store := &fakeOAuthStore{grant: OAuthGrant{
+				UserID: "user-1", Username: "sam", Audience: testIssuer, Scope: tc.scope,
+			}}
+			app := New(Config{OAuth: store, OAuthIssuer: testIssuer})
+			user, err := AuthenticateOAuthToken.Call(context.Background(), app, AuthenticateOAuthTokenParams{Token: "l4l_at_x"})
+			if tc.wantOK {
+				if err != nil || user.ID != "user-1" {
+					t.Fatalf("authentication = %+v, %v, want the grant's user", user, err)
+				}
+			} else if !errors.Is(err, ErrOAuthInsufficientScope) || user.ID != "" {
+				t.Fatalf("authentication = %+v, %v, want no user and ErrOAuthInsufficientScope", user, err)
+			}
+		})
 	}
 }

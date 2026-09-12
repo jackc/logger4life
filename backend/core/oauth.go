@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"uuid"
@@ -78,6 +79,7 @@ var (
 
 	ErrOAuthInvalidToken          = errors.New("invalid or expired access token")
 	ErrOAuthTokenAudienceMismatch = errors.New("access token audience does not match this MCP server")
+	ErrOAuthInsufficientScope     = errors.New("access token requires the mcp scope")
 )
 
 type OAuthClient struct {
@@ -253,11 +255,16 @@ func (c *Core) validateAuthorization(ctx context.Context, p OAuthAuthorizationPa
 	if scope == "" {
 		scope = OAuthScopeMCP
 	}
-	for _, s := range strings.Fields(scope) {
+	scopes := strings.Fields(scope)
+	if len(scopes) == 0 {
+		return OAuthAuthorizationRequest{}, redirectableOAuthError("invalid_scope", "scope must include mcp")
+	}
+	for _, s := range scopes {
 		if s != OAuthScopeMCP {
 			return OAuthAuthorizationRequest{}, redirectableOAuthError("invalid_scope", "unsupported scope "+s)
 		}
 	}
+	scope = strings.Join(scopes, " ")
 	// RFC 8707 audience binding: the resource MUST identify this server.
 	audience := p.Resource
 	if audience == "" {
@@ -463,7 +470,7 @@ type AuthenticateOAuthTokenParams struct {
 }
 
 var AuthenticateOAuthToken = Define(ActionDef[AuthenticateOAuthTokenParams, User]{
-	Name: "authenticate_oauth_token", Public: true, Description: "Resolve an OAuth access token to its user.",
+	Name: "authenticate_oauth_token", Public: true, Description: "Validate an OAuth access token's audience and MCP scope and resolve its user.",
 	Handler: func(ctx context.Context, c *Core, p AuthenticateOAuthTokenParams) (User, error) {
 		if p.Token == "" {
 			return User{}, ErrOAuthInvalidToken
@@ -477,6 +484,9 @@ var AuthenticateOAuthToken = Define(ActionDef[AuthenticateOAuthTokenParams, User
 		}
 		if !domain.SameCanonicalURL(grant.Audience, c.oauthIssuer) {
 			return User{}, ErrOAuthTokenAudienceMismatch
+		}
+		if !slices.Contains(strings.Fields(grant.Scope), OAuthScopeMCP) {
+			return User{}, ErrOAuthInsufficientScope
 		}
 		return User{ID: grant.UserID, Username: grant.Username}, nil
 	},

@@ -226,17 +226,17 @@ func (m *mcpServer) requireBearerToken() func(http.Handler) http.Handler {
 			authz := r.Header.Get("Authorization")
 			scheme, token, ok := strings.Cut(authz, " ")
 			if !ok || !strings.EqualFold(scheme, "Bearer") {
-				writeBearerChallenge(w, resourceMetadataURL, "")
+				writeBearerChallenge(w, resourceMetadataURL, nil)
 				return
 			}
 			token = strings.TrimSpace(token)
 			if token == "" {
-				writeBearerChallenge(w, resourceMetadataURL, "missing bearer token")
+				writeBearerChallenge(w, resourceMetadataURL, errors.New("missing bearer token"))
 				return
 			}
 			user, err := m.oauth.verifyAccessToken(r.Context(), token)
 			if err != nil {
-				writeBearerChallenge(w, resourceMetadataURL, err.Error())
+				writeBearerChallenge(w, resourceMetadataURL, err)
 				return
 			}
 			ctx := context.WithValue(r.Context(), userContextKey, user)
@@ -254,17 +254,25 @@ func (m *mcpServer) requireBearerToken() func(http.Handler) http.Handler {
 	}
 }
 
-// writeBearerChallenge emits a 401 with the WWW-Authenticate header pointing
-// the client at our protected-resource metadata, per RFC 9728 §5.1.
-func writeBearerChallenge(w http.ResponseWriter, resourceMetadataURL, errDesc string) {
+// writeBearerChallenge points clients at our protected-resource metadata.
+// Invalid credentials receive 401; valid tokens lacking MCP permission receive
+// 403 with insufficient_scope and the required scope (RFC 6750 §3.1).
+func writeBearerChallenge(w http.ResponseWriter, resourceMetadataURL string, err error) {
 	challenge := fmt.Sprintf(`Bearer resource_metadata=%q, scope=%q`, resourceMetadataURL, core.OAuthScopeMCP)
+	status := http.StatusUnauthorized
 	body := map[string]string{"error": "unauthorized"}
 	// RFC 6750 §3.1: an initial challenge without credentials should not
 	// claim that the client presented an invalid token.
-	if errDesc != "" {
-		challenge += fmt.Sprintf(`, error="invalid_token", error_description=%q`, errDesc)
-		body["error_description"] = errDesc
+	if err != nil {
+		code := "invalid_token"
+		if errors.Is(err, core.ErrOAuthInsufficientScope) {
+			status = http.StatusForbidden
+			code = "insufficient_scope"
+			body["error"] = code
+		}
+		challenge += fmt.Sprintf(`, error=%q, error_description=%q`, code, err.Error())
+		body["error_description"] = err.Error()
 	}
 	w.Header().Set("WWW-Authenticate", challenge)
-	writeJSON(w, http.StatusUnauthorized, body)
+	writeJSON(w, status, body)
 }

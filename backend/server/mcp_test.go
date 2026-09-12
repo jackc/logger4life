@@ -327,6 +327,82 @@ func TestMCPHTTPOriginAndAuthentication(t *testing.T) {
 	}
 }
 
+type mcpScopeOAuthStore struct {
+	core.OAuthStore
+	grant core.OAuthGrant
+	err   error
+}
+
+func (s mcpScopeOAuthStore) GetGrantByAccessToken(context.Context, []byte) (core.OAuthGrant, error) {
+	return s.grant, s.err
+}
+
+func TestMCPHTTPRequiresGrantedScope(t *testing.T) {
+	const issuer = "https://logs.example.com"
+	for _, tc := range []struct {
+		name, scope, audience string
+		storeErr              error
+		wantStatus            int
+		wantError             string
+	}{
+		{name: "empty", audience: issuer, wantStatus: http.StatusForbidden, wantError: "insufficient_scope"},
+		{name: "whitespace", scope: " \t\n ", audience: issuer, wantStatus: http.StatusForbidden, wantError: "insufficient_scope"},
+		{name: "unrelated", scope: "admin", audience: issuer, wantStatus: http.StatusForbidden, wantError: "insufficient_scope"},
+		{name: "substring", scope: "mcp:read", audience: issuer, wantStatus: http.StatusForbidden, wantError: "insufficient_scope"},
+		{name: "wrong case", scope: "MCP", audience: issuer, wantStatus: http.StatusForbidden, wantError: "insufficient_scope"},
+		{name: "mcp", scope: "mcp", audience: issuer, wantStatus: http.StatusNoContent},
+		{name: "scope set", scope: "other mcp extra", audience: issuer, wantStatus: http.StatusNoContent},
+		{name: "wrong audience takes precedence", audience: "https://other.example.com", wantStatus: http.StatusUnauthorized, wantError: "invalid_token"},
+		{name: "invalid token takes precedence", audience: issuer, storeErr: core.ErrOAuthRecordNotFound, wantStatus: http.StatusUnauthorized, wantError: "invalid_token"},
+		{name: "store failure is sanitized", audience: issuer, storeErr: errors.New("secret database failure"), wantStatus: http.StatusUnauthorized, wantError: "invalid_token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := core.New(core.Config{
+				OAuth: mcpScopeOAuthStore{
+					grant: core.OAuthGrant{UserID: "alice", Username: "alice", Scope: tc.scope, Audience: tc.audience},
+					err:   tc.storeErr,
+				},
+				OAuthIssuer: issuer,
+			})
+			server := newMCPServer(app, newOAuthProvider(app, issuer))
+			called := false
+			handler := server.requireBearerToken()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				require.Equal(t, &AuthUser{ID: "alice", Username: "alice"}, userFromContext(r.Context()))
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+				t.Run(method, func(t *testing.T) {
+					called = false
+					req := newMCPHTTPRequest(t, "2026-07-28", "tools/list", nil)
+					req.Method = method
+					// A browser session must not substitute for the token's missing scope.
+					req = req.WithContext(context.WithValue(req.Context(), userContextKey, &AuthUser{ID: "cookie-user"}))
+					w := httptest.NewRecorder()
+					handler.ServeHTTP(w, req)
+					require.Equal(t, tc.wantStatus, w.Code, w.Body.String())
+					assert.Equal(t, tc.wantError == "", called, "resource handler must run only with granted MCP scope")
+					if tc.wantError == "" {
+						assert.Empty(t, w.Header().Get("WWW-Authenticate"))
+						return
+					}
+					challenge := w.Header().Get("WWW-Authenticate")
+					assert.Contains(t, challenge, `Bearer resource_metadata="`+issuer+`/.well-known/oauth-protected-resource"`)
+					assert.Contains(t, challenge, `scope="mcp"`)
+					assert.Contains(t, challenge, `error="`+tc.wantError+`"`)
+					assert.NotContains(t, challenge+w.Body.String(), "secret")
+					if tc.wantError == "insufficient_scope" {
+						assert.NotContains(t, challenge, "invalid_token")
+						var body map[string]string
+						require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+						assert.Equal(t, "insufficient_scope", body["error"])
+					}
+				})
+			}
+		})
+	}
+}
+
 type cancellingMCPExecutor struct{ started, cancelled chan struct{} }
 
 func (e *cancellingMCPExecutor) ExecuteUserSQL(ctx context.Context, _, _ string) (core.UserSQLResult, error) {

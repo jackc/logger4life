@@ -345,7 +345,7 @@ func (p *oauthProvider) handleRevoke() http.HandlerFunc {
 func (p *oauthProvider) verifyAccessToken(ctx context.Context, token string) (*AuthUser, error) {
 	user, err := core.AuthenticateOAuthToken.Call(ctx, p.app, core.AuthenticateOAuthTokenParams{Token: token})
 	switch {
-	case errors.Is(err, core.ErrOAuthInvalidToken), errors.Is(err, core.ErrOAuthTokenAudienceMismatch):
+	case errors.Is(err, core.ErrOAuthInvalidToken), errors.Is(err, core.ErrOAuthTokenAudienceMismatch), errors.Is(err, core.ErrOAuthInsufficientScope):
 		return nil, err
 	case err != nil:
 		// An unexpected failure must not describe itself in the bearer

@@ -237,7 +237,7 @@ func TestOAuthEndToEnd(t *testing.T) {
 	authValues.Set("redirect_uri", "http://localhost/cb")
 	authValues.Set("code_challenge", challenge)
 	authValues.Set("code_challenge_method", "S256")
-	authValues.Set("scope", "mcp")
+	authValues.Set("scope", " \tmcp\n ")
 	authValues.Set("state", "deadbeef-state")
 	authValues.Set("resource", srv.URL)
 	authValues.Set("approve", "true")
@@ -281,6 +281,7 @@ func TestOAuthEndToEnd(t *testing.T) {
 	require.NotEmpty(t, access)
 	require.NotEmpty(t, refresh)
 	assert.Equal(t, "Bearer", tok["token_type"])
+	assert.Equal(t, "mcp", tok["scope"])
 
 	// /mcp initialize with the access token should now succeed (200).
 	initReq, _ := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(
@@ -506,9 +507,8 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 		"access token in revoked family must be rejected by /mcp")
 }
 
-// TestAuthorizeRejectsAudienceMismatch verifies RFC 8707 enforcement: a
-// resource parameter that doesn't match our canonical URL is rejected.
-func TestAuthorizeRejectsAudienceMismatch(t *testing.T) {
+// Invalid scope and audience requests are rejected before consent or code issuance.
+func TestAuthorizeRejectsInvalidScopeOrAudience(t *testing.T) {
 	t.Parallel()
 	srv, _ := setupOAuthTestServer(t)
 	jar, _ := cookiejar.New(nil)
@@ -538,14 +538,39 @@ func TestAuthorizeRejectsAudienceMismatch(t *testing.T) {
 	v.Set("redirect_uri", "http://localhost/cb")
 	v.Set("code_challenge", challenge)
 	v.Set("code_challenge_method", "S256")
-	v.Set("scope", "mcp")
 	v.Set("state", "abcdefgh")
-	v.Set("resource", "http://wrong.example.com")
 	v.Set("approve", "true")
-	resp, err = noFollow.PostForm(srv.URL+"/oauth/authorize", v)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	loc, _ := url.Parse(resp.Header.Get("Location"))
-	assert.Equal(t, "invalid_target", loc.Query().Get("error"))
-	assert.Empty(t, loc.Query().Get("code"))
+	for _, tc := range []struct {
+		name, scope, resource, wantError string
+	}{
+		{name: "wrong audience", scope: "mcp", resource: "http://wrong.example.com", wantError: "invalid_target"},
+		{name: "spaces", scope: "   ", resource: srv.URL, wantError: "invalid_scope"},
+		{name: "whitespace", scope: "\t\n\r\u00a0", resource: srv.URL, wantError: "invalid_scope"},
+		{name: "unsupported scope", scope: "mcp admin", resource: srv.URL, wantError: "invalid_scope"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v.Set("scope", tc.scope)
+			v.Set("resource", tc.resource)
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				t.Run(method, func(t *testing.T) {
+					var resp *http.Response
+					var err error
+					if method == http.MethodGet {
+						resp, err = noFollow.Get(srv.URL + "/oauth/authorize?" + v.Encode())
+					} else {
+						resp, err = noFollow.PostForm(srv.URL+"/oauth/authorize", v)
+					}
+					require.NoError(t, err)
+					defer resp.Body.Close()
+					require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+					loc, err := url.Parse(resp.Header.Get("Location"))
+					require.NoError(t, err)
+					assert.Equal(t, tc.wantError, loc.Query().Get("error"))
+					assert.Empty(t, loc.Query().Get("code"))
+					assert.Equal(t, "abcdefgh", loc.Query().Get("state"))
+					assert.Equal(t, srv.URL, loc.Query().Get("iss"))
+				})
+			}
+		})
+	}
 }

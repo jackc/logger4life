@@ -79,17 +79,26 @@ Traffic and concurrency counters are process-local; coordinate admission
 before running replicas. The client storage quota is database-enforced.
 Concurrent regression tests exercise each real database independently.
 
-### 3. Enforce the granted scope at the resource boundary
+### 3. Enforce the granted scope at the resource boundary — resolved
 
-**Medium priority; existing protocol gap.** Authorization validates each
-element from `strings.Fields(scope)`, so a whitespace-only scope passes
-without granting `mcp`. `AuthenticateOAuthToken` checks the token and
-audience but never checks `grant.Scope`; that token still authorizes all
-five tools. Normalize or reject empty explicit scope sets and require
-`mcp` during authentication. A valid token lacking permission should receive
-403 with `error="insufficient_scope"` and the required scope, rather than
-being treated as an invalid token. This also establishes the boundary
-needed before adding narrower scopes or write tools.
+Authorization rejects whitespace-only scope sets with `invalid_scope` before
+consent or code issuance. An omitted or empty scope still defaults to `mcp`;
+accepted scope sets have their whitespace normalized before storage.
+
+`AuthenticateOAuthToken` now requires an exact, case-sensitive `mcp` member
+in the stored grant after validating the token and audience. This also denies
+previously issued tokens with empty or unrelated scopes. Every MCP request
+passes through this boundary before reaching the resource handler.
+
+Valid tokens lacking permission receive 403 with `error="insufficient_scope"`,
+`scope="mcp"`, and the protected-resource metadata URL in `WWW-Authenticate`.
+Missing, invalid, expired, revoked, and wrong-audience tokens retain their 401
+behavior. No database migration is needed; affected clients must authorize
+again with `mcp`.
+
+Regressions cover authorization preview and approval, normalized scope in the
+token response, exact scope membership, denial before resource dispatch even
+with a browser session, and the distinction between 401 and 403 challenges.
 
 ### 4. Add Client ID Metadata Documents
 

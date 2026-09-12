@@ -42,3 +42,22 @@ untrusted address scanning from the right identifies the client. Malformed
 chains fall back to the connection address. Include any additional proxies
 only when they sanitize or append the real peer address. Without this setting,
 clients behind Caddy intentionally share its IP allowance.
+
+`OAUTH_MAX_CLIENTS` defaults to 10,000 total persisted clients. Both adapters
+check capacity and insert within one serialized transaction. The quota
+survives restarts and applies across processes sharing the same database;
+configure the same quota on each. Capacity exhaustion returns 503 with an
+OAuth `temporarily_unavailable` error and `Retry-After: 3600`.
+
+At startup and hourly, maintenance removes up to 1,000 registrations older
+than `OAUTH_UNUSED_CLIENT_HOURS` (default 24) with no authorization codes,
+access tokens, refresh tokens, or token families. Even expired authorization
+history is preserved; cleanup never clears revocation state. A registration
+removed before consent completes must be registered again. Cleanup runs with
+a 30-second deadline and is serialized against issuance. Failures are logged
+and retried on the next hourly pass. Large backlogs take multiple passes.
+
+Apply PostgreSQL migration 015 before deployment; jed applies migration 003
+automatically on open. These migrations add indexes and make client foreign keys reject deletion
+while grant history exists. Existing clients and tokens are preserved. Existing installations over quota keep their clients and
+reject new registrations until cleanup or operator action frees capacity.

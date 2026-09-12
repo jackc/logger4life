@@ -18,7 +18,7 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestLimitConfigValidation(t *testing.T) {
-	for _, name := range []string{"MCP_REQUESTS_PER_MINUTE", "MCP_REQUEST_BURST", "SQL_CONCURRENCY_PER_USER", "SQL_CONCURRENCY_GLOBAL", "OAUTH_REGISTRATION_PER_IP", "OAUTH_REGISTRATION_GLOBAL"} {
+	for _, name := range []string{"MCP_REQUESTS_PER_MINUTE", "MCP_REQUEST_BURST", "SQL_CONCURRENCY_PER_USER", "SQL_CONCURRENCY_GLOBAL", "OAUTH_REGISTRATION_PER_IP", "OAUTH_REGISTRATION_GLOBAL", "OAUTH_MAX_CLIENTS", "OAUTH_UNUSED_CLIENT_HOURS"} {
 		t.Run(name, func(t *testing.T) {
 			for _, value := range []string{"", "0", "-1", "lots", "1000001"} {
 				t.Setenv(name, value)

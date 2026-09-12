@@ -23,3 +23,8 @@ func TestOAuthFamilyRevocationConcurrency(t *testing.T) {
 	t.Parallel()
 	storetest.RunOAuthFamilyRevocationConcurrency(t, newTestStore(t))
 }
+
+func TestOAuthClientLimits(t *testing.T) {
+	t.Parallel()
+	storetest.RunOAuthClientLimits(t, newTestStore(t))
+}

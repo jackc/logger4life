@@ -53,22 +53,31 @@ PostgreSQL migration 014 must run before deploying the updated server.
 Embedded databases apply migration 002 automatically on open. Existing
 families are backfilled without requiring users to reconnect.
 
-### 2. Bound request rate, concurrency, and registration growth
+### 2. Bound request rate, concurrency, and registration growth — resolved
 
-**High priority for the public endpoint.** The application and supplied
-Caddy template do not rate-limit MCP tool calls or unauthenticated dynamic
-registration. `/oauth/register` also decodes an unbounded body and accepts
-unbounded client names and redirect lists. A caller can accumulate client
-rows without authentication; an authorized caller can run many expensive
-queries simultaneously.
+MCP now limits authenticated POSTs by user ID (60/minute, burst ten).
+Shared SQL execution admits two queries per user and eight globally per
+process, rejecting excess work without queueing. Slots remain held until
+execution actually stops, including after cancellation.
 
-The SDK's new 4 MiB MCP request cap and the SQL executor's existing
-1000-row, 1 MiB value, and execution-time limits are useful per-request
-limits, but do not bound aggregate work. Add per-user query concurrency and
-rate limits, plus registration body/field limits, throttling, and retention.
-Choose limits for this deployment and ensure proxy-based throttling uses
-trusted client addresses. Tool invocation rate limiting is explicitly
-required by the [tools specification](https://modelcontextprotocol.io/specification/2026-07-28/server/tools#security-considerations).
+Registration accepts one JSON document of at most 32 KiB, names of at most
+256 bytes, and up to ten redirect URIs of at most 2,048 bytes each. Per-IP
+and global token buckets throttle attempts before parsing or database work.
+Only explicitly configured proxy CIDRs can supply forwarded client IPs.
+Limiter maps are bounded and evict idle entries.
+
+Both database adapters atomically enforce a configurable total client quota
+(default 10,000). Startup and hourly cleanup remove up to 1,000 registrations
+older than 24 hours that have no authorization records. Existing codes,
+tokens, and token-family history protect their client from deletion; cleanup
+is serialized against issuance. PostgreSQL migration 015 and automatic jed
+migration 003 add cleanup indexes and restrict deletion of clients referenced
+by grant history.
+
+See [resource limits](resource-limits.md) for configuration and responses.
+Traffic and concurrency counters are process-local; coordinate admission
+before running replicas. The client storage quota is database-enforced.
+Concurrent regression tests exercise each real database independently.
 
 ### 3. Enforce the granted scope at the resource boundary
 

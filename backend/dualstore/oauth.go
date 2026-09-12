@@ -2,6 +2,7 @@ package dualstore
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/logger4life/backend/core"
 )
@@ -60,4 +61,15 @@ func (s *Store) RevokeRefreshToken(ctx context.Context, tokenHash []byte) error 
 	return compareError("RevokeRefreshToken",
 		func() error { return s.primary.RevokeRefreshToken(ctx, tokenHash) },
 		func() error { return s.secondary.RevokeRefreshToken(ctx, tokenHash) })
+}
+
+func (s *Store) CreateOAuthClientLimited(ctx context.Context, client core.OAuthClient, limit int) error {
+	return compareError("CreateOAuthClientLimited",
+		func() error { return s.primary.CreateOAuthClientLimited(ctx, client, limit) },
+		func() error { return s.secondary.CreateOAuthClientLimited(ctx, client, limit) })
+}
+func (s *Store) PruneUnusedOAuthClients(ctx context.Context, before time.Time) (int64, error) {
+	return compareCall("PruneUnusedOAuthClients",
+		func() (int64, error) { return s.primary.PruneUnusedOAuthClients(ctx, before) },
+		func() (int64, error) { return s.secondary.PruneUnusedOAuthClients(ctx, before) })
 }

@@ -73,6 +73,7 @@ var sentinels = []error{
 	core.ErrPasskeyAlreadyRegistered,
 	core.ErrInvalidPasskeyChallenge,
 	core.ErrOAuthRecordNotFound,
+	core.ErrOAuthClientLimit,
 	core.ErrOAuthRefreshReuse,
 }
 

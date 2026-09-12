@@ -120,6 +120,7 @@ func Run(t *testing.T, ports Ports) {
 	t.Run("PasskeyStore", func(t *testing.T) { RunPasskeyStore(t, ports) })
 	t.Run("PasskeyChallengeStore", func(t *testing.T) { RunPasskeyChallengeStore(t, ports) })
 	t.Run("OAuthStore", func(t *testing.T) { RunOAuthStore(t, ports) })
+	t.Run("OAuthClientRetention", func(t *testing.T) { RunOAuthClientRetention(t, ports) })
 	t.Run("SQLSchemaStore", func(t *testing.T) { RunSQLSchemaStore(t, ports) })
 	t.Run("UserSQLExecutor", func(t *testing.T) { RunUserSQLExecutor(t, ports) })
 }

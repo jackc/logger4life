@@ -14,11 +14,12 @@ import (
 type registrationStore struct {
 	core.OAuthStore
 	created int
+	err     error
 }
 
-func (s *registrationStore) CreateOAuthClient(context.Context, core.OAuthClient) error {
+func (s *registrationStore) CreateOAuthClientLimited(context.Context, core.OAuthClient, int) error {
 	s.created++
-	return nil
+	return s.err
 }
 
 func TestRegistrationInputLimits(t *testing.T) {
@@ -89,4 +90,15 @@ func TestRequestClientIP(t *testing.T) {
 		r.Header.Set("X-Forwarded-For", tc.forwarded)
 		require.Equal(t, tc.want, requestClientIP(r, trusted))
 	}
+}
+
+func TestRegistrationCapacityResponse(t *testing.T) {
+	store := &registrationStore{err: core.ErrOAuthClientLimit}
+	p := newOAuthProvider(core.New(core.Config{OAuth: store}), "https://example.com")
+	r := httptest.NewRequest(http.MethodPost, "/oauth/register", strings.NewReader(`{"redirect_uris":["https://example.com/cb"]}`))
+	w := httptest.NewRecorder()
+	p.handleDynamicClientRegistration()(w, r)
+	require.Equal(t, 503, w.Code)
+	require.Equal(t, "3600", w.Header().Get("Retry-After"))
+	require.Contains(t, w.Body.String(), "temporarily_unavailable")
 }

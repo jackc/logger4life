@@ -9,10 +9,13 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/jackc/logger4life/backend/core"
 	slogjournal "github.com/systemd/slog-journal"
 )
 
 type Config struct {
+	OAuthMaxClients         int
+	OAuthUnusedClientHours  int
 	OAuthRegistrationPerIP  int
 	OAuthRegistrationGlobal int
 	TrustedProxyCIDRs       string
@@ -39,6 +42,8 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
+		OAuthMaxClients:         core.OAuthDefaultMaxClients,
+		OAuthUnusedClientHours:  24,
 		OAuthRegistrationPerIP:  5,
 		OAuthRegistrationGlobal: 30,
 		SQLConcurrencyPerUser:   2,
@@ -119,6 +124,8 @@ func ConfigFromEnv() Config {
 	cfg.TrustedProxyCIDRs = os.Getenv("TRUSTED_PROXY_CIDRS")
 	readLimitEnv("OAUTH_REGISTRATION_PER_IP", &cfg.OAuthRegistrationPerIP)
 	readLimitEnv("OAUTH_REGISTRATION_GLOBAL", &cfg.OAuthRegistrationGlobal)
+	readLimitEnv("OAUTH_MAX_CLIENTS", &cfg.OAuthMaxClients)
+	readLimitEnv("OAUTH_UNUSED_CLIENT_HOURS", &cfg.OAuthUnusedClientHours)
 	readLimitEnv("MCP_REQUESTS_PER_MINUTE", &cfg.MCPRequestsPerMinute)
 	readLimitEnv("MCP_REQUEST_BURST", &cfg.MCPRequestBurst)
 
@@ -140,7 +147,7 @@ func (c Config) validateLimits() error {
 	if _, err := parseTrustedProxies(c.TrustedProxyCIDRs); err != nil {
 		return err
 	}
-	for name, value := range map[string]int{"OAUTH_REGISTRATION_PER_IP": c.OAuthRegistrationPerIP, "OAUTH_REGISTRATION_GLOBAL": c.OAuthRegistrationGlobal, "SQL_CONCURRENCY_PER_USER": c.SQLConcurrencyPerUser, "SQL_CONCURRENCY_GLOBAL": c.SQLConcurrencyGlobal, "MCP_REQUESTS_PER_MINUTE": c.MCPRequestsPerMinute, "MCP_REQUEST_BURST": c.MCPRequestBurst} {
+	for name, value := range map[string]int{"OAUTH_MAX_CLIENTS": c.OAuthMaxClients, "OAUTH_UNUSED_CLIENT_HOURS": c.OAuthUnusedClientHours, "OAUTH_REGISTRATION_PER_IP": c.OAuthRegistrationPerIP, "OAUTH_REGISTRATION_GLOBAL": c.OAuthRegistrationGlobal, "SQL_CONCURRENCY_PER_USER": c.SQLConcurrencyPerUser, "SQL_CONCURRENCY_GLOBAL": c.SQLConcurrencyGlobal, "MCP_REQUESTS_PER_MINUTE": c.MCPRequestsPerMinute, "MCP_REQUEST_BURST": c.MCPRequestBurst} {
 		if value < 0 || value > 1000000 {
 			return fmt.Errorf("%s must be an integer between 1 and 1000000", name)
 		}

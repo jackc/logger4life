@@ -37,6 +37,7 @@ func TestRegisterOAuthClientLimits(t *testing.T) {
 }
 
 type fakeOAuthStore struct {
+	OAuthStore
 	client        OAuthClient
 	clientErr     error
 	createdClient OAuthClient
@@ -61,7 +62,7 @@ type fakeOAuthStore struct {
 	revoked []string
 }
 
-func (s *fakeOAuthStore) CreateOAuthClient(_ context.Context, c OAuthClient) error {
+func (s *fakeOAuthStore) CreateOAuthClientLimited(_ context.Context, c OAuthClient, _ int) error {
 	s.createdClient = c
 	return nil
 }

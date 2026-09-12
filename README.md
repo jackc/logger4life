@@ -193,6 +193,9 @@ with JSON responses, and retains compatibility with earlier clients using
 `initialize`. Every request needs an OAuth bearer token. Browser requests
 that include `Origin` must match `MCP_CANONICAL_URL` exactly.
 
+See [resource limits](docs/resource-limits.md) for MCP throttling, SQL
+concurrency, registration quotas, retention, and trusted proxy settings.
+
 See the [MCP implementation review](docs/mcp-review.md) for the migration
 details and remaining recommendations.
 

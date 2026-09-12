@@ -369,6 +369,11 @@ func writeOAuthError(w http.ResponseWriter, status int, code, desc string) {
 // Expected protocol failures carry their own code and a description that is
 // safe to return verbatim; anything else is an internal error.
 func writeOAuthActionError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, core.ErrOAuthClientLimit) {
+		w.Header().Set("Retry-After", "3600")
+		writeOAuthError(w, http.StatusServiceUnavailable, "temporarily_unavailable", "client registration capacity reached; retry later")
+		return
+	}
 	var oauthErr *core.OAuthError
 	if !errors.As(err, &oauthErr) {
 		internalError(w, r, err)

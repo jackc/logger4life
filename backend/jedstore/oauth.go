@@ -9,16 +9,48 @@ import (
 )
 
 func (s *Store) CreateOAuthClient(ctx context.Context, client core.OAuthClient) error {
-	var clientName *string
-	if client.ClientName != "" {
-		clientName = &client.ClientName
+	return s.CreateOAuthClientLimited(ctx, client, core.OAuthDefaultMaxClients)
+}
+
+func (s *Store) CreateOAuthClientLimited(ctx context.Context, client core.OAuthClient, limit int) error {
+	if limit <= 0 {
+		return core.ErrOAuthClientLimit
 	}
-	_, err := s.conn(ctx).Exec(ctx,
-		`INSERT INTO oauth_clients (id, redirect_uris, client_name)
+	return s.InTx(ctx, func(ctx context.Context) error {
+		var count int
+		if err := s.conn(ctx).QueryRow(ctx, `SELECT count(*) FROM oauth_clients`).Scan(&count); err != nil {
+			return err
+		}
+		if count >= limit {
+			return core.ErrOAuthClientLimit
+		}
+		var clientName *string
+		if client.ClientName != "" {
+			clientName = &client.ClientName
+		}
+		_, err := s.conn(ctx).Exec(ctx,
+			`INSERT INTO oauth_clients (id, redirect_uris, client_name)
 		 VALUES ($1, $2, $3)`,
-		client.ID, client.RedirectURIs, clientName,
-	)
-	return err
+			client.ID, client.RedirectURIs, clientName,
+		)
+		return err
+	})
+}
+
+func (s *Store) PruneUnusedOAuthClients(ctx context.Context, before time.Time) (int64, error) {
+	var deleted int64
+	err := s.InTx(ctx, func(ctx context.Context) error {
+		tag, err := s.conn(ctx).Exec(ctx, `DELETE FROM oauth_clients WHERE id IN (SELECT oc.id FROM oauth_clients oc
+		 WHERE oc.created_at < $1
+		 AND NOT EXISTS (SELECT 1 FROM oauth_authorization_codes c WHERE c.client_id = oc.id)
+		 AND NOT EXISTS (SELECT 1 FROM oauth_token_families f WHERE f.client_id = oc.id)
+		 AND NOT EXISTS (SELECT 1 FROM oauth_access_tokens a WHERE a.client_id = oc.id)
+		 AND NOT EXISTS (SELECT 1 FROM oauth_refresh_tokens r WHERE r.client_id = oc.id)
+		 ORDER BY oc.id LIMIT 1000)`, before)
+		deleted = tag.RowsAffected()
+		return err
+	})
+	return deleted, err
 }
 
 func (s *Store) GetOAuthClient(ctx context.Context, id string) (core.OAuthClient, error) {

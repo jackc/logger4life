@@ -10,12 +10,54 @@ import (
 )
 
 func (s *Store) CreateOAuthClient(ctx context.Context, client core.OAuthClient) error {
-	_, err := s.conn(ctx).Exec(ctx,
-		`INSERT INTO oauth_clients (id, redirect_uris, client_name)
+	return s.CreateOAuthClientLimited(ctx, client, core.OAuthDefaultMaxClients)
+}
+
+func (s *Store) CreateOAuthClientLimited(ctx context.Context, client core.OAuthClient, limit int) error {
+	if limit <= 0 {
+		return core.ErrOAuthClientLimit
+	}
+	return s.InTx(ctx, func(ctx context.Context) error {
+		// Serialize count-and-insert across every process using this database.
+		if _, err := s.conn(ctx).Exec(ctx, `LOCK TABLE oauth_clients IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+			return err
+		}
+		var count int
+		if err := s.conn(ctx).QueryRow(ctx, `SELECT count(*) FROM oauth_clients`).Scan(&count); err != nil {
+			return err
+		}
+		if count >= limit {
+			return core.ErrOAuthClientLimit
+		}
+		_, err := s.conn(ctx).Exec(ctx,
+			`INSERT INTO oauth_clients (id, redirect_uris, client_name)
 		 VALUES ($1, $2, NULLIF($3, ''))`,
-		client.ID, client.RedirectURIs, client.ClientName,
-	)
-	return err
+			client.ID, client.RedirectURIs, client.ClientName,
+		)
+		return err
+	})
+}
+
+func (s *Store) PruneUnusedOAuthClients(ctx context.Context, before time.Time) (int64, error) {
+	var deleted int64
+	err := s.InTx(ctx, func(ctx context.Context) error {
+		// EXCLUSIVE also blocks the ROW SHARE table lock from foreign-key
+		// checks during grant issuance. The following statement gets a fresh
+		// snapshot after any in-flight issuer has committed.
+		if _, err := s.conn(ctx).Exec(ctx, `LOCK TABLE oauth_clients IN EXCLUSIVE MODE`); err != nil {
+			return err
+		}
+		tag, err := s.conn(ctx).Exec(ctx, `DELETE FROM oauth_clients WHERE id IN (SELECT oc.id FROM oauth_clients oc
+		 WHERE oc.created_at < $1
+		 AND NOT EXISTS (SELECT 1 FROM oauth_authorization_codes c WHERE c.client_id = oc.id)
+		 AND NOT EXISTS (SELECT 1 FROM oauth_token_families f WHERE f.client_id = oc.id)
+		 AND NOT EXISTS (SELECT 1 FROM oauth_access_tokens a WHERE a.client_id = oc.id)
+		 AND NOT EXISTS (SELECT 1 FROM oauth_refresh_tokens r WHERE r.client_id = oc.id)
+		 ORDER BY oc.id LIMIT 1000)`, before)
+		deleted = tag.RowsAffected()
+		return err
+	})
+	return deleted, err
 }
 
 func (s *Store) GetOAuthClient(ctx context.Context, id string) (core.OAuthClient, error) {

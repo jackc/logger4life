@@ -19,6 +19,7 @@ import (
 // the HTTP adapter.
 
 const (
+	OAuthDefaultMaxClients   = 10000
 	OAuthScopeMCP            = "mcp"
 	OAuthMaxClientNameBytes  = 256
 	OAuthMaxRedirectURIs     = 10
@@ -67,6 +68,7 @@ var (
 	// expired, or already-invalidated row. Actions translate it into a
 	// client-facing OAuthError and never return it directly.
 	ErrOAuthRecordNotFound = errors.New("oauth record not found")
+	ErrOAuthClientLimit    = errors.New("OAuth client registration capacity reached")
 
 	// ErrOAuthRefreshReuse reports that an already-rotated refresh token was
 	// presented again. The store revokes the whole token family as a side
@@ -138,6 +140,11 @@ type OAuthTokens struct {
 // in-flight rotation from issuing a replacement after explicit revocation.
 type OAuthStore interface {
 	CreateOAuthClient(context.Context, OAuthClient) error
+	// CreateOAuthClientLimited checks the total client count and inserts atomically.
+	CreateOAuthClientLimited(context.Context, OAuthClient, int) error
+	// PruneUnusedOAuthClients deletes only old clients with no authorization records,
+	// serialized against issuance so cleanup cannot revoke a concurrent grant.
+	PruneUnusedOAuthClients(context.Context, time.Time) (int64, error)
 	GetOAuthClient(context.Context, string) (OAuthClient, error)
 	CreateAuthorizationCode(context.Context, []byte, OAuthAuthorizationCode) error
 	ConsumeAuthorizationCode(context.Context, []byte) (OAuthAuthorizationCode, error)
@@ -185,7 +192,10 @@ var RegisterOAuthClient = Define(ActionDef[RegisterOAuthClientParams, OAuthClien
 		}
 		id := uuid.NewV7()
 		client := OAuthClient{ID: id.String(), RedirectURIs: p.RedirectURIs, ClientName: p.ClientName}
-		if err := c.oauth.CreateOAuthClient(ctx, client); err != nil {
+		if err := c.oauth.CreateOAuthClientLimited(ctx, client, c.oauthMaxClients); err != nil {
+			if errors.Is(err, ErrOAuthClientLimit) {
+				return OAuthClient{}, &OAuthError{Code: "temporarily_unavailable", Description: "client registration capacity reached; retry later", cause: err}
+			}
 			return OAuthClient{}, err
 		}
 		return client, nil
@@ -471,3 +481,8 @@ var AuthenticateOAuthToken = Define(ActionDef[AuthenticateOAuthTokenParams, User
 		return User{ID: grant.UserID, Username: grant.Username}, nil
 	},
 })
+
+// PruneUnusedOAuthClients is called by server maintenance, without user input.
+func (c *Core) PruneUnusedOAuthClients(ctx context.Context, before time.Time) (int64, error) {
+	return c.oauth.PruneUnusedOAuthClients(ctx, before)
+}

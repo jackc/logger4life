@@ -86,6 +86,7 @@ func Run(ctx context.Context, cfg Config) error {
 	// the canonical URL is needed both as the OAuth issuer and as the RFC
 	// 8707 audience binding for issued access tokens).
 	if cfg.MCPEnabled() {
+		defer startOAuthClientCleanup(ctx, app, cfg, logger)()
 		oauth := newOAuthProvider(app, cfg.MCPCanonicalURL)
 		oauth.registrationIPs = newKeyedRateLimiter(limitOrDefault(cfg.OAuthRegistrationPerIP, 5), 5)
 		oauth.registrations = newKeyedRateLimiter(limitOrDefault(cfg.OAuthRegistrationGlobal, 30), 10)
@@ -209,7 +210,7 @@ func BuildBackend(ctx context.Context, cfg Config, logger *slog.Logger) (*core.C
 	}
 
 	buildCore := func(store persistence) *core.Core {
-		return core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, SQLConcurrencyPerUser: cfg.SQLConcurrencyPerUser, SQLConcurrencyGlobal: cfg.SQLConcurrencyGlobal, Sharing: store, OAuth: store, OAuthIssuer: cfg.MCPCanonicalURL,
+		return core.New(core.Config{Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, SQLConcurrencyPerUser: cfg.SQLConcurrencyPerUser, SQLConcurrencyGlobal: cfg.SQLConcurrencyGlobal, Sharing: store, OAuth: store, OAuthIssuer: cfg.MCPCanonicalURL, OAuthMaxClients: cfg.OAuthMaxClients,
 			// RequireUser is outermost so an anonymous caller is turned away
 			// before the audit trail records an attempt it never let through.
 			Middleware: []core.Middleware{core.RequireUser(), auditMiddleware(logger)}})

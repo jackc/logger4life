@@ -80,6 +80,14 @@ dir = "{{config_root}}"
 run = "scripts/dev-ready"
 hide = true
 
+# Repairing the database must stay possible while the rest of the stack is
+# down: the migration that can break it runs inside the stack's own startup.
+[tasks."db:ready"]
+description = "Require this worktree's PostgreSQL to be running"
+dir = "{{config_root}}"
+run = "scripts/dev-ready --database"
+hide = true
+
 [tasks."dev:urls"]
 description = "Print this worktree's ports and URLs"
 dir = "{{config_root}}"
@@ -99,19 +107,19 @@ run = ["port-tamer allocate --overwrite", "scripts/dev-urls"]
 [tasks."db:reset"]
 description = "Drop and rebuild this worktree's databases"
 dir = "{{config_root}}"
-depends = ["dev:ready"]
+depends = ["db:ready"]
 run = "scripts/db-reset"
 
 [tasks."db:migrate"]
 description = "Run pending migrations against the development database"
 dir = "{{config_root}}"
-depends = ["dev:ready"]
+depends = ["db:ready"]
 run = "scripts/dev-exec tern migrate"
 
 [tasks."db:psql"]
 description = "Open psql against the development database"
 dir = "{{config_root}}"
-depends = ["dev:ready"]
+depends = ["db:ready"]
 run = "scripts/dev-exec psql"
 interactive = true
 

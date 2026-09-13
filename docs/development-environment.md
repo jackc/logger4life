@@ -173,7 +173,10 @@ secret in the environment.
 | `mise run db:reset` | drop both databases and rebuild from migrations |
 
 These commands require `mise run dev` to be running and fail with a startup
-hint when it is not. PostgreSQL is always a child of that process-compose
+hint when it is not. They require PostgreSQL alone rather than a ready
+project: the migrations run inside that startup as `database-ready`, so a
+failing migration also stops the backend and Vite, and these are the commands
+that repair it. PostgreSQL is always a child of that process-compose
 project. To throw the cluster away entirely, run `mise run dev:down` and delete
 `.dev/<platform>/postgres`; the next `mise run dev` recreates it.
 

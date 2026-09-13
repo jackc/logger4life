@@ -42,7 +42,7 @@ build, and release commands remain mise tasks and never start services. See
 - PostgreSQL migrations are managed by **tern** (config: `postgresql/tern.conf`, migrations: `postgresql/migrations/`)
 - Jed migrations are embedded from `db/migrations/jed/` and applied automatically when the store opens
 - Dev database: `logger4life_dev`; browser-test database: `logger4life_test`; Go database tests exclusively check out one of eight `logger4life_test_N` copies. All live in this checkout's own cluster under `.dev/<platform>/postgres/data` on the allocated `PGPORT`.
-- `mise run db:psql`, `mise run db:migrate`, and `mise run db:reset` require the development stack to be running
+- `mise run db:psql`, `mise run db:migrate`, and `mise run db:reset` require this checkout's PostgreSQL to be running, but not a ready stack, so they still work when `database-ready` fails a migration
 - DB role: `logger4life`
 - When creating tables, sequences, or other database objects in migrations, grant appropriate permissions to the `logger4life` role (e.g., `GRANT ALL ON TABLE ... TO logger4life`)
 
@@ -179,7 +179,7 @@ migrations in `db/migrations/jed/` expose the same logical tables:
 - **mise** (`.mise.toml`) manages tool versions, the worktree environment, and the task interface
 - **Port Tamer** (`port-tamer.toml`) allocates the named port group persisted in `.port-tamer.env`
 - **process-compose** (`process-compose.yaml`) owns the single development service graph and is launched only by `mise run dev`
-- **scripts/dev-ready** checks the running project without starting it (`--wait` polls with fail-fast and a timeout); **scripts/dev-down** stops a detached project
+- **scripts/dev-ready** checks the running project without starting it (`--wait` polls with fail-fast and a timeout; `--database` requires only PostgreSQL); **scripts/dev-down** stops a detached project
 - **scripts/** also holds `dev-env.sh` (environment assembly), `dev-urls` (project URL display), `dev-exec` (fresh environment command wrapper), `postgres` / `postgres-ready` / `db-bootstrap` (service lifecycle), `build-release`, `dev-init`, `dev-up`, `db-reset`, and `pgbin`
 - Dev container setup in `.devcontainer/` (Ubuntu 24.04 + PostgreSQL 18 binaries + mise); it is a thin Linux shell that runs the same `mise run dev:init` / `mise run dev` as native macOS
 - **fd** and **rg** (ripgrep) are available in the dev container — use them instead of `find` and `grep`

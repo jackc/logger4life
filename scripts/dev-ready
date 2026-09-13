@@ -9,28 +9,42 @@
 # DEV_READY_TIMEOUT seconds (default 300) in any case. A broken stack
 # therefore fails fast in CI or under an agent instead of blocking until an
 # outer timeout fires.
+#
+# --database narrows the requirement to PostgreSQL alone and ignores every
+# other service. The database commands are what repairs the database, and the
+# migration that can break it runs inside this project's own startup, so
+# requiring a ready project would withhold db:reset in exactly the situation
+# that calls for it.
 
 set -euo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
+scope=project
 wait=false
-case "${1:-}" in
-    '')
-        ;;
-    --wait)
-        wait=true
-        ;;
-    *)
-        echo "usage: scripts/dev-ready [--wait]" >&2
-        exit 2
-        ;;
-esac
+for argument in "$@"; do
+    case "$argument" in
+        --wait)
+            wait=true
+            ;;
+        --database)
+            scope=database
+            ;;
+        *)
+            echo "usage: scripts/dev-ready [--database] [--wait]" >&2
+            exit 2
+            ;;
+    esac
+done
 
 timeout="${DEV_READY_TIMEOUT:-300}"
 
 not_ready() {
+    if [ "$scope" = database ]; then
+        echo "This worktree's PostgreSQL is not running." >&2
+    else
+        echo "The development environment is not running and ready." >&2
+    fi
     cat >&2 <<'EOF2'
-The development environment is not running and ready.
 
 Start it in another terminal with:
     mise run dev
@@ -47,17 +61,30 @@ reachable() {
     process-compose process list -o json >/dev/null 2>&1
 }
 
+# The project has its own readiness gate; PostgreSQL alone is read from the
+# process list, since no gate covers a single service.
 ready() {
-    process-compose project is-ready >/dev/null 2>&1
+    if [ "$scope" = database ]; then
+        process-compose process list -o json 2>/dev/null | node -e '
+            const processes = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const postgres = processes.find((p) => p.name === "postgres");
+            process.exit(postgres && postgres.is_running && postgres.is_ready === "Ready" ? 0 : 1);'
+    else
+        process-compose project is-ready >/dev/null 2>&1
+    fi
 }
 
 # One "exited NAME" line per process that stopped and will not run again --
 # process-compose reports Restarting while a restart is pending -- and one
 # "skipped NAME" line per process it never started because a dependency failed.
+# Only PostgreSQL can fail the --database requirement: a failed migration
+# stopping every other service is the state that requirement tolerates.
 failed_processes() {
-    process-compose process list -o json 2>/dev/null | node -e '
+    process-compose process list -o json 2>/dev/null | DEV_READY_SCOPE="$scope" node -e '
         const processes = JSON.parse(require("fs").readFileSync(0, "utf8"));
+        const database = process.env.DEV_READY_SCOPE === "database";
         for (const p of processes) {
+            if (database && p.name !== "postgres") continue;
             if (p.status === "Error" || (p.status === "Completed" && p.exit_code !== 0)) {
                 console.log("exited", p.name);
             } else if (p.status === "Skipped") {

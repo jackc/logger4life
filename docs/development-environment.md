@@ -180,6 +180,16 @@ that repair it. PostgreSQL is always a child of that process-compose
 project. To throw the cluster away entirely, run `mise run dev:down` and delete
 `.dev/<platform>/postgres`; the next `mise run dev` recreates it.
 
+A migration file that has been applied anywhere is finished: change the schema
+with a new migration instead of editing it. Editing one in place leaves every
+database that already ran it silently different from a fresh one, and the
+difference surfaces much later, as an unrelated migration failing against a
+column it has every reason to expect. `011_create_oauth.sql` was edited that
+way, so `014_add_oauth_token_families.sql` adds the column it inherits where
+it is missing rather than assume it: a migration repairing that damage has to
+tolerate both schemas, which is the cost the edit imposes on every migration
+downstream of it.
+
 ## Tests
 
 ```sh

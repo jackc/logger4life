@@ -93,3 +93,75 @@ func TestOAuthCodeGrantMigrationPreservesCodes(t *testing.T) {
 	require.False(t, codeOnly, "pre-migration DCR codes retain refresh support")
 	require.Equal(t, code.RedirectURI, redirect)
 }
+
+func TestOAuthFamilyMigrationAddsColumnMissingFromEarlyDatabases(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := newTestStore(t)
+	user, err := store.CreateUser(ctx, uuid.NewV4().String(), "early_migration_user", nil, "hash")
+	require.NoError(t, err)
+	client := core.OAuthClient{ID: uuid.NewV7().String(), RedirectURIs: []string{"https://example.com/cb"}}
+	require.NoError(t, store.CreateOAuthClient(ctx, client))
+	pair := core.OAuthTokenPair{
+		Grant:           core.OAuthGrant{ClientID: client.ID, UserID: user.ID, FamilyID: uuid.NewV7().String(), Scope: "mcp", Audience: "https://example.com"},
+		AccessTokenHash: []byte("early-access"), RefreshTokenHash: []byte("early-refresh"),
+		AccessExpiresAt: time.Now().Add(time.Hour), RefreshExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, store.CreateTokenPair(ctx, pair))
+	accessOnly := pair
+	accessOnly.Grant.FamilyID = uuid.NewV7().String()
+	accessOnly.AccessTokenHash, accessOnly.RefreshTokenHash = []byte("early-access-only"), []byte("early-removed-refresh")
+	require.NoError(t, store.CreateTokenPair(ctx, accessOnly))
+
+	// Reproduce a database that applied 011 before it gained family_id, and
+	// roll the schema exercise back so the test database keeps its pgundolog
+	// triggers for the next test.
+	tx, err := store.pool.Begin(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `DELETE FROM oauth_refresh_tokens WHERE token_hash = $1`, accessOnly.RefreshTokenHash)
+	require.NoError(t, err)
+	for _, statement := range []string{
+		`DROP TABLE oauth_token_families`,
+		`ALTER TABLE oauth_access_tokens DROP COLUMN family_id`,
+		`ALTER TABLE oauth_refresh_tokens DROP COLUMN family_id`,
+	} {
+		_, err = tx.Exec(ctx, statement)
+		require.NoError(t, err)
+	}
+	migration, err := os.ReadFile("../../postgresql/migrations/014_add_oauth_token_families.sql")
+	require.NoError(t, err)
+	up, _, found := strings.Cut(string(migration), "---- create above / drop below ----")
+	require.True(t, found)
+	_, err = tx.Exec(ctx, strings.ReplaceAll(up, "{{.app_user}}", "logger4life"))
+	require.NoError(t, err)
+
+	var restored int
+	err = tx.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns
+		WHERE table_name IN ('oauth_access_tokens', 'oauth_refresh_tokens')
+			AND column_name = 'family_id' AND is_nullable = 'NO'`).Scan(&restored)
+	require.NoError(t, err)
+	require.Equal(t, 2, restored, "the migration must restore the column 011 was edited to create")
+	err = tx.QueryRow(ctx, `SELECT count(*) FROM pg_indexes
+		WHERE indexname IN ('oauth_access_tokens_family_idx', 'oauth_refresh_tokens_family_idx')`).Scan(&restored)
+	require.NoError(t, err)
+	require.Equal(t, 2, restored, "the column's indexes come with it")
+
+	var shared bool
+	err = tx.QueryRow(ctx, `SELECT a.family_id = r.family_id FROM oauth_access_tokens a
+		JOIN oauth_refresh_tokens r ON r.token_hash = a.refresh_token_hash
+		WHERE a.token_hash = $1`, pair.AccessTokenHash).Scan(&shared)
+	require.NoError(t, err)
+	require.True(t, shared, "a backfilled access token joins the family of the refresh token that issued it")
+
+	_, err = tx.Exec(ctx, `SET LOCAL ROLE logger4life`)
+	require.NoError(t, err)
+	for _, hash := range [][]byte{pair.AccessTokenHash, accessOnly.AccessTokenHash} {
+		var count int
+		err = tx.QueryRow(ctx, `SELECT count(*) FROM oauth_access_tokens a
+			JOIN oauth_token_families f ON f.id = a.family_id AND f.client_id = a.client_id AND f.user_id = a.user_id
+			WHERE a.token_hash = $1 AND f.revoked = false`, hash).Scan(&count)
+		require.NoError(t, err)
+		require.Equal(t, 1, count, "every backfilled token gets a family of its own owner, unrevoked")
+	}
+}

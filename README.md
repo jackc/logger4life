@@ -63,10 +63,10 @@ Share your logs with other users so they can view and add entries:
 ## Tech Stack
 
 * **Frontend** - SvelteKit 3 / Svelte 5 single-page app styled with Tailwind CSS 4
-* **Backend** - Go API using Chi router
-* **Database** - PostgreSQL with pgx and connection pooling, or an embedded
+* **Backend** - Rust API using Axum and Tokio
+* **Database** - PostgreSQL with connection pooling, or an embedded
   [jed](https://github.com/jackc/jed) database file
-* **Testing** - Go tests with testify (backend), Playwright (browser)
+* **Testing** - Cargo tests (backend and database compatibility), Playwright (browser)
 * **Build** - Vite (frontend), mise (tools, environment, and task orchestration), process-compose (development services)
 
 ## Development
@@ -122,16 +122,43 @@ the environment is put together.
 | `mise run dev:browser` | Open the frontend in the default browser |
 | `mise run db:psql` | psql against the development database |
 | `mise run db:reset` | Drop and rebuild the databases |
-| `mise run build` | Build everything (frontend assets + Go binary) |
+| `mise run build` | Build everything (frontend assets + Rust binary) |
 | `mise run build:assets` | Build frontend assets |
-| `mise run build:binary` | Build the native Go binary |
+| `mise run build:binary` | Build the native Rust binary |
 | `mise run test` | Run all tests |
-| `mise run test:backend` | Run Go backend tests |
+| `mise run test:backend` | Run Rust backend tests |
 | `mise run test:browser` | Run Playwright browser tests |
 
 Keep `mise run dev` running while using the test and database commands. CI and
 agents can start it detached with `mise run dev -- -D`, wait with
 `mise run dev:wait`, and stop it with `mise run dev:down` when finished.
+
+## Rust server
+
+The development stack, browser tests, and release tasks run the Rust binary.
+Run it directly with `cargo run --locked -- server`; the existing `server`
+flags and environment variables remain available. Rust sources are in `rust/`;
+`src/` continues to hold the Svelte frontend. Cargo dependencies are locked,
+including the native jed engine at the same revision as the Go implementation.
+
+Existing PostgreSQL databases and `logger4life.jed` files are used in place.
+Passwords, cookie sessions, OAuth grants, and stored passkeys keep their existing
+formats. A passkey ceremony begun on the Go server must be restarted after
+switching servers; already registered passkeys remain usable. Stop the old
+server before opening the same jed file with Rust.
+
+`cargo test --locked` runs the embedded database and protocol tests. For the
+PostgreSQL and comparison-mode integration matrix, keep `mise run dev` running
+and run `mise run test:backend:databases`. The Go sources remain as a compatibility
+reference; `mise run test:backend:go` runs their original test suites.
+See [architecture](docs/architecture.md) for module boundaries.
+
+Native builds require a C compiler, make, and Perl (installed by
+`scripts/setup-host`). Cargo builds and statically links the locked OpenSSL
+source, including post-quantum certificate support; a system OpenSSL installation
+is not required. Cross-platform release builds additionally require Rust's
+target standard library and a C compiler/linker for the target platform. Run
+each release task on its target platform unless those cross tools are set up.
 
 ## Database backends
 

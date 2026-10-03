@@ -1,7 +1,7 @@
 # Database backends
 
-Logger4Life supports PostgreSQL and [jed](https://github.com/jackc/jed) behind
-the same application persistence ports. Backend selection happens once at
+Logger4Life supports PostgreSQL and [jed](https://github.com/jackc/jed) through
+the same Rust persistence adapter. Backend selection happens once at
 server startup; the HTTP, MCP, and domain layers are identical for both.
 
 ## Selecting a backend
@@ -47,7 +47,7 @@ the copy represents one complete database image.
 
 The `both` backend follows fam's fail-stop comparison pattern. It runs every
 persistence operation against PostgreSQL first and jed second, returns the
-PostgreSQL result, and panics if their observable results or domain errors
+PostgreSQL result, and stops the process if their observable results or domain errors
 differ. It is a development and test mode, not a high-availability or
 production mirroring mode.
 
@@ -62,10 +62,13 @@ Selecting a backend does not migrate or mirror existing data. PostgreSQL and
 jed keep independent databases, and this project does not currently include a
 cross-backend import/export command.
 
-PostgreSQL, jed, and the dual adapter run the shared
-`backend/core/storetest` conformance suite. `mise run test:backend` also runs the
-HTTP server suite against each of `postgresql`, `jed`, and `both`, so a change
-that behaves differently between engines fails the normal backend test task.
-The conformance suite covers authentication, logs and entries, folders and
-placements, sharing, passkeys, saved SQL, OAuth, user-authored read-only SQL,
-and the transaction contract expected by core actions.
+The Rust tests exercise the same catalog and authentication workflows against
+jed, PostgreSQL, and `both`. `cargo test --locked` includes a checked-in fixture
+created by the original Go jed adapter and verifies that Rust can read, update,
+and reopen it. `mise run test:backend:databases` adds live PostgreSQL and dual
+adapter tests. The Go conformance suite is retained under
+`backend/core/storetest` and can be run with `mise run test:backend:go`.
+
+Changing from Go to Rust does not select a different backend or perform a data
+migration: both implementations use the existing schema and file format. The
+native jed engine and migrations are pinned Git dependencies in `Cargo.toml`.

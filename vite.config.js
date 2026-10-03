@@ -29,6 +29,9 @@ export default defineConfig({
 		// Never drift off the allocated port: the rest of the worktree has it
 		// persisted, so a silent move would leave stale URLs everywhere.
 		strictPort: true,
+		// Backend rebuilds are handled by process-compose. Keep Cargo output
+		// and Rust sources out of the frontend's file watcher.
+		watch: { ignored: ['**/target/**', '**/rust/**'] },
 		proxy: {
 			'/api': {
 				target: backendURL,

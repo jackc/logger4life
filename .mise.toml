@@ -40,7 +40,8 @@ TERN_MIGRATIONS = "postgresql/migrations"
 
 [tools]
 fd = "latest"
-go = '1.27.1'
+go = '1.27.1' # Retained for migration compatibility tests
+rust = '1.99.0'
 nodejs = '24.13.0'
 process-compose = "1.122.0"
 rg = "latest"
@@ -126,9 +127,9 @@ interactive = true
 [tasks."build:binary"]
 description = "Build the logger4life binary for the current platform"
 dir = "{{config_root}}"
-sources = ["*.go", "**/*.go", "!**/*_test.go", "go.mod", "go.sum"]
+sources = ["rust/**/*", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "db/migrations/jed/*.sql"]
 outputs = ["build/logger4life"]
-run = ["mkdir -p build", "go build -o build/logger4life"]
+run = ["cargo build --release --locked", "mkdir -p build", "cp target/release/logger4life build/logger4life"]
 
 [tasks."build:assets"]
 description = "Build the frontend assets"
@@ -144,7 +145,7 @@ outputs = ["build/assets/.built"]
 run = ["npm run build", "touch build/assets/.built"]
 
 [tasks.build]
-description = "Build the frontend assets and the Go binary"
+description = "Build the frontend assets and the Rust binary"
 dir = "{{config_root}}"
 run = [{ tasks = ["build:binary", "build:assets"] }]
 
@@ -201,10 +202,10 @@ run = [
 [tasks.test]
 description = "Run the backend and browser test suites"
 dir = "{{config_root}}"
-run = [{ task = "test:backend" }, { task = "test:browser" }]
+run = [{ task = "test:backend" }, { task = "test:backend:databases" }, { task = "test:browser" }]
 
-[tasks."test:backend"]
-description = "Run Go tests against PostgreSQL, jed, and the dual comparison adapter"
+[tasks."test:backend:go"]
+description = "Run the Go compatibility reference suites"
 dir = "{{config_root}}"
 depends = ["test:prepare"]
 run = [
@@ -218,3 +219,19 @@ description = "Run the Playwright browser tests"
 dir = "{{config_root}}"
 depends = ["test:prepare"]
 run = "scripts/dev-exec npm test"
+
+[tasks."test:backend"]
+description = "Run Rust backend tests"
+dir = "{{config_root}}"
+run = "env -u TEST_DATABASE_URL -u TEST_DATABASE_BACKEND cargo test --locked"
+
+[tasks."test:backend:check"]
+description = "Check Rust formatting and lint diagnostics"
+dir = "{{config_root}}"
+run = ["cargo fmt --check", "cargo clippy --locked --all-targets -- -D warnings"]
+
+[tasks."test:backend:databases"]
+description = "Run Rust PostgreSQL and comparison-mode contracts in isolated test databases"
+dir = "{{config_root}}"
+depends = ["test:prepare"]
+run = "scripts/test-rust-databases"

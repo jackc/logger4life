@@ -33,6 +33,9 @@ echo "==> installing Ubuntu host dependencies"
 "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y \
     ca-certificates \
     curl \
+    build-essential \
+    pkg-config \
+    perl \
     git
 
 # Configure PGDG exactly as a normal signed APT source. PostgreSQL's Debian

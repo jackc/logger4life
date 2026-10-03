@@ -16,7 +16,7 @@ process-compose    = the development service graph and lifecycle
 
 ```sh
 scripts/setup-host  # PostgreSQL 18 and Ubuntu Chromium dependencies (once per machine)
-mise install        # tools: Go, Node, Port Tamer, tern, process-compose, ...
+mise install        # tools: Rust, Go (reference tests), Node, Port Tamer, tern, process-compose, ...
 mise run dev:init   # ports and dependencies
 mise run dev        # PostgreSQL + migrations + backend + Vite
 ```
@@ -98,7 +98,7 @@ postgres  ->  database-ready  ->  backend  ->  vite
 Each arrow is a real dependency. `database-ready` creates the roles and
 databases and applies migrations after this supervisor's PostgreSQL is ready;
 the backend waits for that to complete; Vite waits until the backend answers
-`/health`. Process Compose watches the backend's Go source and module files,
+`/health`. Process Compose watches the backend's Rust source and Cargo files,
 so editing them rebuilds and restarts the backend.
 
 Every service, test, and database command runs with `LANG` defaulting to
@@ -194,12 +194,13 @@ downstream of it.
 
 ```sh
 mise run test           # everything
-mise run test:backend   # Go
+mise run test:backend   # Rust (includes embedded jed tests)
 mise run test:browser   # Playwright
 ```
 
-All three commands require the development stack to be ready. They do not
-start PostgreSQL. This makes repeated human test runs cheap and keeps service
+The complete suite and browser commands require the development stack to be
+ready. The default Rust backend tests run without external services. No test
+command starts PostgreSQL. This makes repeated human test runs cheap and keeps service
 ownership visible; automation starts the stack explicitly as shown above.
 
 The browser suite starts its own backend and Vite on the worktree's reserved
@@ -209,12 +210,12 @@ The test commands themselves remain mise tasks. If Redis, NATS, or another
 shared dependency is added later, it belongs in the development graph and is
 started by the same `mise run dev` command.
 
-Go tests that reach PostgreSQL run concurrently. `mise run test:prepare` migrates
+The retained Go reference tests that reach PostgreSQL run concurrently. `mise run test:prepare` migrates
 the primary test database once, installs `pgundolog`, and clones it eight
 times. Each test exclusively checks out a clone through
 `github.com/jackc/testdb`; checkout is coordinated in PostgreSQL across test
 package processes, and `pgundolog` restores the clone before it is reused.
-`mise run test:backend` then reruns the server suite with the jed and `both`
+`mise run test:backend:go` then reruns the reference server suite with the jed and `both`
 adapters; `both` executes each persistence call against PostgreSQL and jed and
 fails immediately if their observable behavior differs.
 
@@ -238,3 +239,16 @@ repository (shared through git)     worktree-local (git-ignored)
   mise.toml, finite tasks             build output
   scripts/ and source
 ```
+
+### Rust backend checks
+
+`cargo test --locked` needs no running services for its default embedded and
+protocol tests. `mise run test:backend:databases` runs the native PostgreSQL and
+`both` integration checks against freshly migrated disposable databases in this
+worktree's PostgreSQL cluster, plus catalog and authentication contracts against PostgreSQL.
+`mise run test:backend:check` checks formatting and Clippy warnings.
+
+The Rust toolchain is pinned in `.mise.toml` and `rust-toolchain.toml`. A C
+compiler, make, and Perl are host prerequisites; Cargo builds the locked,
+bundled OpenSSL source. The runtime uses Axum/Tokio; blocking database and cryptography work runs on Tokio's
+blocking pool. No Go runtime or helper process is needed by the Rust binary.

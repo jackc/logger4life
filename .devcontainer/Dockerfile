@@ -13,7 +13,7 @@ RUN mkdir -p /etc/postgresql-common \
     && apt-get install -y postgresql-18 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Ruby from source prerequisites.
+# Native build prerequisites (including Rust OpenSSL bindings).
 RUN apt-get update \
-    && apt-get install -y build-essential libssl-dev libreadline-dev zlib1g-dev libffi-dev ncurses-dev libyaml-dev libxml2 libxml2-dev libxslt1-dev \
+    && apt-get install -y build-essential pkg-config perl libreadline-dev zlib1g-dev libffi-dev ncurses-dev libyaml-dev libxml2 libxml2-dev libxslt1-dev \
     && rm -rf /var/lib/apt/lists/*

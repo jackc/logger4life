@@ -1,10 +1,17 @@
+> The production backend has been ported to Rust. Use `rust/src/`, `Cargo.toml`,
+> and `docs/architecture.md` for current implementation guidance. The Go
+> `backend/` tree described below is retained as the compatibility reference.
+> Development/build/browser tasks run Rust. `mise run test:backend` runs Cargo
+> tests; `mise run test:backend:go` runs the original Go suites. Existing schemas,
+> API behavior, and per-worktree service lifecycle instructions still apply.
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) with custom event types and optional attributes. It's a full-stack app with a Go backend API and Svelte SPA frontend, backed by PostgreSQL or an embedded jed database. Features include user authentication, custom log fields (text, number, boolean), log sharing via invite tokens, and full CRUD on logs and entries.
+Logger4Life is a quick event logging tool (vitamins, pushups, diapers, etc.) with custom event types and optional attributes. It's a full-stack app with a Rust backend API and Svelte SPA frontend, backed by PostgreSQL or an embedded jed database. Features include user authentication, custom log fields (text, number, boolean), log sharing via invite tokens, and full CRUD on logs and entries.
 
 ## Common Commands
 
@@ -25,15 +32,18 @@ build, and release commands remain mise tasks and never start services. See
 - Ports are never fixed. Read them from the environment (`BACKEND_URL`, `VITE_URL`, `PGPORT`) or `.port-tamer.env`; never assume 4000/5173/5432.
 
 ### Building
-- `mise run build` — Build frontend assets and the native Go binary
+- `mise run build` — Build frontend assets and the native Rust binary
 - `mise run build:assets` — Build frontend assets only
-- `mise run build:binary` — Build the native Go binary (`build/logger4life`)
+- `mise run build:binary` — Build the native Rust binary (`build/logger4life`)
 - `mise run build:linux-amd64` / `build:linux-arm64` / `build:darwin-amd64` / `build:darwin-arm64` — Build a release directory and tarball
 
 ### Testing
 - All PostgreSQL-backed test commands require `mise run dev` to be running; they fail with a startup hint instead of launching services
 - `mise run test` — Run all tests and prepare test databases
-- `mise run test:backend` — Run Go backend tests and prepare test databases
+- `mise run test:backend` — Run Rust backend tests with jed
+- `mise run test:backend:databases` — Run Rust PostgreSQL and dual-backend tests in disposable databases
+- `mise run test:backend:check` — Check Rust formatting and Clippy
+- `mise run test:backend:go` — Run the original Go compatibility reference suites
 - `mise run test:browser` — Run Playwright browser tests (or `npm test`)
 - `mise run test:prepare` — Prepare test databases only
 - `npm run test:report` — Show Playwright HTML report
@@ -48,7 +58,14 @@ build, and release commands remain mise tasks and never start services. See
 
 ## Architecture
 
-### Backend (Go) — `backend/`
+### Backend (Rust) — `rust/src/`
+
+The native server uses Axum and Tokio, synchronous PostgreSQL and jed adapters,
+and a shared action catalog for HTTP and MCP. Read `docs/architecture.md` for
+the current module map. Existing PostgreSQL schemas and jed migrations are
+shared with the Go reference implementation; preserve their storage formats.
+
+### Compatibility reference (Go) — `backend/`
 - **CLI**: Cobra-based with subcommands (e.g., `server`). Entry point: `main.go` → `backend.Execute()` → `backend/root.go`
 - **Layering**: `backend/domain` (pure rules) ← `backend/core` (action catalog and driven ports) ← `backend/pgstore` / `backend/jedstore` (persistence) and `backend/server` (HTTP/MCP adapters). See `docs/architecture.md`; `TestArchitecturalBoundaries` enforces the import rules.
 - **HTTP**: Chi v5 router with structured request logging via `httplog/v3`; the port comes from `--port`/`PORT` (4000 only as a default). API routes under `/api/`.

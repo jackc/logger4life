@@ -1,3 +1,7 @@
+> This review describes the retained Go implementation. The Rust port preserves
+> its HTTP contracts in `rust/src/mcp.rs`, with native regression tests in
+> `rust/tests/mcp_http.rs`; the Go SDK is now a compatibility reference.
+
 # MCP implementation review
 
 Reviewed on 2026-09-12 against the stable **2026-07-28** specification.

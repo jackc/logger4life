@@ -20,3 +20,9 @@
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Rust
+/target/
+
+# Lock sidecars produced by compatibility fixture generation
+/rust/tests/fixtures/*.jed.lock

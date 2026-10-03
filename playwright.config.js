@@ -38,9 +38,11 @@ export default defineConfig({
 	],
 	webServer: [
 		{
-			command: 'go run . server',
+			command: process.env.LOGGER4LIFE_TEST_SERVER_COMMAND ?? 'cargo run --locked -- server',
 			env: {
 				DATABASE_URL: databaseURL,
+				DATABASE_BACKEND: process.env.LOGGER4LIFE_TEST_BACKEND ?? 'postgresql',
+				JED_DATA_DIR: process.env.JED_DATA_DIR ?? '',
 				BIND_ADDRESS: '127.0.0.1',
 				PORT: backendPort,
 				ALLOW_REGISTRATION: 'true',

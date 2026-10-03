@@ -40,7 +40,7 @@ processes:
 
   backend:
     command: >
-      go run . server
+      cargo run --locked -- server
       --bind-address "$BIND_ADDRESS"
       --port "$BACKEND_PORT"
       --allow-registration
@@ -49,10 +49,11 @@ processes:
       --log-format text
     watch:
       paths:
-        - path: main.go
-        - path: backend
-        - path: go.mod
-        - path: go.sum
+        - path: rust
+        - path: Cargo.toml
+        - path: Cargo.lock
+        - path: rust-toolchain.toml
+        - path: db/migrations/jed
     depends_on:
       database-ready:
         condition: process_completed_successfully

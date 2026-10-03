@@ -1,0 +1,65 @@
+[package]
+name = "logger4life"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "rust/src/lib.rs"
+
+[[bin]]
+name = "logger4life"
+path = "rust/src/main.rs"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+http = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+rand = "0.9"
+hex = "0.4"
+base64 = "0.22"
+sha2 = "0.10"
+bcrypt = "0.17"
+url = "2"
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-journald = "0.3"
+postgres = { version = "0.19", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
+jed = { git = "https://github.com/jackc/jed", rev = "d6efeb49fc65bd536ab7e26f95c954a81505254a" }
+jed-migrate = { git = "https://github.com/jackc/jed", rev = "d6efeb49fc65bd536ab7e26f95c954a81505254a" }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "native-tls"] }
+serde_urlencoded = "0.7"
+ipnet = "2"
+httpdate = "1"
+mime = "0.3"
+webauthn-rs-core = "=0.5.5"
+ciborium = "0.2"
+serde_cbor_2 = "0.13"
+fips204 = "0.4"
+x509-parser = "0.16"
+openssl = { version = "0.10", features = ["vendored"] }
+bytes = "1"
+native-tls = "0.2"
+rustls-native-certs = "0.8"
+postgres-native-tls = "0.5"
+r2d2 = "0.8"
+r2d2_postgres = "0.18"
+sqlparser = { version = "0.59", features = ["visitor"] }
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[[test]]
+name = "mcp_http"
+path = "rust/tests/mcp_http.rs"
+
+[[test]]
+name = "server_process"
+path = "rust/tests/server_process.rs"

@@ -1,0 +1,91 @@
+{
+  "views": [
+    {
+      "name": "log_entries",
+      "comment": "Entries from logs you own or have been shared on.",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "comment": "UUID identifying the entry."
+        },
+        {
+          "name": "log_id",
+          "data_type": "uuid",
+          "comment": "UUID of the parent log (join to logs.id)."
+        },
+        {
+          "name": "user_id",
+          "data_type": "uuid",
+          "comment": "UUID of the user who created the entry."
+        },
+        {
+          "name": "user_username",
+          "data_type": "character varying(30)",
+          "comment": "Username of the user who created the entry."
+        },
+        {
+          "name": "fields",
+          "data_type": "jsonb",
+          "comment": "JSONB object with the entry's field values, keyed by field name."
+        },
+        {
+          "name": "occurred_at",
+          "data_type": "timestamp with time zone",
+          "comment": "When the event being logged occurred."
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "comment": "When the entry record was created."
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "comment": "When the entry record was last updated."
+        },
+        {
+          "name": "note",
+          "data_type": "text",
+          "comment": "Optional Markdown note for the entry."
+        }
+      ]
+    },
+    {
+      "name": "logs",
+      "comment": "Logs you own or have been shared on.",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "comment": "UUID identifying the log."
+        },
+        {
+          "name": "name",
+          "data_type": "character varying(100)",
+          "comment": "Display name of the log."
+        },
+        {
+          "name": "fields",
+          "data_type": "jsonb",
+          "comment": "JSONB array of field definitions: [{\"name\",\"type\",\"required\"}]."
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "comment": "When the log was created."
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "comment": "When the log was last updated."
+        },
+        {
+          "name": "shared_with",
+          "data_type": "text[]",
+          "comment": "Array of usernames the log is shared with. NULL unless you are the log owner."
+        }
+      ]
+    }
+  ]
+}

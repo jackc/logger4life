@@ -138,7 +138,6 @@ sources = [
   "static/**/*",
   "package.json",
   "package-lock.json",
-  "svelte.config.js",
   "vite.config.js",
 ]
 outputs = ["build/assets/.built"]

@@ -3,10 +3,12 @@
 /// <reference lib="esnext" />
 /// <reference lib="webworker" />
 
-import { build, files, version } from '$service-worker';
+import { version } from '$app/env';
+import { assets, immutable } from '$app/manifest';
 
 const CACHE_NAME = `logger4life-${version}`;
-const ASSETS = [...build, ...files];
+// Manifest paths are relative to the service worker's directory.
+const ASSETS = [...immutable, ...assets].map(({ path }) => new URL(path, self.location.href).pathname);
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));

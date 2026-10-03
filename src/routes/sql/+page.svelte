@@ -1,8 +1,8 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getAuth } from '$lib/auth.svelte.js';
-	import { apiGet, apiPost, apiPut, apiDelete } from '$lib/api.js';
+	import { getAuth } from '#lib/auth.svelte.js';
+	import { apiGet, apiPost, apiPut, apiDelete } from '#lib/api.js';
 	import { EditorView, basicSetup } from 'codemirror';
 	import { keymap } from '@codemirror/view';
 	import { Prec } from '@codemirror/state';

@@ -1,5 +1,5 @@
 <script>
-	import { renderNote } from '$lib/markdown.js';
+	import { renderNote } from '#lib/markdown.js';
 	let { note = '', collapsible = false } = $props();
 	let expanded = $state(false);
 	const long = $derived(note.length > 500 || note.split('\n').length > 8);

@@ -1,8 +1,8 @@
 <script>
-	import NoteEditor from '$lib/components/NoteEditor.svelte';
-	import { NOTE_LIMIT, noteLength } from '$lib/markdown.js';
-	import { getAuth } from '$lib/auth.svelte.js';
-	import { apiGet, apiPost, apiPut } from '$lib/api.js';
+	import NoteEditor from '#lib/components/NoteEditor.svelte';
+	import { NOTE_LIMIT, noteLength } from '#lib/markdown.js';
+	import { getAuth } from '#lib/auth.svelte.js';
+	import { apiGet, apiPost, apiPut } from '#lib/api.js';
 
 	const auth = getAuth();
 

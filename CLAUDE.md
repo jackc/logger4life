@@ -125,7 +125,7 @@ build, and release commands remain mise tasks and never start services. See
 - Shared members can CRUD entries but cannot manage shares or delete the log
 
 ### Frontend (SvelteKit) — `src/`
-- **SvelteKit 2 + Svelte 5** with static adapter (SPA mode: no SSR, no prerendering)
+- **SvelteKit 3 + Svelte 5** with static adapter (SPA mode: no SSR, no prerendering)
 - **Styling**: Tailwind CSS 4 via `@tailwindcss/vite` plugin
 - **API client**: `src/lib/api.js` — thin wrappers (`apiGet`, `apiPost`, `apiPut`, `apiDelete`) around fetch
 - **Auth state**: `src/lib/auth.svelte.js` — singleton reactive module using `$state` with exported `getAuth()`, `checkAuth()`, `login()`, `register()`, `logout()`
@@ -171,7 +171,7 @@ migrations in `db/migrations/jed/` expose the same logical tables:
 - **Browser**: **Playwright** (Chromium only) in `tests/` — `auth.spec.js`, `home.spec.js`, `logs.spec.js`. Playwright auto-starts both Vite dev server and Go backend.
 
 ### Build Artifacts
-- Frontend assets → `build/assets/` (with compressed copies from the Vite compression plugin)
+- Frontend assets → `build/assets/` (with gzip and Brotli copies from the static adapter)
 - Native Go binary → `build/logger4life`
 - Release directories and archives → `build/<os>_<arch>/` and `build/<os>_<arch>.tar.gz`
 

@@ -1,6 +1,6 @@
 <script>
 	import MarkdownNote from './MarkdownNote.svelte';
-	import { NOTE_LIMIT, noteLength } from '$lib/markdown.js';
+	import { NOTE_LIMIT, noteLength } from '#lib/markdown.js';
 	let { value = $bindable(''), open = $bindable(false), disabled = false } = $props();
 	let preview = $state(false);
 	const id = $props.id();

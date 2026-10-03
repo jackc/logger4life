@@ -1,7 +1,7 @@
 <script>
-	import { getAuth, changeEmail, changePassword } from '$lib/auth.svelte.js';
-	import { isWebAuthnSupported, listPasskeys, startPasskeyRegistration, updatePasskeyDescription, deletePasskey } from '$lib/passkeys.js';
-	import { getSettings } from '$lib/settings.svelte.js';
+	import { getAuth, changeEmail, changePassword } from '#lib/auth.svelte.js';
+	import { isWebAuthnSupported, listPasskeys, startPasskeyRegistration, updatePasskeyDescription, deletePasskey } from '#lib/passkeys.js';
+	import { getSettings } from '#lib/settings.svelte.js';
 	import { goto } from '$app/navigation';
 
 	const auth = getAuth();

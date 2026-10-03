@@ -1,6 +1,6 @@
 <script>
-	import { register, getAuth } from '$lib/auth.svelte.js';
-	import { getSettings } from '$lib/settings.svelte.js';
+	import { register, getAuth } from '#lib/auth.svelte.js';
+	import { getSettings } from '#lib/settings.svelte.js';
 	import { goto } from '$app/navigation';
 
 	const auth = getAuth();

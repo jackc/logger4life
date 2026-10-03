@@ -1,8 +1,8 @@
 <script>
 	import { page } from '$app/state';
-	import { getAuth } from '$lib/auth.svelte.js';
+	import { getAuth } from '#lib/auth.svelte.js';
 	import { goto } from '$app/navigation';
-	import { apiGet, apiPost } from '$lib/api.js';
+	import { apiGet, apiPost } from '#lib/api.js';
 
 	const auth = getAuth();
 

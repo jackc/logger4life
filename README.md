@@ -62,7 +62,7 @@ Share your logs with other users so they can view and add entries:
 
 ## Tech Stack
 
-* **Frontend** - SvelteKit 2 / Svelte 5 single-page app styled with Tailwind CSS 4
+* **Frontend** - SvelteKit 3 / Svelte 5 single-page app styled with Tailwind CSS 4
 * **Backend** - Go API using Chi router
 * **Database** - PostgreSQL with pgx and connection pooling, or an embedded
   [jed](https://github.com/jackc/jed) database file

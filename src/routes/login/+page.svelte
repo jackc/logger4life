@@ -1,7 +1,7 @@
 <script>
-	import { login, passkeyLogin, getAuth } from '$lib/auth.svelte.js';
-	import { isWebAuthnSupported } from '$lib/passkeys.js';
-	import { getSettings } from '$lib/settings.svelte.js';
+	import { login, passkeyLogin, getAuth } from '#lib/auth.svelte.js';
+	import { isWebAuthnSupported } from '#lib/passkeys.js';
+	import { getSettings } from '#lib/settings.svelte.js';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 

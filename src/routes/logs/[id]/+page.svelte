@@ -1,11 +1,11 @@
 <script>
-	import NoteEditor from '$lib/components/NoteEditor.svelte';
-	import MarkdownNote from '$lib/components/MarkdownNote.svelte';
-	import { NOTE_LIMIT, noteLength } from '$lib/markdown.js';
+	import NoteEditor from '#lib/components/NoteEditor.svelte';
+	import MarkdownNote from '#lib/components/MarkdownNote.svelte';
+	import { NOTE_LIMIT, noteLength } from '#lib/markdown.js';
 	import { page } from '$app/state';
-	import { getAuth } from '$lib/auth.svelte.js';
+	import { getAuth } from '#lib/auth.svelte.js';
 	import { goto } from '$app/navigation';
-	import { apiGet, apiPost, apiPut, apiDelete } from '$lib/api.js';
+	import { apiGet, apiPost, apiPut, apiDelete } from '#lib/api.js';
 
 	const auth = getAuth();
 

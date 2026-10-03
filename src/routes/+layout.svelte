@@ -1,8 +1,8 @@
 <script>
 	let { children } = $props();
 	import "../app.css";
-	import { getAuth, checkAuth, logout } from '$lib/auth.svelte.js';
-	import { loadSettings } from '$lib/settings.svelte.js';
+	import { getAuth, checkAuth, logout } from '#lib/auth.svelte.js';
+	import { loadSettings } from '#lib/settings.svelte.js';
 
 	const auth = getAuth();
 

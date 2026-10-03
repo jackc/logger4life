@@ -27,6 +27,7 @@
     "@simplewebauthn/browser": "^14.0.0",
     "@tailwindcss/vite": "^4.1.18",
     "codemirror": "^6.0.2",
+    "markdown-it": "^15.0.2",
     "tailwindcss": "^4.1.18"
   }
 }

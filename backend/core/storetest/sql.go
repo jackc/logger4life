@@ -63,7 +63,7 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 	t.Run("returns a user's own rows with their columns", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins", doseField())
-		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt()); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt(), ""); err != nil {
 			t.Fatal(err)
 		}
 
@@ -116,7 +116,7 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		stranger := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Private", doseField())
-		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt()); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt(), ""); err != nil {
 			t.Fatal(err)
 		}
 
@@ -238,7 +238,7 @@ func RunUserSQLExecutor(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Bulk")
 		for range 3 {
-			if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt()); err != nil {
+			if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt(), ""); err != nil {
 				t.Fatal(err)
 			}
 		}

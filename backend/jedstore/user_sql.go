@@ -140,7 +140,7 @@ func (s *Store) ExecuteUserSQL(ctx context.Context, userID, query string) (core.
 		)`,
 		`CREATE TEMP TABLE log_entries (
 			id text, log_id text, user_id text, user_username varchar(30), fields jsonb,
-			occurred_at timestamptz, created_at timestamptz, updated_at timestamptz
+			occurred_at timestamptz, created_at timestamptz, updated_at timestamptz, note text
 		)`,
 	}
 	for i, statement := range setup {
@@ -204,7 +204,7 @@ func (s *Store) ExecuteUserSQL(ctx context.Context, userID, query string) (core.
 
 		_, err = tx.Exec(ctx, `INSERT INTO log_entries
 			SELECT le.id, le.log_id, le.user_id, u.username, le.fields,
-			       le.occurred_at, le.created_at, le.updated_at
+			       le.occurred_at, le.created_at, le.updated_at, le.note
 			FROM all_log_entries le JOIN users u ON u.id = le.user_id
 			WHERE le.log_id IN (SELECT id FROM logs)`)
 		return err

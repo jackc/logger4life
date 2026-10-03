@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/logger4life/backend/domain"
 )
@@ -13,18 +14,22 @@ var ErrLogEntryNotFound = errors.New("entry not found")
 
 type LogEntryStore interface {
 	LogFieldDefinitions(context.Context, string, string) ([]domain.FieldDefinition, error)
-	CreateLogEntry(context.Context, string, string, string, map[string]any, time.Time) (domain.LogEntry, error)
+	CreateLogEntry(context.Context, string, string, string, map[string]any, time.Time, string) (domain.LogEntry, error)
 	ListLogEntries(context.Context, string, string) ([]domain.LogEntry, error)
-	UpdateLogEntry(context.Context, string, string, string, map[string]any, time.Time) (domain.LogEntry, error)
+	UpdateLogEntry(context.Context, string, string, string, map[string]any, time.Time, *string) (domain.LogEntry, error)
 	DeleteLogEntry(context.Context, string, string, string) error
 }
 
 type CreateLogEntryParams struct {
+	Note   string         `json:"note"`
 	LogID  string         `json:"log_id"`
 	Fields map[string]any `json:"fields"`
 }
 
 func (p *CreateLogEntryParams) Validate() error {
+	if utf8.RuneCountInString(p.Note) > 20000 {
+		return fmt.Errorf("note must be at most 20000 characters")
+	}
 	if e := validID("log_id", p.LogID); e != nil {
 		return e
 	}
@@ -51,7 +56,7 @@ var CreateLogEntry = Define(ActionDef[CreateLogEntryParams, domain.LogEntry]{Nam
 		return domain.LogEntry{}, e
 	}
 	occurredAt := time.Now().UTC().Truncate(time.Microsecond)
-	return c.entries.CreateLogEntry(ctx, entryID, u, p.LogID, p.Fields, occurredAt)
+	return c.entries.CreateLogEntry(ctx, entryID, u, p.LogID, p.Fields, occurredAt, p.Note)
 }})
 
 type ListLogEntriesParams struct {
@@ -69,6 +74,7 @@ var ListLogEntries = Define(ActionDef[ListLogEntriesParams, []domain.LogEntry]{N
 }})
 
 type UpdateLogEntryParams struct {
+	Note       *string        `json:"note"`
 	LogID      string         `json:"log_id"`
 	EntryID    string         `json:"entry_id"`
 	Fields     map[string]any `json:"fields"`
@@ -76,6 +82,9 @@ type UpdateLogEntryParams struct {
 }
 
 func (p *UpdateLogEntryParams) Validate() error {
+	if p.Note != nil && utf8.RuneCountInString(*p.Note) > 20000 {
+		return fmt.Errorf("note must be at most 20000 characters")
+	}
 	if e := validID("log_id", p.LogID); e != nil {
 		return e
 	}
@@ -103,7 +112,7 @@ var UpdateLogEntry = Define(ActionDef[UpdateLogEntryParams, domain.LogEntry]{Nam
 	if e = domain.ValidateFieldValues(defs, p.Fields); e != nil {
 		return domain.LogEntry{}, &ValidationError{Action: "update_log_entry", Err: e}
 	}
-	return c.entries.UpdateLogEntry(ctx, u, p.LogID, p.EntryID, p.Fields, p.OccurredAt)
+	return c.entries.UpdateLogEntry(ctx, u, p.LogID, p.EntryID, p.Fields, p.OccurredAt, p.Note)
 }})
 
 type DeleteLogEntryParams struct {

@@ -1,10 +1,17 @@
 <script>
+	import NoteEditor from '$lib/components/NoteEditor.svelte';
+	import MarkdownNote from '$lib/components/MarkdownNote.svelte';
+	import { NOTE_LIMIT, noteLength } from '$lib/markdown.js';
 	import { page } from '$app/state';
 	import { getAuth } from '$lib/auth.svelte.js';
 	import { goto } from '$app/navigation';
 	import { apiGet, apiPost, apiPut, apiDelete } from '$lib/api.js';
 
 	const auth = getAuth();
+
+	let note = $state('');
+	let noteOpen = $state(false);
+	let editNote = $state('');
 
 	let log = $state(null);
 	let entries = $state([]);
@@ -37,6 +44,8 @@
 	const isShared = $derived(!isOwner || sharedUsers.length > 0);
 
 	function resetFieldValues() {
+		note = '';
+		noteOpen = false;
 		if (log?.fields?.length > 0) {
 			const initial = {};
 			for (const f of log.fields) {
@@ -82,6 +91,10 @@
 
 	async function logEntry(e) {
 		if (e) e.preventDefault();
+		if (noteLength(note) > NOTE_LIMIT) {
+			error = 'Note must be at most 20,000 characters.';
+			return;
+		}
 		logging = true;
 		error = '';
 		try {
@@ -96,7 +109,7 @@
 					}
 				}
 			}
-			const entry = await apiPost(`/api/logs/${logID}/entries`, { fields: payload });
+			const entry = await apiPost(`/api/logs/${logID}/entries`, { fields: payload, note });
 			entries = [entry, ...entries];
 			resetFieldValues();
 		} catch (err) {
@@ -117,6 +130,7 @@
 
 	function startEditing(entry) {
 		editingEntryId = entry.id;
+		editNote = entry.note || '';
 		editError = '';
 		if (log?.fields?.length > 0) {
 			const initial = {};
@@ -162,6 +176,10 @@
 
 	async function saveEntry(e) {
 		if (e) e.preventDefault();
+		if (noteLength(editNote) > NOTE_LIMIT) {
+			editError = 'Note must be at most 20,000 characters.';
+			return;
+		}
 		saving = true;
 		editError = '';
 		try {
@@ -179,7 +197,7 @@
 			const occurredAt = new Date(editOccurredAt).toISOString();
 			const updated = await apiPut(
 				`/api/logs/${logID}/entries/${editingEntryId}`,
-				{ fields: payload, occurred_at: occurredAt }
+				{ fields: payload, occurred_at: occurredAt, note: editNote }
 			);
 			entries = entries.map(en => en.id === updated.id ? updated : en);
 			editingEntryId = null;
@@ -494,6 +512,7 @@
 							{/if}
 						</div>
 					{/each}
+					<NoteEditor bind:value={note} bind:open={noteOpen} disabled={logging} />
 					<button
 						type="submit"
 						disabled={logging}
@@ -503,13 +522,16 @@
 					</button>
 				</form>
 			{:else}
-				<button
-					onclick={logEntry}
-					disabled={logging}
-					class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg text-xl font-semibold hover:bg-blue-700 disabled:opacity-50 mb-6"
-				>
-					{logging ? 'Logging...' : 'Log It!'}
-				</button>
+				<div class="bg-white rounded-lg shadow p-4 mb-6 space-y-3">
+					<NoteEditor bind:value={note} bind:open={noteOpen} disabled={logging} />
+					<button
+						onclick={logEntry}
+						disabled={logging}
+						class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg text-xl font-semibold hover:bg-blue-700 disabled:opacity-50"
+					>
+						{logging ? 'Logging...' : 'Log It!'}
+					</button>
+				</div>
 			{/if}
 
 			{#if error}
@@ -520,7 +542,7 @@
 				<p class="text-gray-500">No entries yet. Tap the button above to log one.</p>
 			{:else}
 				<div class="bg-white rounded-lg shadow divide-y">
-					{#each entries as entry}
+					{#each entries as entry (entry.id)}
 						<div class="px-4 py-3 text-gray-700" data-testid="log-entry">
 							{#if editingEntryId === entry.id}
 								<form onsubmit={saveEntry} class="space-y-3">
@@ -564,6 +586,7 @@
 											</div>
 										{/each}
 									{/if}
+									<NoteEditor bind:value={editNote} open={true} disabled={saving} />
 									{#if editError}
 										<p class="text-red-600 text-sm">{editError}</p>
 									{/if}
@@ -587,7 +610,7 @@
 								</form>
 							{:else}
 								<div class="flex items-start justify-between">
-									<div>
+									<div class="min-w-0 flex-1">
 										<div>
 									{formatTimestamp(entry.occurred_at)}
 									{#if isShared}
@@ -601,6 +624,9 @@
 													<span class="mr-3">{name}: <span class="font-medium text-gray-700">{def?.type === 'boolean' ? (value ? 'Yes' : 'No') : value}</span></span>
 												{/each}
 											</div>
+										{/if}
+										{#if entry.note}
+											<div class="mt-2" data-testid="entry-note"><MarkdownNote note={entry.note} collapsible /></div>
 										{/if}
 									</div>
 									<div class="flex gap-2 ml-2 shrink-0">

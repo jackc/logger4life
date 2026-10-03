@@ -27,6 +27,19 @@ Fields can be marked as required or optional. Each log supports up to 20 custom 
 
 The home page provides a quick-log interface with cards for all your logs. Logs without required fields can be recorded in a single tap.
 
+### Entry Notes
+
+Every entry can include an optional Markdown note of up to 20,000 characters.
+Use **Add note** on a quick-log card or log page, with Write and Preview modes.
+Notes support headings, lists, emphasis, links, blockquotes, and code; raw HTML
+and embedded images are disabled. Long notes collapse in entry history and can
+be expanded or edited later. Shared notes follow the entry's permissions.
+
+Notes are stored as Markdown text and available as `log_entries.note` in SQL.
+API entry creation accepts `note`; updates preserve it when omitted and clear it
+when sent as an empty string. Apply PostgreSQL migration **017** before running
+this version; jed migration **005** applies automatically.
+
 ### Entry Management
 
 * View all entries for a log, sorted by most recent

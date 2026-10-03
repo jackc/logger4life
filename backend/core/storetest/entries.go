@@ -20,6 +20,36 @@ import (
 // every log at once, which is why it is tested here directly.
 func RunLogEntryStore(t *testing.T, ports Ports) {
 	ctx := context.Background()
+	t.Run("notes round trip, remain queryable, and preserve omitted updates", func(t *testing.T) {
+		owner := newUser(t, ports)
+		log := newLog(t, ports, owner.ID, "Notes")
+		note := "# Observation\n\n**Better** today 🙂"
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt(), note)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if entry.Note != note {
+			t.Fatalf("created note = %q", entry.Note)
+		}
+		entries, err := ports.ListLogEntries(ctx, owner.ID, log.ID)
+		if err != nil || len(entries) != 1 || entries[0].Note != note {
+			t.Fatalf("listed entries = %#v, %v", entries, err)
+		}
+		result, err := ports.ExecuteUserSQL(ctx, owner.ID, "SELECT note FROM log_entries")
+		if err != nil || len(result.Rows) != 1 || (result.Rows[0][0] == nil || *result.Rows[0][0] != note) {
+			t.Fatalf("SQL note = %#v, %v", result, err)
+		}
+		updated, err := ports.UpdateLogEntry(ctx, owner.ID, log.ID, entry.ID, map[string]any{}, entry.OccurredAt, nil)
+		if err != nil || updated.Note != note {
+			t.Fatalf("omitted note = %#v, %v", updated, err)
+		}
+		for _, replacement := range []string{"Changed *note*", ""} {
+			updated, err = ports.UpdateLogEntry(ctx, owner.ID, log.ID, entry.ID, map[string]any{}, entry.OccurredAt, &replacement)
+			if err != nil || updated.Note != replacement {
+				t.Fatalf("updated note = %#v, %v", updated, err)
+			}
+		}
+	})
 	occurred := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 
 	t.Run("returns the definitions a log was created with", func(t *testing.T) {
@@ -60,7 +90,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins", doseField())
 
-		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt())
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt(), "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +114,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Water")
 
-		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt())
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt(), "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +146,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 
 		var ids []string
 		for range 3 {
-			entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt())
+			entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt(), "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -124,7 +154,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		}
 		// Give them distinct times in a known order.
 		for i, id := range ids {
-			if _, err := ports.UpdateLogEntry(ctx, owner.ID, log.ID, id, map[string]any{}, occurred.Add(time.Duration(i)*time.Hour)); err != nil {
+			if _, err := ports.UpdateLogEntry(ctx, owner.ID, log.ID, id, map[string]any{}, occurred.Add(time.Duration(i)*time.Hour), nil); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -149,12 +179,12 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 	t.Run("updates an entry in place", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins", doseField())
-		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt())
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{"dose": float64(500)}, newOccurredAt(), "")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		updated, err := ports.UpdateLogEntry(ctx, owner.ID, log.ID, entry.ID, map[string]any{"dose": float64(250)}, occurred)
+		updated, err := ports.UpdateLogEntry(ctx, owner.ID, log.ID, entry.ID, map[string]any{"dose": float64(250)}, occurred, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -175,12 +205,12 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		visible := newLog(t, ports, owner.ID, "Visible")
 		other := newLog(t, ports, owner.ID, "Other")
-		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, other.ID, map[string]any{}, newOccurredAt())
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, other.ID, map[string]any{}, newOccurredAt(), "")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if _, err := ports.UpdateLogEntry(ctx, owner.ID, visible.ID, entry.ID, map[string]any{}, occurred); !errors.Is(err, core.ErrLogEntryNotFound) {
+		if _, err := ports.UpdateLogEntry(ctx, owner.ID, visible.ID, entry.ID, map[string]any{}, occurred, nil); !errors.Is(err, core.ErrLogEntryNotFound) {
 			t.Errorf("updating through the wrong log = %v, want ErrLogEntryNotFound", err)
 		}
 		if err := ports.DeleteLogEntry(ctx, owner.ID, visible.ID, entry.ID); !errors.Is(err, core.ErrLogEntryNotFound) {
@@ -197,7 +227,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins")
 
-		if _, err := ports.UpdateLogEntry(ctx, owner.ID, log.ID, UnknownID, map[string]any{}, occurred); !errors.Is(err, core.ErrLogEntryNotFound) {
+		if _, err := ports.UpdateLogEntry(ctx, owner.ID, log.ID, UnknownID, map[string]any{}, occurred, nil); !errors.Is(err, core.ErrLogEntryNotFound) {
 			t.Errorf("UpdateLogEntry error = %v, want ErrLogEntryNotFound", err)
 		}
 		if err := ports.DeleteLogEntry(ctx, owner.ID, log.ID, UnknownID); !errors.Is(err, core.ErrLogEntryNotFound) {
@@ -208,7 +238,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 	t.Run("deletes an entry", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Vitamins")
-		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt())
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt(), "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -226,7 +256,7 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 	t.Run("discards entries when their log is deleted", func(t *testing.T) {
 		owner := newUser(t, ports)
 		log := newLog(t, ports, owner.ID, "Ephemeral")
-		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt()); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), owner.ID, log.ID, map[string]any{}, newOccurredAt(), ""); err != nil {
 			t.Fatal(err)
 		}
 		if err := ports.DeleteLog(ctx, owner.ID, log.ID); err != nil {

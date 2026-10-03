@@ -19,7 +19,7 @@ func (s *Store) LogFieldDefinitions(ctx context.Context, userID, logID string) (
 }
 func scanLogEntry(row rowScanner) (domain.LogEntry, error) {
 	var e domain.LogEntry
-	err := row.Scan(&e.ID, &e.LogID, &e.UserID, &e.Username, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.ID, &e.LogID, &e.UserID, &e.Username, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt, &e.Note)
 	if e.Fields == nil {
 		e.Fields = map[string]any{}
 	}
@@ -28,18 +28,18 @@ func scanLogEntry(row rowScanner) (domain.LogEntry, error) {
 
 func scanStoredLogEntry(row rowScanner) (domain.LogEntry, error) {
 	var e domain.LogEntry
-	err := row.Scan(&e.ID, &e.LogID, &e.UserID, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.ID, &e.LogID, &e.UserID, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt, &e.Note)
 	if e.Fields == nil {
 		e.Fields = map[string]any{}
 	}
 	return e, err
 }
 
-func (s *Store) CreateLogEntry(ctx context.Context, id, userID, logID string, fields map[string]any, occurredAt time.Time) (domain.LogEntry, error) {
+func (s *Store) CreateLogEntry(ctx context.Context, id, userID, logID string, fields map[string]any, occurredAt time.Time, note string) (domain.LogEntry, error) {
 	var entry domain.LogEntry
 	err := s.InTx(ctx, func(ctx context.Context) error {
 		var err error
-		entry, err = scanStoredLogEntry(s.conn(ctx).QueryRow(ctx, `INSERT INTO all_log_entries(id,log_id,user_id,fields,occurred_at) VALUES($1,$2,$3,$4,$5) RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at`, id, logID, userID, fields, occurredAt))
+		entry, err = scanStoredLogEntry(s.conn(ctx).QueryRow(ctx, `INSERT INTO all_log_entries(id,log_id,user_id,fields,occurred_at,note) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at,note`, id, logID, userID, fields, occurredAt, note))
 		if err != nil {
 			return err
 		}
@@ -51,7 +51,7 @@ func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]dom
 	if _, e := s.LogFieldDefinitions(ctx, userID, logID); e != nil {
 		return nil, e
 	}
-	rows, e := s.conn(ctx).Query(ctx, `SELECT le.id,le.log_id,le.user_id,u.username,le.fields,le.occurred_at,le.created_at,le.updated_at FROM all_log_entries le JOIN users u ON u.id=le.user_id WHERE le.log_id=$1 ORDER BY le.occurred_at DESC`, logID)
+	rows, e := s.conn(ctx).Query(ctx, `SELECT le.id,le.log_id,le.user_id,u.username,le.fields,le.occurred_at,le.created_at,le.updated_at,le.note FROM all_log_entries le JOIN users u ON u.id=le.user_id WHERE le.log_id=$1 ORDER BY le.occurred_at DESC`, logID)
 	if e != nil {
 		return nil, e
 	}
@@ -66,11 +66,11 @@ func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]dom
 	}
 	return out, rows.Err()
 }
-func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID string, fields map[string]any, occurred time.Time) (domain.LogEntry, error) {
+func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID string, fields map[string]any, occurred time.Time, note *string) (domain.LogEntry, error) {
 	var v domain.LogEntry
 	e := s.InTx(ctx, func(ctx context.Context) error {
 		var err error
-		v, err = scanStoredLogEntry(s.conn(ctx).QueryRow(ctx, `UPDATE all_log_entries SET fields=$1,occurred_at=$2,updated_at=now() WHERE id=$3 AND log_id=$4 RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at`, fields, occurred, entryID, logID))
+		v, err = scanStoredLogEntry(s.conn(ctx).QueryRow(ctx, `UPDATE all_log_entries SET fields=$1,occurred_at=$2,updated_at=now(),note=COALESCE($5,note) WHERE id=$3 AND log_id=$4 RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at,note`, fields, occurred, entryID, logID, note))
 		if err != nil {
 			return err
 		}

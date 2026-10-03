@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ func (s *fakeLogEntryStore) LogFieldDefinitions(_ context.Context, userID, logID
 	return s.definitions, s.definitionsErr
 }
 
-func (s *fakeLogEntryStore) CreateLogEntry(_ context.Context, entryID, userID, logID string, fields map[string]any, occurredAt time.Time) (domain.LogEntry, error) {
+func (s *fakeLogEntryStore) CreateLogEntry(_ context.Context, entryID, userID, logID string, fields map[string]any, occurredAt time.Time, note string) (domain.LogEntry, error) {
 	s.writeCalls++
 	s.writeUserID, s.writeLogID, s.writeEntryID, s.writeFields, s.occurredAt = userID, logID, entryID, fields, occurredAt
 	return s.entry, s.err
@@ -46,7 +47,7 @@ func (s *fakeLogEntryStore) ListLogEntries(_ context.Context, userID, logID stri
 	return s.entries, s.err
 }
 
-func (s *fakeLogEntryStore) UpdateLogEntry(_ context.Context, userID, logID, entryID string, fields map[string]any, occurredAt time.Time) (domain.LogEntry, error) {
+func (s *fakeLogEntryStore) UpdateLogEntry(_ context.Context, userID, logID, entryID string, fields map[string]any, occurredAt time.Time, note *string) (domain.LogEntry, error) {
 	s.writeCalls++
 	s.writeUserID, s.writeLogID, s.writeEntryID = userID, logID, entryID
 	s.writeFields, s.occurredAt = fields, occurredAt
@@ -236,5 +237,18 @@ func TestLogEntryActionsPropagateStoreSentinels(t *testing.T) {
 	}
 	if _, err := DeleteLogEntry.Call(ctx, app, DeleteLogEntryParams{LogID: testID("log-1"), EntryID: testID("entry-1")}); !errors.Is(err, ErrLogEntryNotFound) {
 		t.Fatalf("delete_log_entry error = %v, want ErrLogEntryNotFound", err)
+	}
+}
+
+func TestEntryNoteLimit(t *testing.T) {
+	for _, length := range []int{20000, 20001} {
+		note := strings.Repeat("🙂", length)
+		create := CreateLogEntryParams{LogID: testID("log"), Note: note}
+		update := UpdateLogEntryParams{LogID: testID("log"), EntryID: testID("entry"), Note: &note, OccurredAt: time.Now()}
+		for _, err := range []error{create.Validate(), update.Validate()} {
+			if (err != nil) != (length > 20000) {
+				t.Fatalf("length %d: %v", length, err)
+			}
+		}
 	}
 }

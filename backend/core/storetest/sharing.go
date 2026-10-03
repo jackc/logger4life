@@ -133,7 +133,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 		}
 
 		// A member may write entries; that is the point of sharing.
-		if _, err := ports.CreateLogEntry(ctx, newRowID(), joiner.ID, log.ID, map[string]any{"dose": float64(1)}, newOccurredAt()); err != nil {
+		if _, err := ports.CreateLogEntry(ctx, newRowID(), joiner.ID, log.ID, map[string]any{"dose": float64(1)}, newOccurredAt(), ""); err != nil {
 			t.Errorf("a member writing an entry = %v, want it allowed", err)
 		}
 		_ = owner
@@ -198,7 +198,7 @@ func RunSharingStore(t *testing.T, ports Ports) {
 		if _, err := ports.JoinSharedLog(ctx, newRowID(), joiner.ID, token); err != nil {
 			t.Fatal(err)
 		}
-		entry, err := ports.CreateLogEntry(ctx, newRowID(), joiner.ID, log.ID, map[string]any{"dose": float64(1)}, newOccurredAt())
+		entry, err := ports.CreateLogEntry(ctx, newRowID(), joiner.ID, log.ID, map[string]any{"dose": float64(1)}, newOccurredAt(), "")
 		if err != nil {
 			t.Fatal(err)
 		}

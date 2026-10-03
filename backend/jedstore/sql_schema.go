@@ -24,6 +24,7 @@ func (s *Store) ListSQLSchemaViews(context.Context) ([]*core.SQLSchemaView, erro
 				{Name: "occurred_at", DataType: "timestamp with time zone", Comment: stringPtr("When the event being logged occurred.")},
 				{Name: "created_at", DataType: "timestamp with time zone", Comment: stringPtr("When the entry record was created.")},
 				{Name: "updated_at", DataType: "timestamp with time zone", Comment: stringPtr("When the entry record was last updated.")},
+				{Name: "note", DataType: "text", Comment: stringPtr("Optional Markdown note for the entry.")},
 			},
 		},
 		{

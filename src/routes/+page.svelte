@@ -1,4 +1,6 @@
 <script>
+	import NoteEditor from '$lib/components/NoteEditor.svelte';
+	import { NOTE_LIMIT, noteLength } from '$lib/markdown.js';
 	import { getAuth } from '$lib/auth.svelte.js';
 	import { apiGet, apiPost, apiPut } from '$lib/api.js';
 
@@ -29,6 +31,8 @@
 		for (const log of logsList) {
 			state[log.id] = {
 				fieldValues: buildInitialFieldValues(log),
+				note: '',
+				noteOpen: false,
 				logging: false,
 				error: '',
 				success: false,
@@ -64,6 +68,10 @@
 
 	async function logEntry(log) {
 		const state = cardState[log.id];
+		if (noteLength(state.note) > NOTE_LIMIT) {
+			state.error = 'Note must be at most 20,000 characters.';
+			return;
+		}
 		state.logging = true;
 		state.error = '';
 		state.success = false;
@@ -80,8 +88,10 @@
 					}
 				}
 			}
-			await apiPost(`/api/logs/${log.id}/entries`, { fields: payload });
+			await apiPost(`/api/logs/${log.id}/entries`, { fields: payload, note: state.note });
 			state.fieldValues = buildInitialFieldValues(log);
+			state.note = '';
+			state.noteOpen = false;
 			state.success = true;
 
 			setTimeout(() => {
@@ -211,6 +221,7 @@
 												{/if}
 											</div>
 										{/each}
+										<NoteEditor bind:value={state.note} bind:open={state.noteOpen} disabled={state.logging} />
 										<button
 											type="submit"
 											disabled={state.logging}
@@ -226,6 +237,7 @@
 										</button>
 									</form>
 								{:else}
+									<NoteEditor bind:value={state.note} bind:open={state.noteOpen} disabled={state.logging} />
 									<button
 										onclick={() => logEntry(log)}
 										disabled={state.logging}

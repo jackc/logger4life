@@ -43,15 +43,18 @@ type updateHomePositionRequest struct {
 }
 
 type createLogEntryRequest struct {
+	Note   string         `json:"note"`
 	Fields map[string]any `json:"fields"`
 }
 
 type updateLogEntryRequest struct {
+	Note       *string        `json:"note"`
 	Fields     map[string]any `json:"fields"`
 	OccurredAt time.Time      `json:"occurred_at"`
 }
 
 type logEntryResponse struct {
+	Note       string         `json:"note"`
 	ID         string         `json:"id"`
 	LogID      string         `json:"log_id"`
 	UserID     string         `json:"user_id"`
@@ -198,7 +201,7 @@ func handleCreateLogEntry(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		v, err := core.CreateLogEntry.Call(actionContext(r), app, core.CreateLogEntryParams{LogID: chi.URLParam(r, "logID"), Fields: body.Fields})
+		v, err := core.CreateLogEntry.Call(actionContext(r), app, core.CreateLogEntryParams{LogID: chi.URLParam(r, "logID"), Fields: body.Fields, Note: body.Note})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return
@@ -222,7 +225,7 @@ func handleUpdateLogEntry(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		v, err := core.UpdateLogEntry.Call(actionContext(r), app, core.UpdateLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID"), Fields: body.Fields, OccurredAt: body.OccurredAt})
+		v, err := core.UpdateLogEntry.Call(actionContext(r), app, core.UpdateLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID"), Fields: body.Fields, Note: body.Note, OccurredAt: body.OccurredAt})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return

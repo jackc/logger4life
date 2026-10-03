@@ -5,6 +5,7 @@ import "time"
 // LogEntry is the business representation of a recorded event. It contains
 // no persistence-specific values.
 type LogEntry struct {
+	Note       string         `json:"note"`
 	ID         string         `json:"id"`
 	LogID      string         `json:"log_id"`
 	UserID     string         `json:"user_id"`

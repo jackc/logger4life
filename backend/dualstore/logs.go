@@ -44,13 +44,13 @@ func (s *Store) LogFieldDefinitions(ctx context.Context, userID, logID string) (
 		func() ([]domain.FieldDefinition, error) { return s.secondary.LogFieldDefinitions(ctx, userID, logID) })
 }
 
-func (s *Store) CreateLogEntry(ctx context.Context, id, userID, logID string, fields map[string]any, occurredAt time.Time) (domain.LogEntry, error) {
+func (s *Store) CreateLogEntry(ctx context.Context, id, userID, logID string, fields map[string]any, occurredAt time.Time, note string) (domain.LogEntry, error) {
 	return compareCall("CreateLogEntry",
 		func() (domain.LogEntry, error) {
-			return s.primary.CreateLogEntry(ctx, id, userID, logID, fields, occurredAt)
+			return s.primary.CreateLogEntry(ctx, id, userID, logID, fields, occurredAt, note)
 		},
 		func() (domain.LogEntry, error) {
-			return s.secondary.CreateLogEntry(ctx, id, userID, logID, fields, occurredAt)
+			return s.secondary.CreateLogEntry(ctx, id, userID, logID, fields, occurredAt, note)
 		})
 }
 
@@ -60,13 +60,13 @@ func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]dom
 		func() ([]domain.LogEntry, error) { return s.secondary.ListLogEntries(ctx, userID, logID) })
 }
 
-func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID string, fields map[string]any, occurredAt time.Time) (domain.LogEntry, error) {
+func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID string, fields map[string]any, occurredAt time.Time, note *string) (domain.LogEntry, error) {
 	return compareCall("UpdateLogEntry",
 		func() (domain.LogEntry, error) {
-			return s.primary.UpdateLogEntry(ctx, userID, logID, entryID, fields, occurredAt)
+			return s.primary.UpdateLogEntry(ctx, userID, logID, entryID, fields, occurredAt, note)
 		},
 		func() (domain.LogEntry, error) {
-			return s.secondary.UpdateLogEntry(ctx, userID, logID, entryID, fields, occurredAt)
+			return s.secondary.UpdateLogEntry(ctx, userID, logID, entryID, fields, occurredAt, note)
 		})
 }
 

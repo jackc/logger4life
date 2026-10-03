@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -1919,4 +1920,28 @@ func TestRemoveShare_RevokesAccessNotJustTheListing(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	_, entries := getJSONArray(srv.URL+"/api/logs/"+logID+"/entries", aliceCookies)
 	assert.Len(t, entries, 1)
+}
+
+func TestEntryNotes(t *testing.T) {
+	t.Parallel()
+	srv := setupTestRouter(t)
+	defer srv.Close()
+	cookies := registerUser(t, srv.URL, "alice")
+	_, log := postJSON(srv.URL+"/api/logs", map[string]any{"name": "Notes"}, cookies)
+	url := srv.URL + "/api/logs/" + log["id"].(string) + "/entries"
+	note := strings.Repeat("🙂", 20000)
+	resp, entry := postJSON(url, map[string]any{"note": note}, cookies)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, note, entry["note"])
+	resp, _ = postJSON(url, map[string]any{"note": note + "x"}, cookies)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	updateURL := url + "/" + entry["id"].(string)
+	resp, _ = putJSON(updateURL, map[string]any{"occurred_at": entry["occurred_at"], "note": note + "x"}, cookies)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	resp, updated := putJSON(updateURL, map[string]any{"occurred_at": entry["occurred_at"]}, cookies)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, note, updated["note"])
+	resp, updated = putJSON(updateURL, map[string]any{"occurred_at": entry["occurred_at"], "note": ""}, cookies)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "", updated["note"])
 }

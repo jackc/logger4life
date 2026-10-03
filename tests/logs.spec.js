@@ -380,3 +380,52 @@ test('reorder logs with up arrow', async ({ page }) => {
 	await expect(rows.nth(0)).toContainText('Second');
 	await expect(rows.nth(1)).toContainText('First');
 });
+
+test('Markdown notes can be previewed, saved, edited, and cleared', async ({ page }) => {
+	await registerAndLogin(page);
+	await page.fill('input[name="log-name"]', 'Notes');
+	await page.getByRole('button', { name: 'Create Log', exact: true }).click();
+	await page.getByRole('link', { name: 'Notes', exact: true }).click();
+	await page.getByRole('button', { name: 'Add note', exact: true }).click();
+	const note = '# Observation\n\n**Better** today\n\n- Rested\n\n> Good\n\n`code`\n\n[Safe](https://example.com)\n\n<script>alert(1)</script>\n\n[Bad](javascript:alert(1))\n\n![Image](https://example.com/image.png)';
+	await page.getByRole('textbox', { name: 'Note', exact: true }).fill(note);
+	await page.getByRole('button', { name: 'Preview', exact: true }).click();
+	const preview = page.getByLabel('Note preview');
+	await expect(preview.locator('h1')).toHaveText('Observation');
+	await expect(preview.locator('strong')).toHaveText('Better');
+	await expect(preview.locator('script, img, a[href^="javascript:"]')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Log It!', exact: true }).click();
+	const entry = page.getByTestId('log-entry').first();
+	await expect(entry.locator('h1')).toHaveText('Observation');
+	await page.reload();
+	await expect(entry.locator('strong')).toHaveText('Better');
+	await entry.getByRole('button', { name: 'Edit', exact: true }).click();
+	await expect(entry.getByRole('textbox', { name: 'Note', exact: true })).toHaveValue(note);
+	await entry.getByRole('textbox', { name: 'Note', exact: true }).fill('Updated **note**');
+	await entry.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(entry.getByTestId('entry-note')).toHaveText('Updated note');
+	await entry.getByRole('button', { name: 'Edit', exact: true }).click();
+	await entry.getByRole('textbox', { name: 'Note', exact: true }).fill('');
+	await entry.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(entry.getByTestId('entry-note')).toHaveCount(0);
+});
+
+test('quick log supports long notes and enforces the Unicode character limit', async ({ page }) => {
+	await registerAndLogin(page);
+	await page.fill('input[name="log-name"]', 'Long notes');
+	await page.getByRole('button', { name: 'Create Log', exact: true }).click();
+	await page.getByRole('link', { name: 'Long notes', exact: true }).waitFor();
+	await page.goto('/');
+	const card = page.getByTestId('log-card').filter({ hasText: 'Long notes' });
+	await card.getByRole('button', { name: 'Add note', exact: true }).click();
+	await card.getByRole('textbox', { name: 'Note', exact: true }).fill('🙂'.repeat(20001));
+	await card.getByRole('button', { name: 'Log It!', exact: true }).click();
+	await expect(card.getByText('Note must be at most 20,000 characters.')).toBeVisible();
+	await card.getByRole('textbox', { name: 'Note', exact: true }).fill('🙂'.repeat(20000));
+	await card.getByRole('button', { name: 'Log It!', exact: true }).click();
+	await expect(card.getByRole('button', { name: 'Add note', exact: true })).toBeVisible();
+	await card.getByRole('link', { name: 'View entries' }).click();
+	const entry = page.getByTestId('log-entry').first();
+	await entry.getByRole('button', { name: 'Show more', exact: true }).click();
+	await expect(entry.getByRole('button', { name: 'Show less', exact: true })).toBeVisible();
+});

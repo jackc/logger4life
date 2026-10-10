@@ -124,6 +124,31 @@ its layer: database packages are confined to their persistence adapter and the
 composition root, and `backend/core` and `backend/domain` may not import
 transport or persistence at all.
 
+## Action inventory
+
+From the checkout root, run `go run ./cmd/action-inventory > actions.json`
+(also available as `mise run inventory:actions`). The development command
+exports a versioned JSON document with the core package path and an `actions`
+array sorted by action name. Entries contain `name`, `symbol` (the Go variable),
+`description`, and `source` with a repository-relative `file` and one-based
+`line` pointing to the declaration's `Define` call.
+
+The tool reads and type-checks source using the current Go build environment;
+it does not import or execute application code or start services. Test files
+are excluded. It recognizes direct package-level calls to this package's
+`Define` function, including explicit type arguments. Names and descriptions
+must be compile-time string constants. Recognized calls in unsupported forms
+or duplicate names cause an error on stderr and a nonzero exit, with no JSON
+written. No report file is maintained by hand.
+
+This is an inventory of the current declaration convention, not a general Go
+registration analysis: aliases of `Define`, other registration APIs, and
+declarations in other packages are outside its scope. A test compares the
+source inventory against the production runtime catalog to catch drift for
+the tested build. The inventory contains no policy verification, transport
+exposure, or handler analysis. Source locations refer to the checkout being
+inspected. Use `-root /path/to/logger4life` to inspect another checkout.
+
 ## Where new code goes
 
 - Generic catalog and dispatch mechanics: `action`.

@@ -124,6 +124,11 @@ depends = ["db:ready"]
 run = "scripts/dev-exec psql"
 interactive = true
 
+[tasks."inventory:actions"]
+description = "Export core action declarations and source locations as JSON"
+dir = "{{config_root}}"
+run = "go run ./cmd/action-inventory"
+
 [tasks."build:binary"]
 description = "Build the logger4life binary for the current platform"
 dir = "{{config_root}}"

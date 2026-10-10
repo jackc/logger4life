@@ -209,6 +209,7 @@ func handleCreateLogEntry(app *core.Core) http.HandlerFunc {
 		writeJSON(w, http.StatusCreated, v)
 	}
 }
+
 func handleListLogEntries(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, err := core.ListLogEntries.Call(actionContext(r), app, core.ListLogEntriesParams{LogID: chi.URLParam(r, "logID")})
@@ -219,6 +220,7 @@ func handleListLogEntries(app *core.Core) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, v)
 	}
 }
+
 func handleUpdateLogEntry(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body updateLogEntryRequest
@@ -233,6 +235,7 @@ func handleUpdateLogEntry(app *core.Core) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, v)
 	}
 }
+
 func handleDeleteLogEntry(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, err := core.DeleteLogEntry.Call(actionContext(r), app, core.DeleteLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID")})
@@ -243,6 +246,7 @@ func handleDeleteLogEntry(app *core.Core) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
 func handleUpdateLogPlacement(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body updateLogPlacementRequest
@@ -257,6 +261,7 @@ func handleUpdateLogPlacement(app *core.Core) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
 func handlePinLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body pinLogRequest
@@ -271,6 +276,7 @@ func handlePinLog(app *core.Core) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
 func handleUpdateLogHomePosition(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body updateHomePositionRequest

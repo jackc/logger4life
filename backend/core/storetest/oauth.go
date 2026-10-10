@@ -24,8 +24,10 @@ func RunOAuthFamilyRevocationConcurrency(t *testing.T, ports Ports) {
 	for i := range 20 {
 		label := fmt.Sprintf("concurrent-%s-%d", user.Username, i)
 		pair := core.OAuthTokenPair{
-			Grant: core.OAuthGrant{ClientID: client.ID, UserID: user.ID, Scope: core.OAuthScopeMCP,
-				Audience: "https://example.com", FamilyID: testUUID(label)},
+			Grant: core.OAuthGrant{
+				ClientID: client.ID, UserID: user.ID, Scope: core.OAuthScopeMCP,
+				Audience: "https://example.com", FamilyID: testUUID(label),
+			},
 			AccessTokenHash: []byte(label + "-access-1"), RefreshTokenHash: []byte(label + "-refresh-1"),
 			AccessExpiresAt: time.Now().Add(time.Hour), RefreshExpiresAt: time.Now().Add(time.Hour),
 		}

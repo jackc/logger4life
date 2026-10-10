@@ -38,18 +38,22 @@ type mcpSavedQueryStore struct{ saved core.SavedQuery }
 func (s mcpSavedQueryStore) ListSavedQueries(context.Context, string) ([]core.SavedQuery, error) {
 	return []core.SavedQuery{s.saved}, nil
 }
+
 func (s mcpSavedQueryStore) GetSavedQueryByName(_ context.Context, _, name string) (core.SavedQuery, error) {
 	if name != s.saved.Name {
 		return core.SavedQuery{}, core.ErrSavedQueryNotFound
 	}
 	return s.saved, nil
 }
+
 func (mcpSavedQueryStore) CreateSavedQuery(context.Context, string, string, string, string) (core.SavedQuery, error) {
 	return core.SavedQuery{}, errors.New("not implemented")
 }
+
 func (mcpSavedQueryStore) UpdateSavedQuery(context.Context, string, string, string, string) (core.SavedQuery, error) {
 	return core.SavedQuery{}, errors.New("not implemented")
 }
+
 func (mcpSavedQueryStore) DeleteSavedQuery(context.Context, string, string) error {
 	return errors.New("not implemented")
 }

@@ -15,8 +15,10 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-const maxPasskeyDescriptionLength = 100
-const passkeyChallengeDuration = 5 * time.Minute
+const (
+	maxPasskeyDescriptionLength = 100
+	passkeyChallengeDuration    = 5 * time.Minute
+)
 
 type PasskeyChallengeKind string
 

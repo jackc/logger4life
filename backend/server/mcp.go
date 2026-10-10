@@ -19,8 +19,10 @@ type mcpServer struct {
 	requests *keyedRateLimiter
 }
 
-type listLogsInput = core.CollectionPageParams
-type listLogsOutput = core.LogPage
+type (
+	listLogsInput  = core.CollectionPageParams
+	listLogsOutput = core.LogPage
+)
 
 type getSQLSchemaInput struct{}
 
@@ -28,8 +30,10 @@ type getSQLSchemaOutput struct {
 	Views []*core.SQLSchemaView `json:"views" jsonschema:"views the user can query in the sql_query schema, with their columns and comments"`
 }
 
-type listSavedQueriesInput = core.CollectionPageParams
-type listSavedQueriesOutput = core.SavedQueryPage
+type (
+	listSavedQueriesInput  = core.CollectionPageParams
+	listSavedQueriesOutput = core.SavedQueryPage
+)
 
 type runSavedQueryInput struct {
 	Name string `json:"name" jsonschema:"name of the saved query to run (case-sensitive, as returned by list_saved_queries)"`

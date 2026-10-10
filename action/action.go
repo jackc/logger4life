@@ -40,8 +40,10 @@ type Invocation[M any] struct {
 	Action Info[M]
 	Params any
 }
-type Handler[M any] func(context.Context, Invocation[M]) (any, error)
-type Middleware[M any] func(Handler[M]) Handler[M]
+type (
+	Handler[M any]    func(context.Context, Invocation[M]) (any, error)
+	Middleware[M any] func(Handler[M]) Handler[M]
+)
 
 // AnyAction is the type-erased view used by catalogs and dynamic callers.
 // D is the application dependency type and M is its metadata type.
@@ -123,6 +125,7 @@ func (a *Action[D, M, P, R]) Call(ctx context.Context, d *Dispatcher[D, M], depe
 	}
 	return r, nil
 }
+
 func (a *Action[D, M, P, R]) Invoke(ctx context.Context, d *Dispatcher[D, M], dependencies D, raw any) (any, error) {
 	if a.registry != d.registry {
 		return nil, ErrWrongRegistry

@@ -66,6 +66,7 @@ func (s *Store) UpdateLogPlacement(ctx context.Context, userID, logID string, ch
 		return e
 	})
 }
+
 func (s *Store) PinLog(ctx context.Context, userID, logID string, change domain.HomePinChange) error {
 	return s.InTx(ctx, func(ctx context.Context) error {
 		tx := s.conn(ctx)
@@ -88,6 +89,7 @@ func (s *Store) PinLog(ctx context.Context, userID, logID string, change domain.
 		return e
 	})
 }
+
 func (s *Store) UpdateLogHomePosition(ctx context.Context, userID, logID string, change domain.HomeOrderChange) error {
 	pos := change.HomePosition
 	return s.InTx(ctx, func(ctx context.Context) error {

@@ -653,6 +653,7 @@ func (r *fakeMetadataResolver) ResolveOAuthClient(context.Context, string) (OAut
 	r.calls++
 	return r.client, r.err
 }
+
 func (s *fakeOAuthStore) CreateMetadataAuthorizationCode(ctx context.Context, hash []byte, code OAuthAuthorizationCode, _ int) error {
 	s.createdClient = OAuthClient{ID: code.ClientID, RedirectURIs: []string{}}
 	return s.CreateAuthorizationCode(ctx, hash, code)

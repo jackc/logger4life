@@ -18,14 +18,18 @@ type stubFolderStore struct{}
 func (stubFolderStore) CreateFolder(context.Context, string, string, string, *string) (core.Folder, error) {
 	return core.Folder{ID: "folder-1", Name: "Health"}, nil
 }
+
 func (stubFolderStore) ListFolders(context.Context, string) ([]core.Folder, error) {
 	return []core.Folder{}, nil
 }
+
 func (stubFolderStore) RenameFolder(context.Context, string, string, string) (core.Folder, error) {
 	return core.Folder{}, nil
 }
+
 func (stubFolderStore) MoveFolder(context.Context, string, string, *string, int) error { return nil }
-func (stubFolderStore) DeleteFolder(context.Context, string, string) error             { return nil }
+
+func (stubFolderStore) DeleteFolder(context.Context, string, string) error { return nil }
 
 // auditRecorder builds a core wired exactly as the composition root wires it,
 // over a logger whose output the test can read back.

@@ -18,6 +18,7 @@ func (s *Store) LogFieldDefinitions(ctx context.Context, userID, logID string) (
 	}
 	return defs, e
 }
+
 func scanLogEntry(row rowScanner) (domain.LogEntry, error) {
 	var e domain.LogEntry
 	err := row.Scan(&e.ID, &e.LogID, &e.UserID, &e.Username, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt, &e.Note)
@@ -26,9 +27,11 @@ func scanLogEntry(row rowScanner) (domain.LogEntry, error) {
 	}
 	return e, err
 }
+
 func (s *Store) CreateLogEntry(ctx context.Context, id, userID, logID string, fields map[string]any, occurredAt time.Time, note string) (domain.LogEntry, error) {
 	return scanLogEntry(s.conn(ctx).QueryRow(ctx, `WITH inserted AS (INSERT INTO log_entries(id,log_id,user_id,fields,occurred_at,note) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at,note) SELECT i.id,i.log_id,i.user_id,u.username,i.fields,i.occurred_at,i.created_at,i.updated_at,i.note FROM inserted i JOIN users u ON u.id=i.user_id`, id, logID, userID, fields, occurredAt, note))
 }
+
 func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]domain.LogEntry, error) {
 	if _, e := s.LogFieldDefinitions(ctx, userID, logID); e != nil {
 		return nil, e
@@ -48,6 +51,7 @@ func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]dom
 	}
 	return out, rows.Err()
 }
+
 func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID string, fields map[string]any, occurred time.Time, note *string) (domain.LogEntry, error) {
 	v, e := scanLogEntry(s.conn(ctx).QueryRow(ctx, `WITH updated AS (UPDATE log_entries SET fields=$1,occurred_at=$2,updated_at=now(),note=COALESCE($5,note) WHERE id=$3 AND log_id=$4 RETURNING id,log_id,user_id,fields,occurred_at,created_at,updated_at,note) SELECT x.id,x.log_id,x.user_id,u.username,x.fields,x.occurred_at,x.created_at,x.updated_at,x.note FROM updated x JOIN users u ON u.id=x.user_id`, fields, occurred, entryID, logID, note))
 	if errors.Is(e, pgx.ErrNoRows) {
@@ -55,6 +59,7 @@ func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID strin
 	}
 	return v, e
 }
+
 func (s *Store) DeleteLogEntry(ctx context.Context, userID, logID, entryID string) error {
 	if _, e := s.LogFieldDefinitions(ctx, userID, logID); e != nil {
 		return e

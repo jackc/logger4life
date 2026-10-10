@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
-const defaultCacheTTL = 5 * time.Minute
-const maxCacheTTL = time.Hour
+const (
+	defaultCacheTTL = 5 * time.Minute
+	maxCacheTTL     = time.Hour
+)
 
 // cacheExpiry honors freshness without retaining validators or stale bodies:
 // no-cache/expired documents receive a new unconditional GET. Unrecognized

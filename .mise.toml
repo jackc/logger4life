@@ -41,6 +41,7 @@ TERN_MIGRATIONS = "postgresql/migrations"
 [tools]
 fd = "latest"
 go = '1.27.1'
+gofumpt = "latest"
 nodejs = '24.13.0'
 process-compose = "1.122.0"
 rg = "latest"

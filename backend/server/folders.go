@@ -10,11 +10,14 @@ import (
 	"github.com/jackc/logger4life/backend/core"
 )
 
-type folderResponse = core.Folder
-type createFolderRequest = core.CreateFolderParams
-type renameFolderRequest struct {
-	Name string `json:"name"`
-}
+type (
+	folderResponse      = core.Folder
+	createFolderRequest = core.CreateFolderParams
+	renameFolderRequest struct {
+		Name string `json:"name"`
+	}
+)
+
 type moveFolderRequest struct {
 	ParentFolderID *string `json:"parent_folder_id"`
 	Position       int     `json:"position"`
@@ -23,6 +26,7 @@ type moveFolderRequest struct {
 func actionContext(r *http.Request) context.Context {
 	return core.WithUserID(r.Context(), userFromContext(r.Context()).ID)
 }
+
 func decodeAction(w http.ResponseWriter, r *http.Request, v any) bool {
 	if json.NewDecoder(r.Body).Decode(v) != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
@@ -30,6 +34,7 @@ func decodeAction(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	return true
 }
+
 func writeFolderError(w http.ResponseWriter, r *http.Request, e error) {
 	var ve *core.ValidationError
 	switch {
@@ -60,6 +65,7 @@ func handleCreateFolder(app *core.Core) http.HandlerFunc {
 		writeJSON(w, http.StatusCreated, f)
 	}
 }
+
 func handleListFolders(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, e := core.ListFolders.Call(actionContext(r), app, core.ListFoldersParams{})
@@ -70,6 +76,7 @@ func handleListFolders(app *core.Core) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, v)
 	}
 }
+
 func handleRenameFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body renameFolderRequest
@@ -84,6 +91,7 @@ func handleRenameFolder(app *core.Core) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, v)
 	}
 }
+
 func handleMoveFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body moveFolderRequest
@@ -98,6 +106,7 @@ func handleMoveFolder(app *core.Core) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
 func handleDeleteFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, e := core.DeleteFolder.Call(actionContext(r), app, core.DeleteFolderParams{FolderID: chi.URLParam(r, "folderID")})

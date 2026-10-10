@@ -10,11 +10,13 @@ import (
 
 // These application types deliberately have no dependency on Logger4Life's
 // core or its action policies.
-type dependencies struct{ prefix string }
-type metadata struct{ Category string }
-type params struct {
-	Value string `json:"value"`
-}
+type (
+	dependencies struct{ prefix string }
+	metadata     struct{ Category string }
+	params       struct {
+		Value string `json:"value"`
+	}
+)
 
 func TestIndependentRegistriesAndDispatchers(t *testing.T) {
 	var first, second action.Registry[dependencies, metadata]

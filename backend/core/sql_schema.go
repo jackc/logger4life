@@ -15,10 +15,12 @@ type SQLSchemaView struct {
 type SQLSchemaStore interface {
 	ListSQLSchemaViews(context.Context) ([]*SQLSchemaView, error)
 }
-type GetSQLSchemaParams struct{}
-type SQLSchema struct {
-	Views []*SQLSchemaView `json:"views"`
-}
+type (
+	GetSQLSchemaParams struct{}
+	SQLSchema          struct {
+		Views []*SQLSchemaView `json:"views"`
+	}
+)
 
 var GetSQLSchema = Define(ActionDef[GetSQLSchemaParams, SQLSchema]{Name: "get_sql_schema", Description: "Describe the read-only SQL schema.", Metadata: ActionMetadata{Public: true}, Handler: func(ctx context.Context, c *Core, _ GetSQLSchemaParams) (SQLSchema, error) {
 	v, e := c.sqlSchema.ListSQLSchemaViews(ctx)

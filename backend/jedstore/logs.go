@@ -72,6 +72,7 @@ func (s *Store) GetLog(ctx context.Context, userID, logID string) (core.Log, err
 	l.Fields = definedFields(l.Fields)
 	return l, nil
 }
+
 func (s *Store) UpdateLog(ctx context.Context, userID, logID, name string, fields []domain.FieldDefinition) (core.Log, error) {
 	fields = definedFields(fields)
 	var l core.Log
@@ -100,6 +101,7 @@ func (s *Store) UpdateLog(ctx context.Context, userID, logID, name string, field
 	l.Fields = definedFields(l.Fields)
 	return l, nil
 }
+
 func (s *Store) DeleteLog(ctx context.Context, userID, logID string) error {
 	return s.InTx(ctx, func(ctx context.Context) error {
 		tx := s.conn(ctx)

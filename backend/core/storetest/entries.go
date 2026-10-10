@@ -266,5 +266,4 @@ func RunLogEntryStore(t *testing.T, ports Ports) {
 			t.Errorf("listing entries of a deleted log = %v, want ErrLogNotFound", err)
 		}
 	})
-
 }

@@ -24,6 +24,7 @@ func folderOwned(ctx context.Context, q queryRower, folderID, userID string) err
 	}
 	return nil
 }
+
 func (s *Store) CreateFolder(ctx context.Context, id, userID, name string, parent *string) (core.Folder, error) {
 	var folder core.Folder
 	err := s.InTx(ctx, func(ctx context.Context) error {
@@ -48,6 +49,7 @@ func (s *Store) CreateFolder(ctx context.Context, id, userID, name string, paren
 	})
 	return folder, err
 }
+
 func (s *Store) ListFolders(ctx context.Context, userID string) ([]core.Folder, error) {
 	rows, e := s.conn(ctx).Query(ctx, `SELECT id,name,parent_folder_id,position,created_at,updated_at FROM folders WHERE user_id=$1 ORDER BY parent_folder_id NULLS FIRST,position`, userID)
 	if e != nil {
@@ -64,6 +66,7 @@ func (s *Store) ListFolders(ctx context.Context, userID string) ([]core.Folder, 
 	}
 	return out, rows.Err()
 }
+
 func (s *Store) RenameFolder(ctx context.Context, userID, folderID, name string) (core.Folder, error) {
 	f, e := scanFolder(s.conn(ctx).QueryRow(ctx, `UPDATE folders SET name=$1,updated_at=now() WHERE id=$2 AND user_id=$3 RETURNING id,name,parent_folder_id,position,created_at,updated_at`, name, folderID, userID))
 	if errors.Is(e, errNoRows) {
@@ -71,6 +74,7 @@ func (s *Store) RenameFolder(ctx context.Context, userID, folderID, name string)
 	}
 	return f, e
 }
+
 func (s *Store) MoveFolder(ctx context.Context, userID, folderID string, parent *string, pos int) error {
 	return s.InTx(ctx, func(ctx context.Context) error {
 		tx := s.conn(ctx)
@@ -141,6 +145,7 @@ func (s *Store) MoveFolder(ctx context.Context, userID, folderID string, parent 
 		return e
 	})
 }
+
 func (s *Store) DeleteFolder(ctx context.Context, userID, folderID string) error {
 	return s.InTx(ctx, func(ctx context.Context) error {
 		tx := s.conn(ctx)

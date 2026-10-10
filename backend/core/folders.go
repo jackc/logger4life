@@ -38,6 +38,7 @@ func validFolderName(name string) error {
 	}
 	return nil
 }
+
 func requiredUser(ctx context.Context) (string, error) {
 	id, ok := UserIDFromContext(ctx)
 	if !ok {

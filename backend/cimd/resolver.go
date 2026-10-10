@@ -45,9 +45,11 @@ type Resolver struct {
 var _ core.OAuthClientMetadataResolver = (*Resolver)(nil)
 
 func New() *Resolver {
-	return &Resolver{client: newHTTPClient(), now: time.Now,
+	return &Resolver{
+		client: newHTTPClient(), now: time.Now,
 		cache: make(map[string]cacheEntry), pending: make(map[string]*pendingFetch),
-		rate: rate.NewLimiter(rate.Every(time.Second), 10)}
+		rate: rate.NewLimiter(rate.Every(time.Second), 10),
+	}
 }
 
 func cloneClient(client core.OAuthClient) core.OAuthClient {

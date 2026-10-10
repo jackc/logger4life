@@ -8,11 +8,13 @@ import (
 
 var ErrUnknownAction = action.ErrUnknownAction
 
-type ValidationError = action.ValidationError
-type Invocation = action.Invocation[ActionMetadata]
-type Handler = action.Handler[ActionMetadata]
-type Middleware = action.Middleware[ActionMetadata]
-type AnyAction = action.AnyAction[*Core, ActionMetadata]
+type (
+	ValidationError = action.ValidationError
+	Invocation      = action.Invocation[ActionMetadata]
+	Handler         = action.Handler[ActionMetadata]
+	Middleware      = action.Middleware[ActionMetadata]
+	AnyAction       = action.AnyAction[*Core, ActionMetadata]
+)
 
 // ActionMetadata contains Logger4Life's action policies. The action package
 // carries these values without interpreting them; application middleware owns

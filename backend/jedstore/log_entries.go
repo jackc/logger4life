@@ -17,6 +17,7 @@ func (s *Store) LogFieldDefinitions(ctx context.Context, userID, logID string) (
 	}
 	return defs, e
 }
+
 func scanLogEntry(row rowScanner) (domain.LogEntry, error) {
 	var e domain.LogEntry
 	err := row.Scan(&e.ID, &e.LogID, &e.UserID, &e.Username, &e.Fields, &e.OccurredAt, &e.CreatedAt, &e.UpdatedAt, &e.Note)
@@ -47,6 +48,7 @@ func (s *Store) CreateLogEntry(ctx context.Context, id, userID, logID string, fi
 	})
 	return entry, err
 }
+
 func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]domain.LogEntry, error) {
 	if _, e := s.LogFieldDefinitions(ctx, userID, logID); e != nil {
 		return nil, e
@@ -66,6 +68,7 @@ func (s *Store) ListLogEntries(ctx context.Context, userID, logID string) ([]dom
 	}
 	return out, rows.Err()
 }
+
 func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID string, fields map[string]any, occurred time.Time, note *string) (domain.LogEntry, error) {
 	var v domain.LogEntry
 	e := s.InTx(ctx, func(ctx context.Context) error {
@@ -81,6 +84,7 @@ func (s *Store) UpdateLogEntry(ctx context.Context, userID, logID, entryID strin
 	}
 	return v, e
 }
+
 func (s *Store) DeleteLogEntry(ctx context.Context, userID, logID, entryID string) error {
 	if _, e := s.LogFieldDefinitions(ctx, userID, logID); e != nil {
 		return e

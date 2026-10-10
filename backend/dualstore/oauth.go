@@ -74,6 +74,7 @@ func (s *Store) CreateOAuthClientLimited(ctx context.Context, client core.OAuthC
 		func() error { return s.primary.CreateOAuthClientLimited(ctx, client, limit) },
 		func() error { return s.secondary.CreateOAuthClientLimited(ctx, client, limit) })
 }
+
 func (s *Store) PruneUnusedOAuthClients(ctx context.Context, before time.Time) (int64, error) {
 	return compareCall("PruneUnusedOAuthClients",
 		func() (int64, error) { return s.primary.PruneUnusedOAuthClients(ctx, before) },

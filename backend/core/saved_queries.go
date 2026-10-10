@@ -66,6 +66,7 @@ var GetSavedQuery = Define(ActionDef[GetSavedQueryParams, SavedQuery]{Name: "get
 	}
 	return c.savedQueries.GetSavedQueryByName(ctx, id, p.Name)
 }})
+
 var CreateSavedQuery = Define(ActionDef[SavedQueryParams, SavedQuery]{Name: "create_saved_query", Description: "Create a saved SQL query.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p SavedQueryParams) (SavedQuery, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {

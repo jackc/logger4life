@@ -21,15 +21,18 @@ func TestPublicIP(t *testing.T) {
 		require.False(t, publicIP(prefix.Addr()), prefix.String())
 		require.False(t, publicIP(prefix.Addr().Next()), prefix.String())
 	}
-	for _, address := range []string{"::", "::1", "::ffff:8.8.8.8", "::ffff:127.0.0.1", "64:ff9b::808:808", "64:ff9b:1::1",
-		"100::1", "100:0:0:1::1", "fc00::1", "fe80::1", "fec0::1", "ff02::1", "5f00::1", "2001:4860::1%eth0"} {
+	for _, address := range []string{
+		"::", "::1", "::ffff:8.8.8.8", "::ffff:127.0.0.1", "64:ff9b::808:808", "64:ff9b:1::1",
+		"100::1", "100:0:0:1::1", "fc00::1", "fe80::1", "fec0::1", "ff02::1", "5f00::1", "2001:4860::1%eth0",
+	} {
 		require.False(t, publicIP(netip.MustParseAddr(address)), address)
 	}
 }
 
 func TestSafeDialer(t *testing.T) {
 	for _, addresses := range [][]netip.Addr{
-		nil, {netip.MustParseAddr("127.0.0.1")},
+		nil,
+		{netip.MustParseAddr("127.0.0.1")},
 		{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("10.1.2.3")},
 		{netip.MustParseAddr("2606:4700:4700::1111"), netip.MustParseAddr("fc00::1")},
 		make([]netip.Addr, 17),

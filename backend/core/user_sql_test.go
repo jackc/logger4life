@@ -42,7 +42,7 @@ func TestExecuteUserSQLUsesTrustedUserAndNormalizesQuery(t *testing.T) {
 	if got.RowCount != want.RowCount || got.Columns[0] != want.Columns[0] || *got.Rows[0][0] != "Vitamins" {
 		t.Fatalf("ExecuteUserSQL() = %#v", got)
 	}
-	if action, ok := Lookup("execute_user_sql"); !ok || action != ExecuteUserSQL {
+	if action, ok := Lookup("execute_user_sql"); !ok || action != ExecuteUserSQL.Action {
 		t.Fatal("execute_user_sql is missing from the action catalog")
 	}
 }

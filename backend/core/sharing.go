@@ -55,7 +55,7 @@ type ShareToken struct {
 	ShareToken string `json:"share_token"`
 }
 
-var CreateShareToken = Define(ActionDef[CreateShareTokenParams, ShareToken]{Name: "create_share_token", Description: "Create a share link for an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p CreateShareTokenParams) (ShareToken, error) {
+var CreateShareToken = Define(ActionDef[CreateShareTokenParams, ShareToken]{Name: "create_share_token", Description: "Create a share link for an owned log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p CreateShareTokenParams) (ShareToken, error) {
 	userID, err := requiredUser(ctx)
 	if err != nil {
 		return ShareToken{}, err
@@ -76,7 +76,7 @@ type DeleteShareTokenParams struct {
 
 func (p *DeleteShareTokenParams) Validate() error { return validID("log_id", p.LogID) }
 
-var DeleteShareToken = Define(ActionDef[DeleteShareTokenParams, struct{}]{Name: "delete_share_token", Description: "Revoke the share link for an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteShareTokenParams) (struct{}, error) {
+var DeleteShareToken = Define(ActionDef[DeleteShareTokenParams, struct{}]{Name: "delete_share_token", Description: "Revoke the share link for an owned log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p DeleteShareTokenParams) (struct{}, error) {
 	userID, err := requiredUser(ctx)
 	if err == nil {
 		err = c.sharing.DeleteShareToken(ctx, userID, p.LogID)
@@ -110,7 +110,7 @@ func (p *RemoveSharedUserParams) Validate() error {
 	return validID("share_id", p.ShareID)
 }
 
-var RemoveSharedUser = Define(ActionDef[RemoveSharedUserParams, struct{}]{Name: "remove_shared_user", Description: "Remove a user from an owned shared log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p RemoveSharedUserParams) (struct{}, error) {
+var RemoveSharedUser = Define(ActionDef[RemoveSharedUserParams, struct{}]{Name: "remove_shared_user", Description: "Remove a user from an owned shared log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p RemoveSharedUserParams) (struct{}, error) {
 	userID, err := requiredUser(ctx)
 	if err == nil {
 		err = c.sharing.RemoveSharedUser(ctx, userID, p.LogID, p.ShareID)
@@ -146,7 +146,7 @@ type JoinSharedLogParams struct {
 	Token string `json:"token"`
 }
 
-var JoinSharedLog = Define(ActionDef[JoinSharedLogParams, JoinSharedLogResult]{Name: "join_shared_log", Description: "Join a log through a share link.", Mutating: true, Handler: func(ctx context.Context, c *Core, p JoinSharedLogParams) (JoinSharedLogResult, error) {
+var JoinSharedLog = Define(ActionDef[JoinSharedLogParams, JoinSharedLogResult]{Name: "join_shared_log", Description: "Join a log through a share link.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p JoinSharedLogParams) (JoinSharedLogResult, error) {
 	userID, err := requiredUser(ctx)
 	if err != nil {
 		return JoinSharedLogResult{}, err

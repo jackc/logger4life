@@ -201,7 +201,7 @@ type PasskeyRegistrationOptions struct {
 }
 
 var BeginPasskeyRegistration = Define(ActionDef[BeginPasskeyRegistrationParams, PasskeyRegistrationOptions]{
-	Name: "begin_passkey_registration", Description: "Begin registering a passkey for the current user.", Mutating: true,
+	Name: "begin_passkey_registration", Description: "Begin registering a passkey for the current user.", Metadata: ActionMetadata{Mutating: true},
 	Handler: func(ctx context.Context, c *Core, _ BeginPasskeyRegistrationParams) (PasskeyRegistrationOptions, error) {
 		wan, err := requireWebAuthn(c)
 		if err != nil {
@@ -253,7 +253,7 @@ func (p *FinishPasskeyRegistrationParams) Validate() error {
 }
 
 var FinishPasskeyRegistration = Define(ActionDef[FinishPasskeyRegistrationParams, PasskeyInfo]{
-	Name: "finish_passkey_registration", Description: "Verify and save a passkey registration response.", Mutating: true,
+	Name: "finish_passkey_registration", Description: "Verify and save a passkey registration response.", Metadata: ActionMetadata{Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p FinishPasskeyRegistrationParams) (PasskeyInfo, error) {
 		wan, err := requireWebAuthn(c)
 		if err != nil {
@@ -303,7 +303,7 @@ type PasskeyLoginOptions struct {
 }
 
 var BeginPasskeyLogin = Define(ActionDef[BeginPasskeyLoginParams, PasskeyLoginOptions]{
-	Name: "begin_passkey_login", Public: true, Description: "Begin a discoverable passkey login.", Mutating: true,
+	Name: "begin_passkey_login", Description: "Begin a discoverable passkey login.", Metadata: ActionMetadata{Public: true, Mutating: true},
 	Handler: func(ctx context.Context, c *Core, _ BeginPasskeyLoginParams) (PasskeyLoginOptions, error) {
 		wan, err := requireWebAuthn(c)
 		if err != nil {
@@ -340,7 +340,7 @@ func (p FinishPasskeyLoginParams) Validate() error {
 }
 
 var FinishPasskeyLogin = Define(ActionDef[FinishPasskeyLoginParams, AuthSession]{
-	Name: "finish_passkey_login", Public: true, Description: "Verify a passkey response and create a session.", Mutating: true,
+	Name: "finish_passkey_login", Description: "Verify a passkey response and create a session.", Metadata: ActionMetadata{Public: true, Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p FinishPasskeyLoginParams) (AuthSession, error) {
 		wan, err := requireWebAuthn(c)
 		if err != nil {
@@ -442,7 +442,7 @@ func (p *RenamePasskeyParams) Validate() error {
 }
 
 var RenamePasskey = Define(ActionDef[RenamePasskeyParams, PasskeyInfo]{
-	Name: "rename_passkey", Description: "Rename one of the current user's passkeys.", Mutating: true,
+	Name: "rename_passkey", Description: "Rename one of the current user's passkeys.", Metadata: ActionMetadata{Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p RenamePasskeyParams) (PasskeyInfo, error) {
 		if _, err := requireWebAuthn(c); err != nil {
 			return PasskeyInfo{}, err
@@ -471,7 +471,7 @@ func (p DeletePasskeyParams) Validate() error {
 }
 
 var DeletePasskey = Define(ActionDef[DeletePasskeyParams, struct{}]{
-	Name: "delete_passkey", Description: "Delete one of the current user's passkeys.", Mutating: true,
+	Name: "delete_passkey", Description: "Delete one of the current user's passkeys.", Metadata: ActionMetadata{Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p DeletePasskeyParams) (struct{}, error) {
 		if _, err := requireWebAuthn(c); err != nil {
 			return struct{}{}, err

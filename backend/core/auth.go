@@ -119,7 +119,7 @@ func (p *RegisterUserParams) Validate() error {
 }
 
 var RegisterUser = Define(ActionDef[RegisterUserParams, AuthSession]{
-	Name: "register_user", Public: true, Description: "Register a user and start a session.", Mutating: true,
+	Name: "register_user", Description: "Register a user and start a session.", Metadata: ActionMetadata{Public: true, Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p RegisterUserParams) (AuthSession, error) {
 		hash, err := bcrypt.GenerateFromPassword([]byte(p.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -156,7 +156,7 @@ type LoginWithPasswordParams struct {
 }
 
 var LoginWithPassword = Define(ActionDef[LoginWithPasswordParams, AuthSession]{
-	Name: "login_with_password", Public: true, Description: "Log in with a username and password.", Mutating: true,
+	Name: "login_with_password", Description: "Log in with a username and password.", Metadata: ActionMetadata{Public: true, Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p LoginWithPasswordParams) (AuthSession, error) {
 		user, hash, err := c.users.GetUserByUsername(ctx, p.Username)
 		if errors.Is(err, ErrUserNotFound) {
@@ -184,7 +184,7 @@ type AuthenticateSessionParams struct {
 }
 
 var AuthenticateSession = Define(ActionDef[AuthenticateSessionParams, User]{
-	Name: "authenticate_session", Public: true, Description: "Resolve a session token to its user.",
+	Name: "authenticate_session", Description: "Resolve a session token to its user.", Metadata: ActionMetadata{Public: true},
 	Handler: func(ctx context.Context, c *Core, p AuthenticateSessionParams) (User, error) {
 		token, err := hex.DecodeString(p.Token)
 		if err != nil || len(token) == 0 {
@@ -199,7 +199,7 @@ type LogoutParams struct {
 }
 
 var Logout = Define(ActionDef[LogoutParams, struct{}]{
-	Name: "logout", Public: true, Description: "Delete a session.", Mutating: true,
+	Name: "logout", Description: "Delete a session.", Metadata: ActionMetadata{Public: true, Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p LogoutParams) (struct{}, error) {
 		token, err := hex.DecodeString(p.Token)
 		if err != nil || len(token) == 0 {
@@ -232,7 +232,7 @@ func (p *ChangeEmailParams) Validate() error {
 }
 
 var ChangeEmail = Define(ActionDef[ChangeEmailParams, User]{
-	Name: "change_email", Description: "Change or clear the current user's email.", Mutating: true,
+	Name: "change_email", Description: "Change or clear the current user's email.", Metadata: ActionMetadata{Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p ChangeEmailParams) (User, error) {
 		userID, err := requiredUser(ctx)
 		if err != nil {
@@ -252,7 +252,7 @@ func (p *ChangePasswordParams) Validate() error {
 }
 
 var ChangePassword = Define(ActionDef[ChangePasswordParams, struct{}]{
-	Name: "change_password", Description: "Change the current user's password.", Mutating: true,
+	Name: "change_password", Description: "Change the current user's password.", Metadata: ActionMetadata{Mutating: true},
 	Handler: func(ctx context.Context, c *Core, p ChangePasswordParams) (struct{}, error) {
 		userID, err := requiredUser(ctx)
 		if err != nil {

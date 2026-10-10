@@ -66,7 +66,7 @@ var GetSavedQuery = Define(ActionDef[GetSavedQueryParams, SavedQuery]{Name: "get
 	}
 	return c.savedQueries.GetSavedQueryByName(ctx, id, p.Name)
 }})
-var CreateSavedQuery = Define(ActionDef[SavedQueryParams, SavedQuery]{Name: "create_saved_query", Description: "Create a saved SQL query.", Mutating: true, Handler: func(ctx context.Context, c *Core, p SavedQueryParams) (SavedQuery, error) {
+var CreateSavedQuery = Define(ActionDef[SavedQueryParams, SavedQuery]{Name: "create_saved_query", Description: "Create a saved SQL query.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p SavedQueryParams) (SavedQuery, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {
 		return SavedQuery{}, e
@@ -94,7 +94,7 @@ func (p *UpdateSavedQueryParams) Validate() error {
 	return e
 }
 
-var UpdateSavedQuery = Define(ActionDef[UpdateSavedQueryParams, SavedQuery]{Name: "update_saved_query", Description: "Update a saved SQL query.", Mutating: true, Handler: func(ctx context.Context, c *Core, p UpdateSavedQueryParams) (SavedQuery, error) {
+var UpdateSavedQuery = Define(ActionDef[UpdateSavedQueryParams, SavedQuery]{Name: "update_saved_query", Description: "Update a saved SQL query.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p UpdateSavedQueryParams) (SavedQuery, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {
 		return SavedQuery{}, e
@@ -108,7 +108,7 @@ type DeleteSavedQueryParams struct {
 
 func (p *DeleteSavedQueryParams) Validate() error { return validID("id", p.ID) }
 
-var DeleteSavedQuery = Define(ActionDef[DeleteSavedQueryParams, struct{}]{Name: "delete_saved_query", Description: "Delete a saved SQL query.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteSavedQueryParams) (struct{}, error) {
+var DeleteSavedQuery = Define(ActionDef[DeleteSavedQueryParams, struct{}]{Name: "delete_saved_query", Description: "Delete a saved SQL query.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p DeleteSavedQueryParams) (struct{}, error) {
 	id, e := requiredUser(ctx)
 	if e == nil {
 		e = c.savedQueries.DeleteSavedQuery(ctx, id, p.ID)

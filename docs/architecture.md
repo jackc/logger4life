@@ -5,6 +5,16 @@ reified action catalog. The pattern follows `.scratch/fam`.
 
 ## Dependency direction
 
+`action` supplies the reusable catalog and dispatcher. Registries are explicit
+instances parameterized by application dependencies and metadata. Dispatchers
+bind a registry to middleware and handle typed calls, JSON decoding, and
+parameter validation. Dependencies are supplied per invocation; a dispatcher
+does not retain its application instance. Typed and dynamic invocations require
+the action to belong to the dispatcher's registry. Middleware sees only the
+action's `Info[M]` (name, description, metadata) and invocation parameters,
+without a dependency type or invocation method. The package does not interpret
+metadata or depend on any backend package.
+
 `backend/domain` contains pure types and rules. It performs no I/O and does
 not depend on the service or adapter packages.
 
@@ -14,6 +24,12 @@ contain orchestration, accept JSON-tagged parameter structs, and call driven
 port interfaces owned by this package. `core.Catalog` is the complete,
 enumerable catalog; typed callers use `Action.Call`, while dynamic adapters
 use `Core.InvokeJSON`.
+
+Core owns Logger4Life's registry and the `ActionMetadata` fields `Public` and
+`Mutating`. Its small action wrapper preserves the application's declarations
+and typed call sites while delegating execution to `action`. Authentication
+and mutation auditing remain application middleware, with their existing
+behavior and configuration.
 
 `backend/pgstore` and `backend/jedstore` each implement the same persistence
 ports. PostgreSQL and embedded-database details, SQL differences, and error
@@ -110,6 +126,7 @@ transport or persistence at all.
 
 ## Where new code goes
 
+- Generic catalog and dispatch mechanics: `action`.
 - Pure validation, calculation, and domain types: `backend/domain`.
 - Load/compute/save orchestration and action definitions: `backend/core`.
 - PostgreSQL persistence mechanics: `backend/pgstore`.

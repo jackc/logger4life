@@ -32,7 +32,7 @@ func (p *UpdateLogPlacementParams) Validate() error {
 	return nil
 }
 
-var UpdateLogPlacement = Define(ActionDef[UpdateLogPlacementParams, struct{}]{Name: "update_log_placement", Description: "Move and reorder a log placement.", Mutating: true, Handler: func(ctx context.Context, c *Core, p UpdateLogPlacementParams) (struct{}, error) {
+var UpdateLogPlacement = Define(ActionDef[UpdateLogPlacementParams, struct{}]{Name: "update_log_placement", Description: "Move and reorder a log placement.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p UpdateLogPlacementParams) (struct{}, error) {
 	u, e := requiredUser(ctx)
 	if e == nil {
 		e = c.placements.UpdateLogPlacement(ctx, u, p.LogID, domain.LogPlacementChange{FolderID: p.FolderID, Position: p.Position})
@@ -47,7 +47,7 @@ type PinLogParams struct {
 
 func (p *PinLogParams) Validate() error { return validID("log_id", p.LogID) }
 
-var PinLog = Define(ActionDef[PinLogParams, struct{}]{Name: "pin_log", Description: "Set a log's home pin.", Mutating: true, Handler: func(ctx context.Context, c *Core, p PinLogParams) (struct{}, error) {
+var PinLog = Define(ActionDef[PinLogParams, struct{}]{Name: "pin_log", Description: "Set a log's home pin.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p PinLogParams) (struct{}, error) {
 	u, e := requiredUser(ctx)
 	if e == nil {
 		e = c.placements.PinLog(ctx, u, p.LogID, domain.HomePinChange{Pinned: p.Pinned})
@@ -70,7 +70,7 @@ func (p *UpdateLogHomePositionParams) Validate() error {
 	return nil
 }
 
-var UpdateLogHomePosition = Define(ActionDef[UpdateLogHomePositionParams, struct{}]{Name: "update_log_home_position", Description: "Reorder a pinned log on home.", Mutating: true, Handler: func(ctx context.Context, c *Core, p UpdateLogHomePositionParams) (struct{}, error) {
+var UpdateLogHomePosition = Define(ActionDef[UpdateLogHomePositionParams, struct{}]{Name: "update_log_home_position", Description: "Reorder a pinned log on home.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p UpdateLogHomePositionParams) (struct{}, error) {
 	u, e := requiredUser(ctx)
 	if e == nil {
 		e = c.placements.UpdateLogHomePosition(ctx, u, p.LogID, domain.HomeOrderChange{HomePosition: p.HomePosition})

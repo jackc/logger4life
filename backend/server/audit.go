@@ -21,7 +21,7 @@ import (
 func auditMiddleware(logger *slog.Logger) core.Middleware {
 	return func(next core.Handler) core.Handler {
 		return func(ctx context.Context, inv core.Invocation) (any, error) {
-			if !inv.Action.Mutating() {
+			if !inv.Action.Metadata().Mutating {
 				return next(ctx, inv)
 			}
 

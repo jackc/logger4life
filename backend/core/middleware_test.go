@@ -33,7 +33,7 @@ var middlewareHandlerCalls int
 var errMiddlewareHandler = errors.New("handler failed")
 
 var middlewareTestAction = Define(ActionDef[middlewareParams, string]{
-	Name: "core_test_middleware", Description: "middleware test action", Mutating: true,
+	Name: "core_test_middleware", Description: "middleware test action", Metadata: ActionMetadata{Mutating: true},
 	Handler: func(ctx context.Context, _ *Core, p middlewareParams) (string, error) {
 		middlewareHandlerCalls++
 		if p.Value == "boom" {
@@ -103,7 +103,7 @@ func TestEveryCatalogActionPassesThroughMiddleware(t *testing.T) {
 
 	catalog := Catalog()
 	for _, action := range catalog {
-		if _, err := action.Invoke(context.Background(), c, action.NewParams()); !errors.Is(err, denied) {
+		if _, err := action.Invoke(context.Background(), c.actions, c, action.NewParams()); !errors.Is(err, denied) {
 			t.Errorf("action %q returned %v, want the middleware's denial", action.Name(), err)
 		}
 	}
@@ -127,7 +127,7 @@ func TestMiddlewareObservesActionIdentityAndParameters(t *testing.T) {
 	if _, err := invokeMiddlewareAction(c, "audited"); err != nil {
 		t.Fatal(err)
 	}
-	if seen.Action == nil || seen.Action.Name() != middlewareTestAction.Name() || !seen.Action.Mutating() {
+	if seen.Action == nil || seen.Action.Name() != middlewareTestAction.Name() || !seen.Action.Metadata().Mutating {
 		t.Fatalf("observed action = %#v", seen.Action)
 	}
 	params, ok := seen.Params.(*middlewareParams)

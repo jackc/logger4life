@@ -45,7 +45,7 @@ func TestEveryActionRefusesAnAnonymousCallerUnlessItIsPublic(t *testing.T) {
 					err = fmt.Errorf("panicked on a nil port: %v", r)
 				}
 			}()
-			_, err = action.Invoke(context.Background(), app, action.NewParams())
+			_, err = action.Invoke(context.Background(), app.actions, app, action.NewParams())
 			return err
 		}()
 		if !errors.Is(err, ErrUnauthenticated) {
@@ -59,11 +59,11 @@ func TestEveryActionRefusesAnAnonymousCallerUnlessItIsPublic(t *testing.T) {
 func TestPublicActionsAreExactlyTheOnesDeclaredPublic(t *testing.T) {
 	declared := map[string]bool{}
 	for _, action := range Catalog() {
-		if action.Public() {
+		if action.Metadata().Public {
 			declared[action.Name()] = true
 		}
-		if _, listed := publicActions[action.Name()]; listed != action.Public() {
-			t.Errorf("%s: declared Public = %t, listed as public = %t", action.Name(), action.Public(), listed)
+		if _, listed := publicActions[action.Name()]; listed != action.Metadata().Public {
+			t.Errorf("%s: declared Public = %t, listed as public = %t", action.Name(), action.Metadata().Public, listed)
 		}
 	}
 	for name := range publicActions {

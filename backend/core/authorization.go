@@ -14,7 +14,7 @@ import "context"
 func RequireUser() Middleware {
 	return func(next Handler) Handler {
 		return func(ctx context.Context, inv Invocation) (any, error) {
-			if !inv.Action.Public() {
+			if !inv.Action.Metadata().Public {
 				if _, ok := UserIDFromContext(ctx); !ok {
 					return nil, ErrUnauthenticated
 				}

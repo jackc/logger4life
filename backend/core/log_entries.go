@@ -39,7 +39,7 @@ func (p *CreateLogEntryParams) Validate() error {
 	return nil
 }
 
-var CreateLogEntry = Define(ActionDef[CreateLogEntryParams, domain.LogEntry]{Name: "create_log_entry", Description: "Create an entry in a visible log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p CreateLogEntryParams) (domain.LogEntry, error) {
+var CreateLogEntry = Define(ActionDef[CreateLogEntryParams, domain.LogEntry]{Name: "create_log_entry", Description: "Create an entry in a visible log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p CreateLogEntryParams) (domain.LogEntry, error) {
 	u, e := requiredUser(ctx)
 	if e != nil {
 		return domain.LogEntry{}, e
@@ -100,7 +100,7 @@ func (p *UpdateLogEntryParams) Validate() error {
 	return nil
 }
 
-var UpdateLogEntry = Define(ActionDef[UpdateLogEntryParams, domain.LogEntry]{Name: "update_log_entry", Description: "Update an entry in a visible log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p UpdateLogEntryParams) (domain.LogEntry, error) {
+var UpdateLogEntry = Define(ActionDef[UpdateLogEntryParams, domain.LogEntry]{Name: "update_log_entry", Description: "Update an entry in a visible log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p UpdateLogEntryParams) (domain.LogEntry, error) {
 	u, e := requiredUser(ctx)
 	if e != nil {
 		return domain.LogEntry{}, e
@@ -127,7 +127,7 @@ func (p *DeleteLogEntryParams) Validate() error {
 	return validID("entry_id", p.EntryID)
 }
 
-var DeleteLogEntry = Define(ActionDef[DeleteLogEntryParams, struct{}]{Name: "delete_log_entry", Description: "Delete an entry from a visible log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteLogEntryParams) (struct{}, error) {
+var DeleteLogEntry = Define(ActionDef[DeleteLogEntryParams, struct{}]{Name: "delete_log_entry", Description: "Delete an entry from a visible log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p DeleteLogEntryParams) (struct{}, error) {
 	u, e := requiredUser(ctx)
 	if e == nil {
 		e = c.entries.DeleteLogEntry(ctx, u, p.LogID, p.EntryID)

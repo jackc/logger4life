@@ -2,128 +2,48 @@ package core
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"maps"
-	"slices"
-	"strings"
-	"sync"
+
+	"github.com/jackc/logger4life/action"
 )
 
-var ErrUnknownAction = errors.New("unknown action")
+var ErrUnknownAction = action.ErrUnknownAction
 
-type ValidationError struct {
-	Action string
-	Err    error
+type ValidationError = action.ValidationError
+type Invocation = action.Invocation[ActionMetadata]
+type Handler = action.Handler[ActionMetadata]
+type Middleware = action.Middleware[ActionMetadata]
+type AnyAction = action.AnyAction[*Core, ActionMetadata]
+
+// ActionMetadata contains Logger4Life's action policies. The action package
+// carries these values without interpreting them; application middleware owns
+// authentication requirements and mutation auditing.
+type ActionMetadata struct {
+	Mutating bool
+	// Public marks an action a caller may invoke before being anyone.
+	Public bool
 }
 
-func (e *ValidationError) Error() string { return fmt.Sprintf("%s: %v", e.Action, e.Err) }
-func (e *ValidationError) Unwrap() error { return e.Err }
+// ActionDef keeps application declarations independent of the generic
+// catalog's dependency and metadata type parameters.
+type ActionDef[P, R any] = action.Definition[*Core, ActionMetadata, P, R]
 
-type Invocation struct {
-	Action AnyAction
-	Params any
-}
-type Handler func(context.Context, Invocation) (any, error)
-type Middleware func(Handler) Handler
-
-type AnyAction interface {
-	Name() string
-	Description() string
-	Mutating() bool
-	Public() bool
-	NewParams() any
-	Invoke(context.Context, *Core, any) (any, error)
+type Action[P, R any] struct {
+	*action.Action[*Core, ActionMetadata, P, R]
 }
 
-type ActionDef[P, R any] struct {
-	Name        string
-	Description string
-	Mutating    bool
-	// Public marks an action a caller may invoke before being anyone —
-	// registering, logging in, and the OAuth and passkey exchanges that
-	// establish who the caller is. It defaults to false so that an action
-	// added without a thought about it is closed rather than open.
-	Public  bool
-	Handler func(context.Context, *Core, P) (R, error)
-}
-
-type Action[P, R any] struct{ def ActionDef[P, R] }
-
-var registry = map[string]AnyAction{}
-var registryMu sync.RWMutex
+var registry action.Registry[*Core, ActionMetadata]
 
 func Define[P, R any](def ActionDef[P, R]) *Action[P, R] {
-	if def.Name == "" || def.Handler == nil {
-		panic("core: action name and handler are required")
-	}
-	a := &Action[P, R]{def: def}
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	if _, exists := registry[def.Name]; exists {
-		panic("core: duplicate action " + def.Name)
-	}
-	registry[def.Name] = a
-	return a
+	return &Action[P, R]{registry.Define(def)}
 }
 
-func Lookup(name string) (AnyAction, bool) {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-	a, ok := registry[name]
-	return a, ok
-}
-func Catalog() []AnyAction {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-	a := slices.Collect(maps.Values(registry))
-	slices.SortFunc(a, func(a, b AnyAction) int { return strings.Compare(a.Name(), b.Name()) })
-	return a
-}
-func (a *Action[P, R]) Name() string        { return a.def.Name }
-func (a *Action[P, R]) Description() string { return a.def.Description }
-func (a *Action[P, R]) Mutating() bool      { return a.def.Mutating }
-func (a *Action[P, R]) Public() bool        { return a.def.Public }
-func (a *Action[P, R]) NewParams() any      { return new(P) }
+func Lookup(name string) (AnyAction, bool) { return registry.Lookup(name) }
+func Catalog() []AnyAction                 { return registry.Catalog() }
+
 func (a *Action[P, R]) Call(ctx context.Context, c *Core, p P) (R, error) {
-	var zero R
-	v, err := a.Invoke(ctx, c, &p)
-	if err != nil {
-		return zero, err
-	}
-	r, ok := v.(R)
-	if !ok {
-		return zero, fmt.Errorf("core: action %q returned %T", a.Name(), v)
-	}
-	return r, nil
-}
-func (a *Action[P, R]) Invoke(ctx context.Context, c *Core, raw any) (any, error) {
-	p, ok := raw.(*P)
-	if !ok {
-		return nil, fmt.Errorf("core: action %q parameters have type %T", a.Name(), raw)
-	}
-	inner := func(ctx context.Context, inv Invocation) (any, error) {
-		if v, ok := any(p).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return nil, &ValidationError{Action: a.Name(), Err: err}
-			}
-		}
-		return a.def.Handler(ctx, c, *p)
-	}
-	return c.run(ctx, Invocation{Action: a, Params: p}, inner)
+	return a.Action.Call(ctx, c.actions, c, p)
 }
 
 func (c *Core) InvokeJSON(ctx context.Context, name string, data []byte) (any, error) {
-	a, ok := Lookup(name)
-	if !ok {
-		return nil, ErrUnknownAction
-	}
-	p := a.NewParams()
-	dec := json.NewDecoder(strings.NewReader(string(data)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(p); err != nil {
-		return nil, &ValidationError{Action: name, Err: err}
-	}
-	return a.Invoke(ctx, c, p)
+	return c.actions.InvokeJSON(ctx, c, name, data)
 }

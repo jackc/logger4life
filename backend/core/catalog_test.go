@@ -105,7 +105,8 @@ func TestActionsRejectMalformedIDs(t *testing.T) {
 						err = fmt.Errorf("panicked on a nil port: %v", r)
 					}
 				}()
-				_, err = action.Invoke(context.Background(), New(Config{}), params.Interface())
+				app := New(Config{})
+				_, err = action.Invoke(context.Background(), app.actions, app, params.Interface())
 				return err
 			}()
 

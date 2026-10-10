@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/jackc/logger4life/action"
 )
 
 type Core struct {
@@ -30,7 +31,7 @@ type Core struct {
 	oauth           OAuthStore
 	oauthMetadata   OAuthClientMetadataResolver
 	oauthIssuer     string
-	middleware      []Middleware
+	actions         *action.Dispatcher[*Core, ActionMetadata]
 }
 
 type Config struct {
@@ -70,7 +71,9 @@ func New(cfg Config) *Core {
 	if maxClients <= 0 {
 		maxClients = OAuthDefaultMaxClients
 	}
-	return &Core{collections: cfg.Collections, oauthMaxClients: maxClients, users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sqlConcurrency: newSQLConcurrency(cfg.SQLConcurrencyPerUser, cfg.SQLConcurrencyGlobal), sharing: cfg.Sharing, oauth: cfg.OAuth, oauthMetadata: cfg.OAuthMetadata, oauthIssuer: cfg.OAuthIssuer, middleware: append([]Middleware(nil), cfg.Middleware...)}
+	c := &Core{collections: cfg.Collections, oauthMaxClients: maxClients, users: cfg.Users, sessions: cfg.Sessions, passkeys: cfg.Passkeys, challenges: cfg.Challenges, webAuthn: cfg.WebAuthn, tx: tx, logs: cfg.Logs, entries: cfg.Entries, placements: cfg.Placements, folders: cfg.Folders, savedQueries: cfg.SavedQueries, sqlSchema: cfg.SQLSchema, userSQL: cfg.UserSQL, sqlConcurrency: newSQLConcurrency(cfg.SQLConcurrencyPerUser, cfg.SQLConcurrencyGlobal), sharing: cfg.Sharing, oauth: cfg.OAuth, oauthMetadata: cfg.OAuthMetadata, oauthIssuer: cfg.OAuthIssuer}
+	c.actions = action.NewDispatcher(&registry, cfg.Middleware...)
+	return c
 }
 
 // Transactor is the driven port for transaction boundaries. Store calls made
@@ -83,12 +86,6 @@ type passthroughTx struct{}
 
 func (passthroughTx) InTx(ctx context.Context, fn func(context.Context) error) error {
 	return fn(ctx)
-}
-func (c *Core) run(ctx context.Context, inv Invocation, h Handler) (any, error) {
-	for i := len(c.middleware) - 1; i >= 0; i-- {
-		h = c.middleware[i](h)
-	}
-	return h(ctx, inv)
 }
 
 type contextKey uint8

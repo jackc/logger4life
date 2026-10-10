@@ -56,7 +56,7 @@ func (p *CreateLogParams) Validate() error {
 	return domain.ValidateFieldDefinitions(p.Fields)
 }
 
-var CreateLog = Define(ActionDef[CreateLogParams, Log]{Name: "create_log", Description: "Create a log and its initial home placement.", Mutating: true, Handler: func(ctx context.Context, c *Core, p CreateLogParams) (Log, error) {
+var CreateLog = Define(ActionDef[CreateLogParams, Log]{Name: "create_log", Description: "Create a log and its initial home placement.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p CreateLogParams) (Log, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {
 		return Log{}, e
@@ -99,7 +99,7 @@ func (p *UpdateLogParams) Validate() error {
 	return e
 }
 
-var UpdateLog = Define(ActionDef[UpdateLogParams, Log]{Name: "update_log", Description: "Update an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p UpdateLogParams) (Log, error) {
+var UpdateLog = Define(ActionDef[UpdateLogParams, Log]{Name: "update_log", Description: "Update an owned log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p UpdateLogParams) (Log, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {
 		return Log{}, e
@@ -113,7 +113,7 @@ type DeleteLogParams struct {
 
 func (p *DeleteLogParams) Validate() error { return validID("log_id", p.LogID) }
 
-var DeleteLog = Define(ActionDef[DeleteLogParams, struct{}]{Name: "delete_log", Description: "Delete an owned log.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteLogParams) (struct{}, error) {
+var DeleteLog = Define(ActionDef[DeleteLogParams, struct{}]{Name: "delete_log", Description: "Delete an owned log.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p DeleteLogParams) (struct{}, error) {
 	id, e := requiredUser(ctx)
 	if e == nil {
 		e = c.logs.DeleteLog(ctx, id, p.LogID)

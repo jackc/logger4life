@@ -59,7 +59,7 @@ func (p *CreateFolderParams) Validate() error {
 	return validFolderName(p.Name)
 }
 
-var CreateFolder = Define(ActionDef[CreateFolderParams, Folder]{Name: "create_folder", Description: "Create a folder.", Mutating: true, Handler: func(ctx context.Context, c *Core, p CreateFolderParams) (Folder, error) {
+var CreateFolder = Define(ActionDef[CreateFolderParams, Folder]{Name: "create_folder", Description: "Create a folder.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p CreateFolderParams) (Folder, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {
 		return Folder{}, e
@@ -94,7 +94,7 @@ func (p *RenameFolderParams) Validate() error {
 	return validFolderName(p.Name)
 }
 
-var RenameFolder = Define(ActionDef[RenameFolderParams, Folder]{Name: "rename_folder", Description: "Rename a folder.", Mutating: true, Handler: func(ctx context.Context, c *Core, p RenameFolderParams) (Folder, error) {
+var RenameFolder = Define(ActionDef[RenameFolderParams, Folder]{Name: "rename_folder", Description: "Rename a folder.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p RenameFolderParams) (Folder, error) {
 	id, e := requiredUser(ctx)
 	if e != nil {
 		return Folder{}, e
@@ -121,7 +121,7 @@ func (p *MoveFolderParams) Validate() error {
 	return nil
 }
 
-var MoveFolder = Define(ActionDef[MoveFolderParams, struct{}]{Name: "move_folder", Description: "Move and reorder a folder.", Mutating: true, Handler: func(ctx context.Context, c *Core, p MoveFolderParams) (struct{}, error) {
+var MoveFolder = Define(ActionDef[MoveFolderParams, struct{}]{Name: "move_folder", Description: "Move and reorder a folder.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p MoveFolderParams) (struct{}, error) {
 	id, e := requiredUser(ctx)
 	if e == nil {
 		e = c.folders.MoveFolder(ctx, id, p.FolderID, p.ParentFolderID, p.Position)
@@ -135,7 +135,7 @@ type DeleteFolderParams struct {
 
 func (p *DeleteFolderParams) Validate() error { return validID("folder_id", p.FolderID) }
 
-var DeleteFolder = Define(ActionDef[DeleteFolderParams, struct{}]{Name: "delete_folder", Description: "Delete an empty folder.", Mutating: true, Handler: func(ctx context.Context, c *Core, p DeleteFolderParams) (struct{}, error) {
+var DeleteFolder = Define(ActionDef[DeleteFolderParams, struct{}]{Name: "delete_folder", Description: "Delete an empty folder.", Metadata: ActionMetadata{Mutating: true}, Handler: func(ctx context.Context, c *Core, p DeleteFolderParams) (struct{}, error) {
 	id, e := requiredUser(ctx)
 	if e == nil {
 		e = c.folders.DeleteFolder(ctx, id, p.FolderID)

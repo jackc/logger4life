@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/httpregistry"
 )
 
 func writeSharingError(w http.ResponseWriter, r *http.Request, err error) {
@@ -28,7 +28,7 @@ func writeSharingError(w http.ResponseWriter, r *http.Request, err error) {
 
 func handleCreateShareToken(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		result, err := core.CreateShareToken.Call(actionContext(r), app, core.CreateShareTokenParams{LogID: chi.URLParam(r, "logID")})
+		result, err := core.CreateShareToken.Call(actionContext(r), app, core.CreateShareTokenParams{LogID: httpregistry.PathParam(r, "logID")})
 		if err != nil {
 			writeSharingError(w, r, err)
 			return
@@ -39,7 +39,7 @@ func handleCreateShareToken(app *core.Core) http.HandlerFunc {
 
 func handleDeleteShareToken(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, err := core.DeleteShareToken.Call(actionContext(r), app, core.DeleteShareTokenParams{LogID: chi.URLParam(r, "logID")})
+		_, err := core.DeleteShareToken.Call(actionContext(r), app, core.DeleteShareTokenParams{LogID: httpregistry.PathParam(r, "logID")})
 		if err != nil {
 			writeSharingError(w, r, err)
 			return
@@ -50,7 +50,7 @@ func handleDeleteShareToken(app *core.Core) http.HandlerFunc {
 
 func handleListShares(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		shares, err := core.ListSharedUsers.Call(actionContext(r), app, core.ListSharedUsersParams{LogID: chi.URLParam(r, "logID")})
+		shares, err := core.ListSharedUsers.Call(actionContext(r), app, core.ListSharedUsersParams{LogID: httpregistry.PathParam(r, "logID")})
 		if err != nil {
 			writeSharingError(w, r, err)
 			return
@@ -61,7 +61,7 @@ func handleListShares(app *core.Core) http.HandlerFunc {
 
 func handleRemoveShare(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, err := core.RemoveSharedUser.Call(actionContext(r), app, core.RemoveSharedUserParams{LogID: chi.URLParam(r, "logID"), ShareID: chi.URLParam(r, "shareID")})
+		_, err := core.RemoveSharedUser.Call(actionContext(r), app, core.RemoveSharedUserParams{LogID: httpregistry.PathParam(r, "logID"), ShareID: httpregistry.PathParam(r, "shareID")})
 		if err != nil {
 			writeSharingError(w, r, err)
 			return
@@ -72,7 +72,7 @@ func handleRemoveShare(app *core.Core) http.HandlerFunc {
 
 func handleGetShareInfo(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		info, err := core.GetShareInfo.Call(actionContext(r), app, core.GetShareInfoParams{Token: chi.URLParam(r, "token")})
+		info, err := core.GetShareInfo.Call(actionContext(r), app, core.GetShareInfoParams{Token: httpregistry.PathParam(r, "token")})
 		if err != nil {
 			writeSharingError(w, r, err)
 			return
@@ -83,7 +83,7 @@ func handleGetShareInfo(app *core.Core) http.HandlerFunc {
 
 func handleJoinLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		result, err := core.JoinSharedLog.Call(actionContext(r), app, core.JoinSharedLogParams{Token: chi.URLParam(r, "token")})
+		result, err := core.JoinSharedLog.Call(actionContext(r), app, core.JoinSharedLogParams{Token: httpregistry.PathParam(r, "token")})
 		if err != nil {
 			writeSharingError(w, r, err)
 			return

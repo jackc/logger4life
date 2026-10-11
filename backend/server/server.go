@@ -7,9 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/httplog/v3"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/logger4life/backend/cimd"
 	"github.com/jackc/logger4life/backend/core"
@@ -46,133 +43,14 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer cleanup()
 
-	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
-				w.Header().Set(middleware.RequestIDHeader, reqID)
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
-	r.Use(loadSession(app))
-	r.Use(httplog.RequestLogger(logger, &httplog.Options{
-		Level:         cfg.SlogLevel(),
-		RecoverPanics: true,
-		LogExtraAttrs: func(req *http.Request, _ string, _ int) []slog.Attr {
-			var attrs []slog.Attr
-			if reqID := middleware.GetReqID(req.Context()); reqID != "" {
-				attrs = append(attrs, slog.String("request_id", reqID))
-			}
-			if user := userFromContext(req.Context()); user != nil {
-				attrs = append(attrs, slog.String("user_id", user.ID))
-				attrs = append(attrs, slog.String("username", user.Username))
-			}
-			return attrs
-		},
-	}))
-
-	// Health check
-	r.Get("/health", handleHealth(health))
-
-	// Public routes
-	r.Get("/api/hello", handleHello(health))
-	r.Get("/api/settings", handleSettings(cfg))
-	r.Post("/api/register", handleRegister(app, cfg.AllowRegistration))
-	r.Post("/api/login", handleLogin(app))
-	if cfg.PasskeysEnabled() {
-		r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(app))
-		r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(app))
-	}
-
-	// OAuth + MCP. Mounted only when a canonical URL is configured (because
-	// the canonical URL is needed both as the OAuth issuer and as the RFC
-	// 8707 audience binding for issued access tokens).
+	routes := newHTTPRegistry(app, health, cfg, logger, nil)
 	if cfg.MCPEnabled() {
 		defer startOAuthClientCleanup(ctx, app, cfg, logger)()
-		oauth := newOAuthProvider(app, cfg.MCPCanonicalURL)
-		oauth.registrationIPs = newKeyedRateLimiter(limitOrDefault(cfg.OAuthRegistrationPerIP, 5), 5)
-		oauth.registrations = newKeyedRateLimiter(limitOrDefault(cfg.OAuthRegistrationGlobal, 30), 10)
-		oauth.trustedProxies, _ = parseTrustedProxies(cfg.TrustedProxyCIDRs)
-		mcpSrv := newMCPServer(app, oauth)
-		mcpSrv.requests = newKeyedRateLimiter(limitOrDefault(cfg.MCPRequestsPerMinute, 60), limitOrDefault(cfg.MCPRequestBurst, 10))
-
-		r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
-		r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
-		r.Post("/oauth/register", oauth.handleDynamicClientRegistration())
-		r.Get("/oauth/authorize", oauth.handleAuthorize())
-		r.Post("/oauth/authorize", oauth.handleAuthorize())
-		r.Post("/oauth/token", oauth.handleToken())
-		r.Post("/oauth/revoke", oauth.handleRevoke())
-
-		// /mcp authenticates via bearer token, NOT via the cookie-session
-		// loadSession+requireAuth path used for the SPA's /api routes.
-		r.Group(func(r chi.Router) {
-			r.Use(mcpSrv.requireBearerToken())
-			r.Mount("/mcp", mcpSrv.handler)
-		})
-
 		logger.Info("MCP enabled", "canonical_url", cfg.MCPCanonicalURL)
 	}
 
-	// Protected routes
-	r.Group(func(r chi.Router) {
-		r.Use(requireAuth)
-		r.Post("/api/logout", handleLogout(app))
-		r.Get("/api/me", handleMe(app))
-		r.Put("/api/me/email", handleChangeEmail(app))
-		r.Put("/api/me/password", handleChangePassword(app))
-		if cfg.PasskeysEnabled() {
-			r.Get("/api/me/passkeys", handleListPasskeys(app))
-			r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(app))
-			r.Delete("/api/me/passkeys/{passkeyID}", handleDeletePasskey(app))
-			r.Post("/api/me/passkeys/register/begin", handlePasskeyRegisterBegin(app))
-			r.Post("/api/me/passkeys/register/finish", handlePasskeyRegisterFinish(app))
-		}
-
-		// Logs
-		r.Post("/api/logs", handleCreateLog(app))
-		r.Get("/api/logs", handleListLogs(app))
-		r.Get("/api/logs/{logID}", handleGetLog(app))
-		r.Put("/api/logs/{logID}", handleUpdateLog(app))
-		r.Delete("/api/logs/{logID}", handleDeleteLog(app))
-		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(app))
-		r.Put("/api/logs/{logID}/pin", handlePinLog(app))
-		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(app))
-
-		// Folders
-		r.Post("/api/folders", handleCreateFolder(app))
-		r.Get("/api/folders", handleListFolders(app))
-		r.Put("/api/folders/{folderID}", handleRenameFolder(app))
-		r.Put("/api/folders/{folderID}/move", handleMoveFolder(app))
-		r.Delete("/api/folders/{folderID}", handleDeleteFolder(app))
-
-		// Log entries
-		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(app))
-		r.Get("/api/logs/{logID}/entries", handleListLogEntries(app))
-		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(app))
-		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(app))
-
-		// Sharing
-		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(app))
-		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(app))
-		r.Get("/api/logs/{logID}/shares", handleListShares(app))
-		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(app))
-		r.Get("/api/join/{token}", handleGetShareInfo(app))
-		r.Post("/api/join/{token}", handleJoinLog(app))
-
-		// SQL query feature
-		r.Post("/api/sql/execute", handleExecuteSQL(app))
-		r.Get("/api/sql/schema", handleGetSQLSchema(app))
-		r.Get("/api/sql/saved", handleListSavedQueries(app))
-		r.Post("/api/sql/saved", handleCreateSavedQuery(app))
-		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(app))
-		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(app))
-	})
-
 	logger.Info("Starting server", "address", cfg.ListenAddress(), "backend", cfg.DatabaseBackend, "registration", cfg.AllowRegistration)
-	return http.ListenAndServe(cfg.ListenAddress(), r)
+	return http.ListenAndServe(cfg.ListenAddress(), routes.Handler())
 }
 
 type persistence interface {

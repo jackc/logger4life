@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/httpregistry"
 )
 
 func writePasskeyError(w http.ResponseWriter, r *http.Request, err error) {
@@ -114,7 +114,7 @@ func handleUpdatePasskey(app *core.Core) http.HandlerFunc {
 			return
 		}
 		passkey, err := core.RenamePasskey.Call(actionContext(r), app, core.RenamePasskeyParams{
-			PasskeyID: chi.URLParam(r, "passkeyID"), Description: body.Description,
+			PasskeyID: httpregistry.PathParam(r, "passkeyID"), Description: body.Description,
 		})
 		if err != nil {
 			writePasskeyError(w, r, err)
@@ -127,7 +127,7 @@ func handleUpdatePasskey(app *core.Core) http.HandlerFunc {
 func handleDeletePasskey(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, err := core.DeletePasskey.Call(actionContext(r), app, core.DeletePasskeyParams{
-			PasskeyID: chi.URLParam(r, "passkeyID"),
+			PasskeyID: httpregistry.PathParam(r, "passkeyID"),
 		})
 		if err != nil {
 			writePasskeyError(w, r, err)

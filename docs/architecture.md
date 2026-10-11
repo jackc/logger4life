@@ -16,8 +16,8 @@ without a dependency type or invocation method. The package does not interpret
 metadata or depend on any backend package.
 
 `InvokeJSON` accepts exactly one JSON value and rejects unknown fields and trailing
-data before entering middleware; trailing whitespace is allowed. Action package
-tests enforce independence from other repository packages.
+data before entering middleware; trailing whitespace is allowed. Action and HTTP
+registry package tests enforce independence from other repository packages.
 
 `backend/domain` contains pure types and rules. It performs no I/O and does
 not depend on the service or adapter packages.
@@ -153,9 +153,62 @@ the tested build. The inventory contains no policy verification, transport
 exposure, or handler analysis. Source locations refer to the checkout being
 inspected. Use `-root /path/to/logger4life` to inspect another checkout.
 
+## HTTP registry
+
+`httpregistry` is a reusable, application-independent package for HTTP registration,
+metadata compilation, and inspectable typed bindings. Chi remains private to its
+routing implementation. Core and domain cannot import the registry; `action`
+remains independent of transports. See [the library contract](../httpregistry/README.md).
+
+`backend/server/http.go` is the single production route assembly, also used by the
+HTTP integration tests. Every endpoint has application-owned `HTTPMetadata` with
+`Public` and `Credentials`. A compiler turns those values into the session-user
+or OAuth bearer gate; core action `Public` does not control HTTP exposure or
+HTTP authentication. Global request ID, optional session loading, and logging
+stages preserve their previous order, including for MCP and unmatched requests.
+The effective chain appears in every inventory entry, without subrouter policy
+inheritance. The MCP wrapper's origin, bearer, and POST rate-limit checks remain
+one named compound stage with their existing behavior.
+
+All routes, including health, settings, login, OAuth, and the MCP mount, register
+through the library. Three routes use generated typed bindings: `GET /api/logs`,
+`GET /api/logs/{logID}`, and `POST /api/logs/{logID}/entries`. Their mappings invoke
+the existing `core.Action.Call` pipeline, preserve response shapes/statuses and
+application error writers, and keep identity in trusted context. The mutation
+uses strict `encoding/json/v2` request decoding: unknown fields, duplicate keys,
+case aliases, invalid Unicode, top-level null, and trailing input are rejected.
+Response encoding uses `encoding/json` (v1). No new body limit or content-type
+requirement is applied to these existing endpoints.
+
+The application's `bindHTTPAction` adapter supplies the core namespace and handles
+transport input errors before delegating domain errors to each binding's writer.
+`CustomFactory` defers OAuth/MCP construction until an enabled registration needs
+it; all those registrations share one protocol server. Disabled routes remain in
+the inventory without initializing their services. OAuth configuration is applied
+equally to production and test-injected providers.
+
+Run `go run ./cmd/http-inventory` or `mise run inventory:http` to export a
+configuration-specific JSON inventory. Flags `-passkeys`, `-mcp-origin URL`, and
+`-registration` describe a feature configuration; the command does not read
+service configuration from the environment or open databases. The same handler
+constructors assemble the description without executing requests or starting
+background work. `server.HTTPInventory(cfg)` supports callers that already have
+a configuration. The report includes nonsecret feature settings, disabled
+passkey/OAuth/MCP declarations, explicit endpoint metadata, and binding plans.
+Registration-disabled is a handler behavior: `/api/register` remains installed.
+
+An entry's `gaps` marks opaque handler/protocol internals. Installed stages are
+construction evidence, not verification of their implementation. Handler-local
+limits, custom codecs/error writers, and transitive action calls are not inferred.
+Authentication middleware may call actions even on endpoints with no direct
+binding. Mounted protocol methods and internal dispatch remain opaque. HTTP
+source locations and a combined HTTP/action source report are not implemented;
+the existing action inventory and its recognition limits are unchanged.
+
 ## Where new code goes
 
 - Generic catalog and dispatch mechanics: `action`.
+- Generic HTTP registration, inventory, and typed binding mechanics: `httpregistry`.
 - Pure validation, calculation, and domain types: `backend/domain`.
 - Load/compute/save orchestration and action definitions: `backend/core`.
 - PostgreSQL persistence mechanics: `backend/pgstore`.

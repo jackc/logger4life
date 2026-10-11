@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/httpregistry"
 )
 
 func handleExecuteSQL(app *core.Core) http.HandlerFunc {
@@ -111,7 +111,7 @@ func handleCreateSavedQuery(app *core.Core) http.HandlerFunc {
 func handleUpdateSavedQuery(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
-		queryID := chi.URLParam(r, "id")
+		queryID := httpregistry.PathParam(r, "id")
 
 		var req savedQueryRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -131,7 +131,7 @@ func handleUpdateSavedQuery(app *core.Core) http.HandlerFunc {
 func handleDeleteSavedQuery(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
-		queryID := chi.URLParam(r, "id")
+		queryID := httpregistry.PathParam(r, "id")
 
 		_, err := core.DeleteSavedQuery.Call(core.WithUserID(r.Context(), user.ID), app, core.DeleteSavedQueryParams{ID: queryID})
 		if err != nil {

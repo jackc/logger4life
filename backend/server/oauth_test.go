@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/cimd"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
@@ -53,23 +52,7 @@ func setupOAuthTestServer(t *testing.T, metadata ...core.OAuthClientMetadataReso
 	require.NoError(t, err)
 	t.Cleanup(cleanup)
 	oauth := newOAuthProvider(app, srv.URL)
-	mcpSrv := newMCPServer(app, oauth)
-
-	r := chi.NewRouter()
-	r.Use(loadSession(app))
-	r.Post("/api/register", handleRegister(app, true))
-	r.Post("/api/login", handleLogin(app))
-	r.Get("/.well-known/oauth-protected-resource", oauth.handleProtectedResourceMetadata())
-	r.Get("/.well-known/oauth-authorization-server", oauth.handleAuthorizationServerMetadata())
-	r.Post("/oauth/register", oauth.handleDynamicClientRegistration())
-	r.Get("/oauth/authorize", oauth.handleAuthorize())
-	r.Post("/oauth/authorize", oauth.handleAuthorize())
-	r.Post("/oauth/token", oauth.handleToken())
-	r.Group(func(r chi.Router) {
-		r.Use(mcpSrv.requireBearerToken())
-		r.Mount("/mcp", mcpSrv.handler)
-	})
-	srv.Config.Handler = r
+	srv.Config.Handler = newHTTPRegistry(app, func(context.Context) error { return nil }, cfg, slog.New(slog.DiscardHandler), oauth).Handler()
 	return srv, oauth
 }
 

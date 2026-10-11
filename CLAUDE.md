@@ -51,7 +51,7 @@ build, and release commands remain mise tasks and never start services. See
 ### Backend (Go) — `backend/`
 - **CLI**: Cobra-based with subcommands (e.g., `server`). Entry point: `main.go` → `backend.Execute()` → `backend/root.go`
 - **Layering**: `backend/domain` (pure rules) ← `backend/core` (action catalog and driven ports) ← `backend/pgstore` / `backend/jedstore` (persistence) and `backend/server` (HTTP/MCP adapters). See `docs/architecture.md`; `TestArchitecturalBoundaries` enforces the import rules.
-- **HTTP**: Chi v5 router with structured request logging via `httplog/v3`; the port comes from `--port`/`PORT` (4000 only as a default). API routes under `/api/`.
+- **HTTP**: Inspectable `httpregistry` endpoints with application-owned policy metadata and a private Chi v5 router with structured request logging via `httplog/v3`; the port comes from `--port`/`PORT` (4000 only as a default). API routes under `/api/`.
 - **Database**: `DATABASE_BACKEND=postgresql` (default) uses pgx v5 and `DATABASE_URL`; `DATABASE_BACKEND=jed` uses the embedded file `<JED_DATA_DIR>/logger4life.jed`. See `docs/database-backends.md`.
 - **Config**: Environment variables and CLI flags. Precedence: defaults < env vars < CLI flags. Env vars: `DATABASE_BACKEND`, `DATABASE_URL`, `JED_DATA_DIR`, `BIND_ADDRESS`, `PORT`, `ALLOW_REGISTRATION`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`, `LOG_LEVEL`, `LOG_FORMAT`, `MCP_CANONICAL_URL`, `SECURE_COOKIES`. CLI flags include the corresponding `--database-backend`, `--database-url`, and `--jed-data-dir` options. Set `SECURE_COOKIES=true` in any HTTPS deployment so the session cookie gets the `Secure` attribute.
 - **Logging**: Structured logging via `log/slog` and `httplog/v3`. `LOG_LEVEL` accepts `debug`, `info` (default), `warn`, `error`. `LOG_FORMAT` accepts `json` (default), `text`, or `journal` (logs directly to systemd journald via `slog-journal`).
@@ -64,7 +64,10 @@ build, and release commands remain mise tasks and never start services. See
 | `backend/root.go` | Cobra root command definition |
 | `backend/server_cmd.go` | `server` subcommand: flags, config resolution, calls `server.Run` |
 | `backend/architecture_test.go` | Enforces the layering import rules |
-| `backend/server/server.go` | Composition root: backend selection, store, core, Chi router, route registration |
+| `backend/server/server.go` | Composition root: backend selection, store/core construction, service lifecycle |
+| `backend/server/http.go` | HTTP route registration, policy compilation, typed action bindings, inventory |
+| `httpregistry/` | Application-independent HTTP registry, request mapping, and inventory |
+| `action/` | Application-independent typed action catalog and dispatch |
 | `backend/server/config.go` | Config struct, default config, env var loader |
 | `backend/server/auth.go` | Register, login, logout handlers; session/cookie management |
 | `backend/server/logs.go` | Log and log entry HTTP handlers |

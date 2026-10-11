@@ -6,8 +6,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/logger4life/httpregistry"
 )
 
 type (
@@ -83,7 +83,7 @@ func handleRenameFolder(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		v, e := core.RenameFolder.Call(actionContext(r), app, core.RenameFolderParams{FolderID: chi.URLParam(r, "folderID"), Name: body.Name})
+		v, e := core.RenameFolder.Call(actionContext(r), app, core.RenameFolderParams{FolderID: httpregistry.PathParam(r, "folderID"), Name: body.Name})
 		if e != nil {
 			writeFolderError(w, r, e)
 			return
@@ -98,7 +98,7 @@ func handleMoveFolder(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		_, e := core.MoveFolder.Call(actionContext(r), app, core.MoveFolderParams{FolderID: chi.URLParam(r, "folderID"), ParentFolderID: body.ParentFolderID, Position: body.Position})
+		_, e := core.MoveFolder.Call(actionContext(r), app, core.MoveFolderParams{FolderID: httpregistry.PathParam(r, "folderID"), ParentFolderID: body.ParentFolderID, Position: body.Position})
 		if e != nil {
 			writeFolderError(w, r, e)
 			return
@@ -109,7 +109,7 @@ func handleMoveFolder(app *core.Core) http.HandlerFunc {
 
 func handleDeleteFolder(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, e := core.DeleteFolder.Call(actionContext(r), app, core.DeleteFolderParams{FolderID: chi.URLParam(r, "folderID")})
+		_, e := core.DeleteFolder.Call(actionContext(r), app, core.DeleteFolderParams{FolderID: httpregistry.PathParam(r, "folderID")})
 		if e != nil {
 			writeFolderError(w, r, e)
 			return

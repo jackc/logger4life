@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
+	"github.com/jackc/logger4life/httpregistry"
 )
 
 type fieldDefinition = domain.FieldDefinition
@@ -40,11 +40,6 @@ type pinLogRequest struct {
 
 type updateHomePositionRequest struct {
 	HomePosition int `json:"home_position"`
-}
-
-type createLogEntryRequest struct {
-	Note   string         `json:"note"`
-	Fields map[string]any `json:"fields"`
 }
 
 type updateLogEntryRequest struct {
@@ -102,36 +97,10 @@ func handleCreateLog(app *core.Core) http.HandlerFunc {
 	}
 }
 
-func handleListLogs(app *core.Core) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		ctx := core.WithUserID(r.Context(), user.ID)
-		logs, err := core.ListLogs.Call(ctx, app, core.ListLogsParams{})
-		if err != nil {
-			internalError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, logs)
-	}
-}
-
-func handleGetLog(app *core.Core) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
-		l, err := core.GetLog.Call(core.WithUserID(r.Context(), user.ID), app, core.GetLogParams{LogID: logID})
-		if err != nil {
-			writeLogOperationError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, l)
-	}
-}
-
 func handleUpdateLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
+		logID := httpregistry.PathParam(r, "logID")
 
 		var req createLogRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -165,7 +134,7 @@ func handleUpdateLog(app *core.Core) http.HandlerFunc {
 func handleDeleteLog(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := userFromContext(r.Context())
-		logID := chi.URLParam(r, "logID")
+		logID := httpregistry.PathParam(r, "logID")
 
 		_, err := core.DeleteLog.Call(core.WithUserID(r.Context(), user.ID), app, core.DeleteLogParams{LogID: logID})
 		if err != nil {
@@ -195,24 +164,9 @@ func writeLogOperationError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-func handleCreateLogEntry(app *core.Core) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var body createLogEntryRequest
-		if !decodeAction(w, r, &body) {
-			return
-		}
-		v, err := core.CreateLogEntry.Call(actionContext(r), app, core.CreateLogEntryParams{LogID: chi.URLParam(r, "logID"), Fields: body.Fields, Note: body.Note})
-		if err != nil {
-			writeLogOperationError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, v)
-	}
-}
-
 func handleListLogEntries(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		v, err := core.ListLogEntries.Call(actionContext(r), app, core.ListLogEntriesParams{LogID: chi.URLParam(r, "logID")})
+		v, err := core.ListLogEntries.Call(actionContext(r), app, core.ListLogEntriesParams{LogID: httpregistry.PathParam(r, "logID")})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return
@@ -227,7 +181,7 @@ func handleUpdateLogEntry(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		v, err := core.UpdateLogEntry.Call(actionContext(r), app, core.UpdateLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID"), Fields: body.Fields, Note: body.Note, OccurredAt: body.OccurredAt})
+		v, err := core.UpdateLogEntry.Call(actionContext(r), app, core.UpdateLogEntryParams{LogID: httpregistry.PathParam(r, "logID"), EntryID: httpregistry.PathParam(r, "entryID"), Fields: body.Fields, Note: body.Note, OccurredAt: body.OccurredAt})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return
@@ -238,7 +192,7 @@ func handleUpdateLogEntry(app *core.Core) http.HandlerFunc {
 
 func handleDeleteLogEntry(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, err := core.DeleteLogEntry.Call(actionContext(r), app, core.DeleteLogEntryParams{LogID: chi.URLParam(r, "logID"), EntryID: chi.URLParam(r, "entryID")})
+		_, err := core.DeleteLogEntry.Call(actionContext(r), app, core.DeleteLogEntryParams{LogID: httpregistry.PathParam(r, "logID"), EntryID: httpregistry.PathParam(r, "entryID")})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return
@@ -253,7 +207,7 @@ func handleUpdateLogPlacement(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		_, err := core.UpdateLogPlacement.Call(actionContext(r), app, core.UpdateLogPlacementParams{LogID: chi.URLParam(r, "logID"), FolderID: body.FolderID, Position: body.Position})
+		_, err := core.UpdateLogPlacement.Call(actionContext(r), app, core.UpdateLogPlacementParams{LogID: httpregistry.PathParam(r, "logID"), FolderID: body.FolderID, Position: body.Position})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return
@@ -268,7 +222,7 @@ func handlePinLog(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		_, err := core.PinLog.Call(actionContext(r), app, core.PinLogParams{LogID: chi.URLParam(r, "logID"), Pinned: body.Pinned})
+		_, err := core.PinLog.Call(actionContext(r), app, core.PinLogParams{LogID: httpregistry.PathParam(r, "logID"), Pinned: body.Pinned})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return
@@ -283,7 +237,7 @@ func handleUpdateLogHomePosition(app *core.Core) http.HandlerFunc {
 		if !decodeAction(w, r, &body) {
 			return
 		}
-		_, err := core.UpdateLogHomePosition.Call(actionContext(r), app, core.UpdateLogHomePositionParams{LogID: chi.URLParam(r, "logID"), HomePosition: body.HomePosition})
+		_, err := core.UpdateLogHomePosition.Call(actionContext(r), app, core.UpdateLogHomePositionParams{LogID: httpregistry.PathParam(r, "logID"), HomePosition: body.HomePosition})
 		if err != nil {
 			writeLogOperationError(w, r, err)
 			return

@@ -129,6 +129,11 @@ description = "Export core action declarations and source locations as JSON"
 dir = "{{config_root}}"
 run = "go run ./cmd/action-inventory"
 
+[tasks."inventory:http"]
+description = "Export HTTP endpoints, policy metadata, bindings, and coverage gaps as JSON"
+dir = "{{config_root}}"
+run = "go run ./cmd/http-inventory"
+
 [tasks."build:binary"]
 description = "Build the logger4life binary for the current platform"
 dir = "{{config_root}}"

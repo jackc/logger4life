@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/logger4life/test/testutil"
 	"github.com/jackc/testdb"
 	"github.com/stretchr/testify/assert"
@@ -43,55 +42,7 @@ func setupTestRouterWithConfig(t *testing.T, allowRegistration bool) *testServer
 	require.NoError(t, err)
 	t.Cleanup(cleanup)
 
-	r := chi.NewRouter()
-	r.Use(loadSession(app))
-	r.Get("/api/settings", handleSettings(cfg))
-	r.Post("/api/register", handleRegister(app, allowRegistration))
-	r.Post("/api/login", handleLogin(app))
-	r.Post("/api/passkey-login/begin", handlePasskeyLoginBegin(app))
-	r.Post("/api/passkey-login/finish", handlePasskeyLoginFinish(app))
-	r.Group(func(r chi.Router) {
-		r.Use(requireAuth)
-		r.Post("/api/logout", handleLogout(app))
-		r.Get("/api/me", handleMe(app))
-		r.Put("/api/me/email", handleChangeEmail(app))
-		r.Put("/api/me/password", handleChangePassword(app))
-		r.Get("/api/me/passkeys", handleListPasskeys(app))
-		r.Put("/api/me/passkeys/{passkeyID}", handleUpdatePasskey(app))
-		r.Delete("/api/me/passkeys/{passkeyID}", handleDeletePasskey(app))
-		r.Post("/api/me/passkeys/register/begin", handlePasskeyRegisterBegin(app))
-		r.Post("/api/me/passkeys/register/finish", handlePasskeyRegisterFinish(app))
-		r.Post("/api/logs", handleCreateLog(app))
-		r.Get("/api/logs", handleListLogs(app))
-		r.Get("/api/logs/{logID}", handleGetLog(app))
-		r.Put("/api/logs/{logID}", handleUpdateLog(app))
-		r.Delete("/api/logs/{logID}", handleDeleteLog(app))
-		r.Put("/api/logs/{logID}/placement", handleUpdateLogPlacement(app))
-		r.Put("/api/logs/{logID}/pin", handlePinLog(app))
-		r.Put("/api/logs/{logID}/home-position", handleUpdateLogHomePosition(app))
-		r.Post("/api/folders", handleCreateFolder(app))
-		r.Get("/api/folders", handleListFolders(app))
-		r.Put("/api/folders/{folderID}", handleRenameFolder(app))
-		r.Put("/api/folders/{folderID}/move", handleMoveFolder(app))
-		r.Delete("/api/folders/{folderID}", handleDeleteFolder(app))
-		r.Post("/api/logs/{logID}/entries", handleCreateLogEntry(app))
-		r.Get("/api/logs/{logID}/entries", handleListLogEntries(app))
-		r.Put("/api/logs/{logID}/entries/{entryID}", handleUpdateLogEntry(app))
-		r.Delete("/api/logs/{logID}/entries/{entryID}", handleDeleteLogEntry(app))
-		r.Post("/api/logs/{logID}/share-token", handleCreateShareToken(app))
-		r.Delete("/api/logs/{logID}/share-token", handleDeleteShareToken(app))
-		r.Get("/api/logs/{logID}/shares", handleListShares(app))
-		r.Delete("/api/logs/{logID}/shares/{shareID}", handleRemoveShare(app))
-		r.Get("/api/join/{token}", handleGetShareInfo(app))
-		r.Post("/api/join/{token}", handleJoinLog(app))
-
-		r.Post("/api/sql/execute", handleExecuteSQL(app))
-		r.Get("/api/sql/schema", handleGetSQLSchema(app))
-		r.Get("/api/sql/saved", handleListSavedQueries(app))
-		r.Post("/api/sql/saved", handleCreateSavedQuery(app))
-		r.Put("/api/sql/saved/{id}", handleUpdateSavedQuery(app))
-		r.Delete("/api/sql/saved/{id}", handleDeleteSavedQuery(app))
-	})
+	r := newHTTPRegistry(app, func(context.Context) error { return nil }, cfg, slog.New(slog.DiscardHandler), nil).Handler()
 
 	return &testServer{Server: httptest.NewServer(r), db: db, app: app}
 }

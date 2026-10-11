@@ -4,10 +4,12 @@
 package action
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -159,6 +161,8 @@ func NewDispatcher[D, M any](registry *Registry[D, M], middleware ...Middleware[
 }
 
 func (d *Dispatcher[D, M]) run(ctx context.Context, inv Invocation[M], h Handler[M]) (any, error) {
+	// The terminal handler captures this invocation's dependencies and parameters.
+	// Reusing a composed chain would require a different call-state contract.
 	for i := len(d.middleware) - 1; i >= 0; i-- {
 		h = d.middleware[i](h)
 	}
@@ -166,17 +170,24 @@ func (d *Dispatcher[D, M]) run(ctx context.Context, inv Invocation[M], h Handler
 }
 
 // InvokeJSON resolves an action and decodes parameters before entering
-// middleware. Unknown JSON fields are rejected. Parameter validation runs
-// inside middleware, as it does for typed calls.
+// middleware. Unknown JSON fields and trailing data are rejected. Parameter
+// validation runs inside middleware, as it does for typed calls.
 func (d *Dispatcher[D, M]) InvokeJSON(ctx context.Context, dependencies D, name string, data []byte) (any, error) {
 	a, ok := d.registry.Lookup(name)
 	if !ok {
 		return nil, ErrUnknownAction
 	}
 	p := a.NewParams()
-	dec := json.NewDecoder(strings.NewReader(string(data)))
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(p); err != nil {
+		return nil, &ValidationError{Action: name, Err: err}
+	}
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			err = errors.New("expected one JSON value")
+		}
 		return nil, &ValidationError{Action: name, Err: err}
 	}
 	return a.Invoke(ctx, d, dependencies, p)

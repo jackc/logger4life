@@ -159,3 +159,43 @@ func TestDuplicateNamesAreRejectedWithinARegistry(t *testing.T) {
 	}()
 	registry.Define(def)
 }
+
+func TestInvokeJSONRejectsTrailingDataBeforeDispatch(t *testing.T) {
+	var registry action.Registry[struct{}, struct{}]
+	handlerCalls, middlewareCalls := 0, 0
+	registry.Define(action.Definition[struct{}, struct{}, params, string]{
+		Name: "json",
+		Handler: func(_ context.Context, _ struct{}, p params) (string, error) {
+			handlerCalls++
+			return p.Value, nil
+		},
+	})
+	dispatcher := action.NewDispatcher(&registry, func(next action.Handler[struct{}]) action.Handler[struct{}] {
+		return func(ctx context.Context, inv action.Invocation[struct{}]) (any, error) {
+			middlewareCalls++
+			return next(ctx, inv)
+		}
+	})
+	for _, data := range []string{
+		`{"value":"first"}{"value":"second"}`,
+		`{"value":"first"} null`,
+		`{"value":"first"} true`,
+		`{"value":"first"} garbage`,
+		`{"value":"first"} {`,
+	} {
+		t.Run(data, func(t *testing.T) {
+			_, err := dispatcher.InvokeJSON(context.Background(), struct{}{}, "json", []byte(data))
+			var validation *action.ValidationError
+			if !errors.As(err, &validation) || validation.Action != "json" {
+				t.Fatalf("expected named validation error, got %v", err)
+			}
+			if handlerCalls != 0 || middlewareCalls != 0 {
+				t.Fatal("malformed input entered the invocation pipeline")
+			}
+		})
+	}
+	result, err := dispatcher.InvokeJSON(context.Background(), struct{}{}, "json", []byte("{\"value\":\"ok\"} \n\t"))
+	if err != nil || result != "ok" || handlerCalls != 1 || middlewareCalls != 1 {
+		t.Fatalf("trailing whitespace should be accepted: result=%v error=%v calls=%d/%d", result, err, handlerCalls, middlewareCalls)
+	}
+}

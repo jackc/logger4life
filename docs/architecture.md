@@ -15,6 +15,10 @@ action's `Info[M]` (name, description, metadata) and invocation parameters,
 without a dependency type or invocation method. The package does not interpret
 metadata or depend on any backend package.
 
+`InvokeJSON` accepts exactly one JSON value and rejects unknown fields and trailing
+data before entering middleware; trailing whitespace is allowed. Action package
+tests enforce independence from other repository packages.
+
 `backend/domain` contains pure types and rules. It performs no I/O and does
 not depend on the service or adapter packages.
 

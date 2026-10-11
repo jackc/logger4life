@@ -47,7 +47,7 @@ export default defineConfig({
 				WEBAUTHN_RP_ID: 'localhost',
 				WEBAUTHN_ORIGIN: baseURL
 			},
-			url: `${backendURL}/api/hello`
+			url: `${backendURL}/health`
 		},
 		{
 			command: 'npm run dev',

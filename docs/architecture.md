@@ -88,10 +88,10 @@ responses. Plaintext tokens never reach a store; core hashes them first, and
 PostgreSQL, jed, or the fail-stop `both` comparison adapter, builds one store
 and one `core.Core`, and `server.Run`
 injects that core into every HTTP and MCP adapter; no handler constructs its
-own. Health and hello are
-infrastructure liveness probes rather than catalog operations — they read no
-application state — so `Run` supplies a `HealthCheck` function and the handlers
-hold neither SQL nor a connection pool. `GET /api/settings` is exempt for the
+own. The health endpoint is an
+infrastructure liveness probe rather than a catalog operation — it reads no
+application state — so `Run` supplies a `HealthCheck` function and the handler
+holds neither SQL nor a connection pool. `GET /api/settings` is exempt for the
 same reason: it reports what this process was configured with, so there is no
 stored state for an action to own.
 

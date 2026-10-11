@@ -11,16 +11,6 @@ import (
 
 const sessionCookieName = "session_token"
 
-func handleHello(health HealthCheck) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := health(r.Context()); err != nil {
-			internalError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"message": "Hello, World!"})
-	}
-}
-
 func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 	var validationErr *core.ValidationError
 	switch {

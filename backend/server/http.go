@@ -102,7 +102,6 @@ func newHTTPRegistry(app *core.Core, health HealthCheck, cfg Config, logger *slo
 		r.Handle(httpregistry.Spec[HTTPMetadata]{Method: method, Path: path, Metadata: policy, When: condition}, httpregistry.Custom(h))
 	}
 	handle("GET", "/health", public, nil, handleHealth(health))
-	handle("GET", "/api/hello", public, nil, handleHello(health))
 	handle("GET", "/api/settings", public, nil, handleSettings(cfg))
 	// Registration remains installed even when the handler's feature is disabled.
 	handle("POST", "/api/register", public, nil, handleRegister(app, cfg.AllowRegistration))

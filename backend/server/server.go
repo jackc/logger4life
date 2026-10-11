@@ -16,10 +16,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// HealthCheck reports whether the database answers queries. Health and hello
-// are infrastructure liveness probes, not catalog operations: they read no
+// HealthCheck reports whether the database answers queries. The health endpoint
+// is an infrastructure liveness probe, not a catalog operation: it reads no
 // application state, so the composition root supplies this function and the
-// handlers hold no SQL or connection pool.
+// handler holds no SQL or connection pool.
 type HealthCheck func(ctx context.Context) error
 
 // Run connects the database, wires core to its ports, and serves the HTTP

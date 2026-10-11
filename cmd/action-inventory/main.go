@@ -3,7 +3,8 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -78,9 +79,7 @@ func run(root string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(doc)
+	return json.MarshalWrite(out, doc, jsontext.WithIndent("  "), json.Deterministic(true))
 }
 
 func collect(pkg *packages.Package, root string) (inventory, error) {

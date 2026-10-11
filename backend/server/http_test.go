@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -127,7 +127,7 @@ func TestEntryBindingStrictDecodingAndDispatch(t *testing.T) {
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			var body map[string]any
-			require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+			require.NoError(t, json.UnmarshalRead(resp.Body, &body))
 			require.Equal(t, "invalid request body", body["error"])
 		})
 	}

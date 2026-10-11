@@ -3,7 +3,8 @@ package core
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
@@ -235,9 +236,9 @@ var BeginPasskeyRegistration = Define(ActionDef[BeginPasskeyRegistrationParams, 
 })
 
 type FinishPasskeyRegistrationParams struct {
-	ChallengeID string          `json:"challenge_id"`
-	Credential  json.RawMessage `json:"credential"`
-	Description string          `json:"description"`
+	ChallengeID string         `json:"challenge_id"`
+	Credential  jsontext.Value `json:"credential"`
+	Description string         `json:"description"`
 }
 
 func (p *FinishPasskeyRegistrationParams) Validate() error {
@@ -327,8 +328,8 @@ var BeginPasskeyLogin = Define(ActionDef[BeginPasskeyLoginParams, PasskeyLoginOp
 })
 
 type FinishPasskeyLoginParams struct {
-	ChallengeID string          `json:"challenge_id"`
-	Credential  json.RawMessage `json:"credential"`
+	ChallengeID string         `json:"challenge_id"`
+	Credential  jsontext.Value `json:"credential"`
 }
 
 func (p FinishPasskeyLoginParams) Validate() error {

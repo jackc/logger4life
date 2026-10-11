@@ -101,7 +101,7 @@ bodies are ignored by default, as in the existing application.
 
 Decode failures arrive at the error writer as `InputError`, preserving wrapped
 errors such as `http.MaxBytesError`. Operation errors pass through unchanged.
-Successful results are encoded completely with `encoding/json` (v1) and the
+Successful results are encoded completely with `encoding/json/v2` and the
 configured 2xx status;
 204/205 and projections are not supported. Encoding happens before committing
 headers. Login cookies, response filtering, OAuth forms, streams, and protocol

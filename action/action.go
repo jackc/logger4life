@@ -4,12 +4,10 @@
 package action
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -170,7 +168,8 @@ func (d *Dispatcher[D, M]) run(ctx context.Context, inv Invocation[M], h Handler
 }
 
 // InvokeJSON resolves an action and decodes parameters before entering
-// middleware. Unknown JSON fields and trailing data are rejected. Parameter
+// middleware. JSON v2 rejects unknown fields, duplicate names, invalid Unicode,
+// and trailing data, and matches field names case-sensitively. Parameter
 // validation runs inside middleware, as it does for typed calls.
 func (d *Dispatcher[D, M]) InvokeJSON(ctx context.Context, dependencies D, name string, data []byte) (any, error) {
 	a, ok := d.registry.Lookup(name)
@@ -178,16 +177,7 @@ func (d *Dispatcher[D, M]) InvokeJSON(ctx context.Context, dependencies D, name 
 		return nil, ErrUnknownAction
 	}
 	p := a.NewParams()
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(p); err != nil {
-		return nil, &ValidationError{Action: name, Err: err}
-	}
-	var trailing json.RawMessage
-	if err := dec.Decode(&trailing); err != io.EOF {
-		if err == nil {
-			err = errors.New("expected one JSON value")
-		}
+	if err := json.Unmarshal(data, p, json.RejectUnknownMembers(true)); err != nil {
 		return nil, &ValidationError{Action: name, Err: err}
 	}
 	return a.Invoke(ctx, d, dependencies, p)

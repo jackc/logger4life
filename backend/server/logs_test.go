@@ -1,7 +1,7 @@
 package server
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"strings"
 	"testing"
@@ -19,7 +19,7 @@ func getJSONArray(url string, cookies []*http.Cookie) (*http.Response, []map[str
 	client := &http.Client{}
 	resp, _ := client.Do(req)
 	var result []map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.UnmarshalRead(resp.Body, &result)
 	resp.Body.Close()
 	return resp, result
 }

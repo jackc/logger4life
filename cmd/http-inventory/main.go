@@ -2,7 +2,8 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"flag"
 	"fmt"
 	"os"
@@ -35,9 +36,7 @@ func main() {
 		Features  map[string]bool `json:"features"`
 		Inventory any             `json:"inventory"`
 	}{map[string]bool{"passkeys": cfg.PasskeysEnabled(), "mcp": cfg.MCPEnabled(), "registration": cfg.AllowRegistration}, inventory}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(report); err != nil {
+	if err := json.MarshalWrite(os.Stdout, report, jsontext.WithIndent("  "), json.Deterministic(true)); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

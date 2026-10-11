@@ -22,7 +22,7 @@ const sessionTokenLength = 32
 type User struct {
 	ID       string  `json:"id"`
 	Username string  `json:"username"`
-	Email    *string `json:"email,omitempty"`
+	Email    *string `json:"email,omitzero"`
 }
 
 // Session is the server-side credential persisted for an authenticated user.
@@ -105,7 +105,7 @@ func authSession(user User, session Session) AuthSession {
 
 type RegisterUserParams struct {
 	Username string  `json:"username"`
-	Email    *string `json:"email,omitempty"`
+	Email    *string `json:"email,omitzero"`
 	Password string  `json:"password"`
 }
 

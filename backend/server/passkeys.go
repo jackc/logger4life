@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -46,7 +45,7 @@ func handlePasskeyRegisterBegin(app *core.Core) http.HandlerFunc {
 func handlePasskeyRegisterFinish(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.FinishPasskeyRegistrationParams
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		if err := decodeJSONObject(r.Body, &params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -75,7 +74,7 @@ func handlePasskeyLoginBegin(app *core.Core) http.HandlerFunc {
 func handlePasskeyLoginFinish(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.FinishPasskeyLoginParams
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		if err := decodeJSONObject(r.Body, &params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -109,7 +108,7 @@ func handleUpdatePasskey(app *core.Core) http.HandlerFunc {
 		var body struct {
 			Description string `json:"description"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := decodeJSONObject(r.Body, &body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}

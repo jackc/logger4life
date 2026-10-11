@@ -1,7 +1,7 @@
 package cimd
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 	"testing"
 
@@ -95,6 +95,8 @@ func TestMetadataDocuments(t *testing.T) {
 		"null", "[]", "{}", valid + "{}", valid + "junk", valid[:len(valid)-1],
 		`{"client_id":"different",` + valid[1:], strings.Replace(valid, "client_id", "CLIENT_ID", 1),
 		strings.Replace(valid, "Example Client", string([]byte{0xff}), 1),
+		strings.Replace(valid, "Example Client", `\ud800`, 1),
+		`{"extension":{"x":1,"x":2},` + valid[1:],
 	} {
 		_, err := parseMetadata(testID, []byte(body))
 		require.Error(t, err, "%q", body)

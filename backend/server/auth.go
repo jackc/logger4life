@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -49,7 +48,7 @@ func handleRegister(app *core.Core, allowRegistration bool) http.HandlerFunc {
 			return
 		}
 		var params core.RegisterUserParams
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		if err := decodeJSONObject(r.Body, &params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -66,7 +65,7 @@ func handleRegister(app *core.Core, allowRegistration bool) http.HandlerFunc {
 func handleLogin(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.LoginWithPasswordParams
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		if err := decodeJSONObject(r.Body, &params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -134,7 +133,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 func handleChangeEmail(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.ChangeEmailParams
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		if err := decodeJSONObject(r.Body, &params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -150,7 +149,7 @@ func handleChangeEmail(app *core.Core) http.HandlerFunc {
 func handleChangePassword(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.ChangePasswordParams
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		if err := decodeJSONObject(r.Body, &params); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -160,12 +159,6 @@ func handleChangePassword(app *core.Core) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
 	}
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
 }
 
 func internalError(w http.ResponseWriter, r *http.Request, err error) {

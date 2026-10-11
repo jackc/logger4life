@@ -3,7 +3,8 @@ package jedstore
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
@@ -119,7 +120,7 @@ func adaptArgs(args []any) ([]any, error) {
 			if v != nil {
 				adapted[i] = *v
 			}
-		case []domain.FieldDefinition, map[string]any, []string, json.RawMessage:
+		case []domain.FieldDefinition, map[string]any, []string, jsontext.Value:
 			encoded, err := json.Marshal(v)
 			if err != nil {
 				return nil, fmt.Errorf("jedstore: encode parameter %d: %w", i+1, err)
@@ -140,7 +141,7 @@ func adaptDestinations(dest []any) []any {
 			adapted[i] = &nullableStringScanner{dest: v}
 		case *[]byte:
 			adapted[i] = &nullableBytesScanner{dest: v}
-		case *[]domain.FieldDefinition, *map[string]any, *[]string, *json.RawMessage:
+		case *[]domain.FieldDefinition, *map[string]any, *[]string, *jsontext.Value:
 			adapted[i] = &jsonScanner{dest: d}
 		default:
 			adapted[i] = d

@@ -1,13 +1,11 @@
 package cimd
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
-	"io"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
@@ -16,36 +14,10 @@ import (
 var errMetadata = errors.New("invalid client metadata document")
 
 func parseMetadata(id string, body []byte) (core.OAuthClient, error) {
-	if !utf8.Valid(body) {
-		return core.OAuthClient{}, errMetadata
-	}
-	// Decode exact, case-sensitive member names and reject duplicates rather
-	// than accepting whichever security-sensitive value appears last.
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	token, err := decoder.Token()
-	if err != nil || token != json.Delim('{') {
-		return core.OAuthClient{}, errMetadata
-	}
-	fields := map[string]json.RawMessage{}
-	for decoder.More() {
-		token, err := decoder.Token()
-		if err != nil {
-			return core.OAuthClient{}, errMetadata
-		}
-		key, ok := token.(string)
-		if !ok || fields[key] != nil {
-			return core.OAuthClient{}, errMetadata
-		}
-		var value json.RawMessage
-		if err := decoder.Decode(&value); err != nil {
-			return core.OAuthClient{}, errMetadata
-		}
-		fields[key] = value
-	}
-	if _, err := decoder.Token(); err != nil {
-		return core.OAuthClient{}, errMetadata
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	// A map preserves exact member names and permits metadata extensions.
+	// JSON v2 rejects duplicates, invalid Unicode, and trailing input.
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(body, &fields); err != nil || fields == nil {
 		return core.OAuthClient{}, errMetadata
 	}
 	var documentID, name, authMethod string

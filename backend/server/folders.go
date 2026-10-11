@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -28,7 +27,7 @@ func actionContext(r *http.Request) context.Context {
 }
 
 func decodeAction(w http.ResponseWriter, r *http.Request, v any) bool {
-	if json.NewDecoder(r.Body).Decode(v) != nil {
+	if decodeJSONObject(r.Body, v) != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return false
 	}

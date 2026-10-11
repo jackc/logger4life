@@ -3,7 +3,8 @@ package core
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"time"
 
@@ -40,7 +41,7 @@ type SavedQuerySummary struct {
 }
 
 type CollectionPageParams struct {
-	Limit  int    `json:"limit,omitempty" jsonschema:"maximum records to return; defaults to 50, maximum 100; byte limits may shorten a page"`
+	Limit  int    `json:"limit,omitzero" jsonschema:"maximum records to return; defaults to 50, maximum 100; byte limits may shorten a page"`
 	Cursor string `json:"cursor,omitempty" jsonschema:"opaque next_cursor from the previous page of this tool"`
 }
 
@@ -89,7 +90,9 @@ func boundCollectionPage[T any](all []T, limit int, cursor collectionCursor, key
 		if len(selected) == limit {
 			break
 		}
-		encoded, err := json.Marshal(item)
+		// The MCP SDK still escapes HTML and JavaScript line separators in both
+		// text and structured results. Budget against that representation.
+		encoded, err := json.Marshal(item, jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true))
 		if err != nil {
 			return nil, "", err
 		}

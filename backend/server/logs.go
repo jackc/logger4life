@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -20,7 +19,7 @@ type logResponse struct {
 	Name         string            `json:"name"`
 	Fields       []fieldDefinition `json:"fields"`
 	IsOwner      bool              `json:"is_owner"`
-	ShareToken   *string           `json:"share_token,omitempty"`
+	ShareToken   *string           `json:"share_token,omitzero"`
 	FolderID     *string           `json:"folder_id"`
 	Position     int               `json:"position"`
 	PinnedToHome bool              `json:"pinned_to_home"`
@@ -73,7 +72,7 @@ func handleCreateLog(app *core.Core) http.HandlerFunc {
 		user := userFromContext(r.Context())
 
 		var req createLogRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSONObject(r.Body, &req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -103,7 +102,7 @@ func handleUpdateLog(app *core.Core) http.HandlerFunc {
 		logID := httpregistry.PathParam(r, "logID")
 
 		var req createLogRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSONObject(r.Body, &req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"log/slog"
 	"net/http"
@@ -75,7 +75,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var body map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &body))
 	assert.Equal(t, srv.URL, body["resource"])
 	assert.Equal(t, []any{srv.URL}, body["authorization_servers"])
 	assert.Equal(t, []any{"mcp"}, body["scopes_supported"])
@@ -92,7 +92,7 @@ func TestAuthorizationServerMetadata(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var body map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &body))
 	assert.Equal(t, srv.URL, body["issuer"])
 	assert.Equal(t, srv.URL+"/oauth/authorize", body["authorization_endpoint"])
 	assert.Equal(t, srv.URL+"/oauth/token", body["token_endpoint"])
@@ -106,14 +106,14 @@ func TestDynamicClientRegistration(t *testing.T) {
 	t.Parallel()
 	srv, _ := setupOAuthTestServer(t)
 
-	body := strings.NewReader(`{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"client_name":"Claude"}`)
+	body := strings.NewReader(`{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"client_name":"Claude","future_metadata":{"enabled":true}}`)
 	resp, err := http.Post(srv.URL+"/oauth/register", "application/json", body)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	var got map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &got))
 	assert.NotEmpty(t, got["client_id"])
 	assert.Equal(t, "none", got["token_endpoint_auth_method"])
 	assert.Equal(t, "Claude", got["client_name"])
@@ -130,7 +130,7 @@ func TestDynamicClientRegistrationRejectsBadRedirect(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
 	var got map[string]string
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &got))
 	assert.Equal(t, "invalid_redirect_uri", got["error"])
 }
 
@@ -230,7 +230,7 @@ func testOAuthEndToEnd(t *testing.T, mode string) {
 			strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
 		require.NoError(t, err)
 		var dcr map[string]any
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
+		require.NoError(t, json.UnmarshalRead(resp.Body, &dcr))
 		resp.Body.Close()
 		clientID = dcr["client_id"].(string)
 	}
@@ -279,7 +279,7 @@ func testOAuthEndToEnd(t *testing.T, mode string) {
 	assert.Equal(t, "no-store", resp.Header.Get("Cache-Control"))
 	assert.Equal(t, "no-cache", resp.Header.Get("Pragma"))
 	var tok map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tok))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &tok))
 	resp.Body.Close()
 	access := tok["access_token"].(string)
 	refresh, _ := tok["refresh_token"].(string)
@@ -318,7 +318,7 @@ func testOAuthEndToEnd(t *testing.T, mode string) {
 	defer modernResp.Body.Close()
 	require.Equal(t, http.StatusOK, modernResp.StatusCode)
 	var modernBody map[string]any
-	require.NoError(t, json.NewDecoder(modernResp.Body).Decode(&modernBody))
+	require.NoError(t, json.UnmarshalRead(modernResp.Body, &modernBody))
 	result := modernBody["result"].(map[string]any)
 	assert.Equal(t, "complete", result["resultType"])
 	assert.NotEqual(t, true, result["isError"])
@@ -346,7 +346,7 @@ func testOAuthEndToEnd(t *testing.T, mode string) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusOK, refreshResp.StatusCode)
 	var refreshed map[string]any
-	require.NoError(t, json.NewDecoder(refreshResp.Body).Decode(&refreshed))
+	require.NoError(t, json.UnmarshalRead(refreshResp.Body, &refreshed))
 	assert.NotEqual(t, access, refreshed["access_token"], "refreshed token should differ")
 	assert.Equal(t, "no-store", refreshResp.Header.Get("Cache-Control"))
 }
@@ -368,7 +368,7 @@ func TestOAuthConsentDecisionCannotBeSuppliedByAuthorizationURL(t *testing.T) {
 		strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
 	require.NoError(t, err)
 	var dcr map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &dcr))
 	resp.Body.Close()
 	_, challenge := pkceParams(t)
 	values := url.Values{
@@ -435,7 +435,7 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 		strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
 	require.NoError(t, err)
 	var dcr map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &dcr))
 	resp.Body.Close()
 	clientID := dcr["client_id"].(string)
 
@@ -470,7 +470,7 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 	resp, err = http.PostForm(srv.URL+"/oauth/token", tokValues)
 	require.NoError(t, err)
 	var tok map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tok))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &tok))
 	resp.Body.Close()
 	refresh1 := tok["refresh_token"].(string)
 
@@ -483,7 +483,7 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var refreshed map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&refreshed))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &refreshed))
 	resp.Body.Close()
 	refresh2 := refreshed["refresh_token"].(string)
 	access2 := refreshed["access_token"].(string)
@@ -536,7 +536,7 @@ func TestAuthorizeRejectsInvalidScopeOrAudience(t *testing.T) {
 		strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
 	require.NoError(t, err)
 	var dcr map[string]any
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&dcr))
+	require.NoError(t, json.UnmarshalRead(resp.Body, &dcr))
 	resp.Body.Close()
 	clientID := dcr["client_id"].(string)
 

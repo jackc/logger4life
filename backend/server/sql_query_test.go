@@ -3,7 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +27,7 @@ func sqlExec(t *testing.T, srvURL, query string, cookies []*http.Cookie) (*http.
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.UnmarshalRead(resp.Body, &result)
 	resp.Body.Close()
 	return resp, result
 }

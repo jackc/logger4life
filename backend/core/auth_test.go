@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"strings"
 	"testing"

@@ -2,9 +2,8 @@ package server
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
-	"io"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -97,17 +96,9 @@ func (p *oauthProvider) handleDynamicClientRegistration() http.HandlerFunc {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
-		decoder := json.NewDecoder(r.Body)
 		var params core.RegisterOAuthClientParams
-		err := decoder.Decode(&params)
-		if err == nil {
-			var trailing any
-			if err = decoder.Decode(&trailing); err == io.EOF {
-				err = nil
-			} else if err == nil {
-				err = errors.New("multiple JSON documents")
-			}
-		}
+		// OAuth client metadata permits extensions beyond the supported fields.
+		err := decodeJSONObject(r.Body, &params, json.RejectUnknownMembers(false))
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {

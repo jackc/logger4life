@@ -3,7 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -59,7 +59,7 @@ func postJSON(url string, body any, cookies []*http.Cookie) (*http.Response, map
 	}}
 	resp, _ := client.Do(req)
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.UnmarshalRead(resp.Body, &result)
 	resp.Body.Close()
 	return resp, result
 }
@@ -76,7 +76,7 @@ func putJSON(url string, body any, cookies []*http.Cookie) (*http.Response, map[
 	}}
 	resp, _ := client.Do(req)
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.UnmarshalRead(resp.Body, &result)
 	resp.Body.Close()
 	return resp, result
 }
@@ -91,7 +91,7 @@ func deleteJSON(url string, cookies []*http.Cookie) (*http.Response, map[string]
 	}}
 	resp, _ := client.Do(req)
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.UnmarshalRead(resp.Body, &result)
 	resp.Body.Close()
 	return resp, result
 }
@@ -104,7 +104,7 @@ func getJSON(url string, cookies []*http.Cookie) (*http.Response, map[string]any
 	client := &http.Client{}
 	resp, _ := client.Do(req)
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	json.UnmarshalRead(resp.Body, &result)
 	resp.Body.Close()
 	return resp, result
 }

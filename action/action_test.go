@@ -160,7 +160,7 @@ func TestDuplicateNamesAreRejectedWithinARegistry(t *testing.T) {
 	registry.Define(def)
 }
 
-func TestInvokeJSONRejectsTrailingDataBeforeDispatch(t *testing.T) {
+func TestInvokeJSONRejectsInvalidInputBeforeDispatch(t *testing.T) {
 	var registry action.Registry[struct{}, struct{}]
 	handlerCalls, middlewareCalls := 0, 0
 	registry.Define(action.Definition[struct{}, struct{}, params, string]{
@@ -182,6 +182,11 @@ func TestInvokeJSONRejectsTrailingDataBeforeDispatch(t *testing.T) {
 		`{"value":"first"} true`,
 		`{"value":"first"} garbage`,
 		`{"value":"first"} {`,
+		`{"Value":"case alias"}`,
+		`{"extra":true}`,
+		`{"value":"first","value":"second"}`,
+		`{"value":"\ud800"}`,
+		"{\"value\":\"\xff\"}",
 	} {
 		t.Run(data, func(t *testing.T) {
 			_, err := dispatcher.InvokeJSON(context.Background(), struct{}{}, "json", []byte(data))

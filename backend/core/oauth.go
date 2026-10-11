@@ -88,7 +88,7 @@ type OAuthClient struct {
 	ClientName   string   `json:"client_name,omitempty"`
 	// AuthorizationCodeOnly is set by CIMD when refresh_token was not
 	// requested. DCR retains its existing authorization + refresh policy.
-	AuthorizationCodeOnly bool `json:"authorization_code_only,omitempty"`
+	AuthorizationCodeOnly bool `json:"authorization_code_only,omitzero"`
 }
 
 // OAuthClientMetadataResolver is the driven port for validated, HTTP-cached
@@ -110,7 +110,7 @@ type OAuthAuthorizationCode struct {
 	CodeChallenge         string    `json:"code_challenge"`
 	CodeChallengeMethod   string    `json:"code_challenge_method"`
 	ExpiresAt             time.Time `json:"expires_at"`
-	AuthorizationCodeOnly bool      `json:"authorization_code_only,omitempty"`
+	AuthorizationCodeOnly bool      `json:"authorization_code_only,omitzero"`
 }
 
 // OAuthGrant is the authorization a token pair was issued under. FamilyID

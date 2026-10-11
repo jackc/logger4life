@@ -3,7 +3,8 @@ package core
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"strings"
 	"testing"
@@ -182,7 +183,7 @@ func TestFinishPasskeyRegistrationConsumesAndBindsChallenge(t *testing.T) {
 		Passkeys: &fakePasskeyStore{}, Challenges: challenges, WebAuthn: newPasskeyTestWebAuthn(t),
 	})
 	_, err = FinishPasskeyRegistration.Call(WithUserID(context.Background(), userID), app, FinishPasskeyRegistrationParams{
-		ChallengeID: challengeID, Credential: json.RawMessage(`{}`),
+		ChallengeID: challengeID, Credential: jsontext.Value(`{}`),
 	})
 	if !errors.Is(err, ErrInvalidPasskeyChallenge) {
 		t.Fatalf("mismatched challenge error = %v", err)

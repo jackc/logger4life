@@ -2,8 +2,8 @@ package httpregistry_test
 
 import (
 	"context"
-	"encoding/json"
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -132,7 +132,9 @@ func TestStrictBindingAllowsOmittedAndNullFields(t *testing.T) {
 		require.Equal(t, 201, w.Code)
 		var p params
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &p))
-		require.Equal(t, params{ID: "trusted"}, p)
+		require.Equal(t, "trusted", p.ID)
+		require.Empty(t, p.Note)
+		require.Empty(t, p.Fields)
 	}
 }
 func TestBindingErrorsAndAuthBeforeDecode(t *testing.T) {

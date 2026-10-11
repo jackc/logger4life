@@ -32,12 +32,12 @@ type Spec[M any] struct {
 	Method   string     `json:"method,omitempty"` // empty only for mounts
 	Path     string     `json:"path"`
 	Metadata M          `json:"metadata"`
-	When     *Condition `json:"when,omitempty"`
+	When     *Condition `json:"when,omitzero"`
 }
 
 type Description struct {
 	Kind    string              `json:"kind"`
-	Binding *BindingDescription `json:"binding,omitempty"`
+	Binding *BindingDescription `json:"binding,omitzero"`
 	Gaps    []string            `json:"gaps,omitempty"`
 }
 

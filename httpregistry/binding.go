@@ -2,7 +2,7 @@ package httpregistry
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"reflect"
 )
@@ -19,8 +19,8 @@ type Operation[D, P, R any] interface {
 type Input struct {
 	Source   string `json:"source"` // path, query, or body
 	Name     string `json:"name"`
-	Field    string `json:"field"`              // exported, top-level Go parameter field
-	Required bool   `json:"required,omitempty"` // query only; path is always present
+	Field    string `json:"field"`             // exported, top-level Go parameter field
+	Required bool   `json:"required,omitzero"` // query only; path is always present
 }
 
 type JSONPolicy string

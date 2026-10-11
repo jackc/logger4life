@@ -15,8 +15,9 @@ action's `Info[M]` (name, description, metadata) and invocation parameters,
 without a dependency type or invocation method. The package does not interpret
 metadata or depend on any backend package.
 
-`InvokeJSON` accepts exactly one JSON value and rejects unknown fields and trailing
-data before entering middleware; trailing whitespace is allowed. Action and HTTP
+`InvokeJSON` uses JSON v2 to accept exactly one JSON value and reject unknown fields,
+duplicate names, invalid Unicode, and trailing data before entering middleware;
+trailing whitespace is allowed. Field names are case-sensitive. Action and HTTP
 registry package tests enforce independence from other repository packages.
 
 `backend/domain` contains pure types and rules. It performs no I/O and does
@@ -177,8 +178,21 @@ the existing `core.Action.Call` pipeline, preserve response shapes/statuses and
 application error writers, and keep identity in trusted context. The mutation
 uses strict `encoding/json/v2` request decoding: unknown fields, duplicate keys,
 case aliases, invalid Unicode, top-level null, and trailing input are rejected.
-Response encoding uses `encoding/json` (v1). No new body limit or content-type
+Response encoding uses `encoding/json/v2`. No new body limit or content-type
 requirement is applied to these existing endpoints.
+
+All first-party JSON code, including tests, uses `encoding/json/v2` and
+`encoding/json/jsontext`; a repository-wide import test prevents v1 imports.
+Custom application handlers share an object-only decoder with unknown-field
+rejection. OAuth registration permits metadata extensions, and WebAuthn
+credentials remain raw JSON for the protocol library to interpret. Both still
+reject malformed JSON, duplicate names, invalid Unicode, and trailing input.
+Responses use v2's empty-array/empty-object defaults for nil collections;
+optional scalar and pointer fields use `omitzero` to retain their omission rules.
+Response encoding finishes before headers are committed so encoding errors can
+return HTTP 500. Stored sessions, cursors, and jed JSON have v1 fixture coverage.
+MCP page-size accounting explicitly matches the SDK's HTML and JavaScript
+escaping, and inventory commands request deterministic, indented output.
 
 The application's `bindHTTPAction` adapter supplies the core namespace and handles
 transport input errors before delegating domain errors to each binding's writer.

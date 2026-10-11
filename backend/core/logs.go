@@ -21,7 +21,7 @@ type Log struct {
 	Name         string                   `json:"name"`
 	Fields       []domain.FieldDefinition `json:"fields"`
 	IsOwner      bool                     `json:"is_owner"`
-	ShareToken   *string                  `json:"share_token,omitempty"`
+	ShareToken   *string                  `json:"share_token,omitzero"`
 	FolderID     *string                  `json:"folder_id"`
 	Position     int                      `json:"position"`
 	PinnedToHome bool                     `json:"pinned_to_home"`

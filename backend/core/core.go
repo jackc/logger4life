@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/jackc/logger4life/action"
+	"github.com/jackc/manifest/action"
 )
 
 type Core struct {

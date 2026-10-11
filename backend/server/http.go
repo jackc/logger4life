@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
-	"github.com/jackc/logger4life/httpregistry"
+	"github.com/jackc/manifest/httpregistry"
 )
 
 // HTTPMetadata is Logger4Life's HTTP policy, independent of core.Public.

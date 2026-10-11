@@ -57,7 +57,7 @@ var pureDependencyRules = map[string][]string{
 		"github.com/jackc/logger4life/backend/jedstore",
 		"github.com/jackc/logger4life/backend/dualstore",
 		"github.com/jackc/logger4life/backend/server",
-		"github.com/jackc/logger4life/httpregistry",
+		"github.com/jackc/manifest/httpregistry",
 	},
 	"domain": {
 		"net/http",
@@ -71,7 +71,7 @@ var pureDependencyRules = map[string][]string{
 		"github.com/jackc/logger4life/backend/jedstore",
 		"github.com/jackc/logger4life/backend/dualstore",
 		"github.com/jackc/logger4life/backend/server",
-		"github.com/jackc/logger4life/httpregistry",
+		"github.com/jackc/manifest/httpregistry",
 	},
 }
 

@@ -5,7 +5,8 @@ reified action catalog. The pattern follows `.scratch/fam`.
 
 ## Dependency direction
 
-`action` supplies the reusable catalog and dispatcher. Registries are explicit
+[Manifest](https://github.com/jackc/manifest) supplies the reusable catalog and
+dispatcher through `github.com/jackc/manifest/action`. Registries are explicit
 instances parameterized by application dependencies and metadata. Dispatchers
 bind a registry to middleware and handle typed calls, JSON decoding, and
 parameter validation. Dependencies are supplied per invocation; a dispatcher
@@ -17,8 +18,9 @@ metadata or depend on any backend package.
 
 `InvokeJSON` uses JSON v2 to accept exactly one JSON value and reject unknown fields,
 duplicate names, invalid Unicode, and trailing data before entering middleware;
-trailing whitespace is allowed. Field names are case-sensitive. Action and HTTP
-registry package tests enforce independence from other repository packages.
+trailing whitespace is allowed. Field names are case-sensitive. Manifest's action
+and HTTP registry package tests enforce independence from application code and
+from each other.
 
 `backend/domain` contains pure types and rules. It performs no I/O and does
 not depend on the service or adapter packages.
@@ -156,10 +158,11 @@ inspected. Use `-root /path/to/logger4life` to inspect another checkout.
 
 ## HTTP registry
 
-`httpregistry` is a reusable, application-independent package for HTTP registration,
-metadata compilation, and inspectable typed bindings. Chi remains private to its
+`github.com/jackc/manifest/httpregistry` is an external, application-independent
+package for HTTP registration, metadata compilation, and inspectable typed
+bindings. Chi remains private to its
 routing implementation. Core and domain cannot import the registry; `action`
-remains independent of transports. See [the library contract](../httpregistry/README.md).
+remains independent of transports. See [the library contract](https://github.com/jackc/manifest/blob/main/httpregistry/README.md).
 
 `backend/server/http.go` is the single production route assembly, also used by the
 HTTP integration tests. Every endpoint has application-owned `HTTPMetadata` with
@@ -221,8 +224,9 @@ the existing action inventory and its recognition limits are unchanged.
 
 ## Where new code goes
 
-- Generic catalog and dispatch mechanics: `action`.
-- Generic HTTP registration, inventory, and typed binding mechanics: `httpregistry`.
+- Generic catalog and dispatch mechanics: `action` in the Manifest repository.
+- Generic HTTP registration, inventory, and typed binding mechanics:
+  `httpregistry` in the Manifest repository.
 - Pure validation, calculation, and domain types: `backend/domain`.
 - Load/compute/save orchestration and action definitions: `backend/core`.
 - PostgreSQL persistence mechanics: `backend/pgstore`.

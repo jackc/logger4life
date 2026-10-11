@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 
-	"github.com/jackc/logger4life/action"
+	"github.com/jackc/manifest/action"
 )
 
 var ErrUnknownAction = action.ErrUnknownAction

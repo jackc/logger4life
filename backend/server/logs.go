@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
-	"github.com/jackc/logger4life/httpregistry"
+	"github.com/jackc/manifest/httpregistry"
 )
 
 type fieldDefinition = domain.FieldDefinition

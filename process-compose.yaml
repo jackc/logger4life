@@ -50,8 +50,6 @@ processes:
     watch:
       paths:
         - path: main.go
-        - path: action
-        - path: httpregistry
         - path: backend
         - path: go.mod
         - path: go.sum

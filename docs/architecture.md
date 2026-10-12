@@ -222,11 +222,44 @@ binding. Mounted protocol methods and internal dispatch remain opaque. HTTP
 source locations and a combined HTTP/action source report are not implemented;
 the existing action inventory and its recognition limits are unchanged.
 
+## MCP registry
+
+`github.com/jackc/manifest/mcpregistry` supplies explicit tool registration,
+typed and raw action bindings, per-call context stages, and an inventory of the
+same declarations used by the SDK server. It depends on the official MCP Go SDK
+and is independent of Manifest's action and HTTP packages. Core and domain may
+not import it.
+
+`backend/server/mcp_tools.go` owns the five tool declarations. `list_logs` and
+`list_saved_queries` use typed bindings to their bounded collection actions;
+the SQL tools retain custom typed adapters to preserve their schemas and
+orchestration. Every tool installs the `require-mcp-user` context stage, which
+checks the trusted adapter identity and supplies the core user ID on each call.
+Typed SDK validation happens before that stage; HTTP bearer authentication still
+happens before protocol dispatch. Safe domain-error translation remains local.
+Tool names, descriptions, annotations, and schemas have a pre-extraction catalog
+fixture checked against both the live tool list and the registry inventory.
+
+`backend/server/mcp.go` retains the transport and OAuth bearer/origin/rate-limit
+boundary. The registry does not own OAuth, HTTP hosting, or the decision to
+enable the mount. It rejects duplicate tool names and freezes registration when
+the SDK server is obtained. Tools are explicitly selected; defining a core action
+does not expose it to MCP.
+
+Run `go run ./cmd/mcp-inventory` or `mise run inventory:mcp` to describe all five
+tools without opening stores, invoking actions, or starting services. The report
+includes schemas, annotations, metadata, installed context stages, direct action
+bindings, and inspection gaps. It describes the catalog independently of HTTP
+configuration; use the HTTP inventory to determine mount availability and bearer
+policy. Custom adapters' internal and transitive action calls remain opaque.
+
 ## Where new code goes
 
 - Generic catalog and dispatch mechanics: `action` in the Manifest repository.
 - Generic HTTP registration, inventory, and typed binding mechanics:
   `httpregistry` in the Manifest repository.
+- Generic MCP tool registration, inventory, and operation bindings:
+  `mcpregistry` in the Manifest repository.
 - Pure validation, calculation, and domain types: `backend/domain`.
 - Load/compute/save orchestration and action definitions: `backend/core`.
 - PostgreSQL persistence mechanics: `backend/pgstore`.

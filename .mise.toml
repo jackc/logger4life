@@ -134,6 +134,11 @@ description = "Export HTTP endpoints, policy metadata, bindings, and coverage ga
 dir = "{{config_root}}"
 run = "go run ./cmd/http-inventory"
 
+[tasks."inventory:mcp"]
+description = "Export MCP tools, policy metadata, action bindings, and coverage gaps as JSON"
+dir = "{{config_root}}"
+run = "go run ./cmd/mcp-inventory"
+
 [tasks."build:binary"]
 description = "Build the logger4life binary for the current platform"
 dir = "{{config_root}}"

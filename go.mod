@@ -8,7 +8,7 @@ require (
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/jackc/jed/impl/go v0.2.1-0.20260907033649-d6efeb49fc65
 	github.com/jackc/jed/migrate/go v0.0.0-20260927222052-904d497a9f7e
-	github.com/jackc/manifest v0.0.0-20261012162005-f7c63593d92a
+	github.com/jackc/manifest v0.0.0-20261012191353-c107fe1cbfb4
 	github.com/jackc/pgsqlarbiter-go v0.1.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jackc/testdb v0.0.0-20221015161059-a3705a386fe0

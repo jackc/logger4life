@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -26,11 +27,14 @@ type User struct {
 }
 
 // Session is the server-side credential persisted for an authenticated user.
-// Token contains raw random bytes; AuthSession is the client-facing form.
+// Only TokenHash, the SHA-256 of the random token, is persisted; the token
+// itself reaches the client through AuthSession.
 type Session struct {
 	UserID    string    `json:"-"`
-	Token     []byte    `json:"-"`
+	TokenHash []byte    `json:"-"`
 	ExpiresAt time.Time `json:"-"`
+
+	token []byte
 }
 
 // AuthSession is returned by registration and login so an adapter can write
@@ -61,7 +65,8 @@ type UserStore interface {
 	UpdateUserPasswordHash(context.Context, string, string) error
 }
 
-// SessionStore is the driven persistence port for login sessions.
+// SessionStore is the driven persistence port for login sessions. It sees
+// only token hashes (hashSessionToken), never a client's token.
 type SessionStore interface {
 	CreateSession(context.Context, Session) error
 	GetUserBySessionToken(context.Context, []byte) (User, error)
@@ -96,11 +101,19 @@ func newSession(userID string) (Session, error) {
 	if _, err := rand.Read(token); err != nil {
 		return Session{}, err
 	}
-	return Session{UserID: userID, Token: token, ExpiresAt: time.Now().Add(SessionDuration)}, nil
+	return Session{UserID: userID, TokenHash: hashSessionToken(token), ExpiresAt: time.Now().Add(SessionDuration), token: token}, nil
+}
+
+// hashSessionToken is the stored form of a session token. The token is 32
+// random bytes, so an unsalted fast hash suffices: a stored hash cannot be
+// presented as a cookie, and the token cannot be recovered from it.
+func hashSessionToken(token []byte) []byte {
+	sum := sha256.Sum256(token)
+	return sum[:]
 }
 
 func authSession(user User, session Session) AuthSession {
-	return AuthSession{User: user, Token: hex.EncodeToString(session.Token), ExpiresAt: session.ExpiresAt}
+	return AuthSession{User: user, Token: hex.EncodeToString(session.token), ExpiresAt: session.ExpiresAt}
 }
 
 type RegisterUserParams struct {
@@ -190,7 +203,7 @@ var AuthenticateSession = Define(ActionDef[AuthenticateSessionParams, User]{
 		if err != nil || len(token) == 0 {
 			return User{}, ErrInvalidSession
 		}
-		return c.sessions.GetUserBySessionToken(ctx, token)
+		return c.sessions.GetUserBySessionToken(ctx, hashSessionToken(token))
 	},
 })
 
@@ -205,7 +218,7 @@ var Logout = Define(ActionDef[LogoutParams, struct{}]{
 		if err != nil || len(token) == 0 {
 			return struct{}{}, nil
 		}
-		return struct{}{}, c.sessions.DeleteSessionByToken(ctx, token)
+		return struct{}{}, c.sessions.DeleteSessionByToken(ctx, hashSessionToken(token))
 	},
 })
 

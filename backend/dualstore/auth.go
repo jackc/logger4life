@@ -55,14 +55,14 @@ func (s *Store) CreateSession(ctx context.Context, session core.Session) error {
 		func() error { return s.secondary.CreateSession(ctx, session) })
 }
 
-func (s *Store) GetUserBySessionToken(ctx context.Context, token []byte) (core.User, error) {
+func (s *Store) GetUserBySessionToken(ctx context.Context, tokenHash []byte) (core.User, error) {
 	return compareCall("GetUserBySessionToken",
-		func() (core.User, error) { return s.primary.GetUserBySessionToken(ctx, token) },
-		func() (core.User, error) { return s.secondary.GetUserBySessionToken(ctx, token) })
+		func() (core.User, error) { return s.primary.GetUserBySessionToken(ctx, tokenHash) },
+		func() (core.User, error) { return s.secondary.GetUserBySessionToken(ctx, tokenHash) })
 }
 
-func (s *Store) DeleteSessionByToken(ctx context.Context, token []byte) error {
+func (s *Store) DeleteSessionByToken(ctx context.Context, tokenHash []byte) error {
 	return compareError("DeleteSessionByToken",
-		func() error { return s.primary.DeleteSessionByToken(ctx, token) },
-		func() error { return s.secondary.DeleteSessionByToken(ctx, token) })
+		func() error { return s.primary.DeleteSessionByToken(ctx, tokenHash) },
+		func() error { return s.secondary.DeleteSessionByToken(ctx, tokenHash) })
 }

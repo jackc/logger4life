@@ -92,19 +92,19 @@ func (s *Store) CreateSession(ctx context.Context, session core.Session) error {
 		return err
 	}
 	_, err = s.conn(ctx).Exec(ctx,
-		`INSERT INTO sessions (id, user_id, token, expires_at) VALUES ($1, $2, $3, $4)`,
-		id, session.UserID, session.Token, session.ExpiresAt,
+		`INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)`,
+		id, session.UserID, session.TokenHash, session.ExpiresAt,
 	)
 	return err
 }
 
-func (s *Store) GetUserBySessionToken(ctx context.Context, token []byte) (core.User, error) {
+func (s *Store) GetUserBySessionToken(ctx context.Context, tokenHash []byte) (core.User, error) {
 	var user core.User
 	err := s.conn(ctx).QueryRow(ctx,
 		`SELECT u.id, u.username, u.email
 		 FROM sessions s
 		 JOIN users u ON s.user_id = u.id
-		 WHERE s.token = $1 AND s.expires_at > now()`, token,
+		 WHERE s.token_hash = $1 AND s.expires_at > now()`, tokenHash,
 	).Scan(&user.ID, &user.Username, &user.Email)
 	if errors.Is(err, errNoRows) {
 		return core.User{}, core.ErrInvalidSession
@@ -112,7 +112,7 @@ func (s *Store) GetUserBySessionToken(ctx context.Context, token []byte) (core.U
 	return user, err
 }
 
-func (s *Store) DeleteSessionByToken(ctx context.Context, token []byte) error {
-	_, err := s.conn(ctx).Exec(ctx, `DELETE FROM sessions WHERE token = $1`, token)
+func (s *Store) DeleteSessionByToken(ctx context.Context, tokenHash []byte) error {
+	_, err := s.conn(ctx).Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash)
 	return err
 }

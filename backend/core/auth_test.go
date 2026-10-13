@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
 	"errors"
@@ -119,12 +120,12 @@ func TestRegisterUserValidatesAndCreatesUserAndSessionInTransaction(t *testing.T
 	if err := bcrypt.CompareHashAndPassword([]byte(users.passwordHash), []byte("password123")); err != nil {
 		t.Fatalf("stored password is not a bcrypt hash: %v", err)
 	}
-	if len(sessions.session.Token) != sessionTokenLength || sessions.session.UserID != "user-1" {
+	if sessions.session.UserID != "user-1" {
 		t.Fatalf("session = %#v", sessions.session)
 	}
 	decoded, err := hex.DecodeString(result.Token)
-	if err != nil || string(decoded) != string(sessions.session.Token) {
-		t.Fatal("auth result does not contain the persisted token")
+	if err != nil || len(decoded) != sessionTokenLength || string(sessionTokenHash(decoded)) != string(sessions.session.TokenHash) {
+		t.Fatal("the store must receive only the hash of the token in the auth result")
 	}
 	if time.Until(result.ExpiresAt) < SessionDuration-time.Minute {
 		t.Fatalf("session expiry = %v", result.ExpiresAt)
@@ -176,18 +177,24 @@ func TestLoginWithPasswordCreatesSessionAndHidesCredentialFailures(t *testing.T)
 	}
 }
 
-func TestSessionAuthenticationAndLogoutDecodeTokens(t *testing.T) {
+// sessionTokenHash is SHA-256, written independently of hashSessionToken.
+func sessionTokenHash(token []byte) []byte {
+	sum := sha256.Sum256(token)
+	return sum[:]
+}
+
+func TestSessionAuthenticationAndLogoutHashTokens(t *testing.T) {
 	sessions := &fakeSessionStore{user: User{ID: "user-1"}}
 	app := New(Config{Sessions: sessions})
 
 	user, err := AuthenticateSession.Call(context.Background(), app, AuthenticateSessionParams{Token: "0102"})
-	if err != nil || user.ID != "user-1" || hex.EncodeToString(sessions.getToken) != "0102" {
+	if err != nil || user.ID != "user-1" || string(sessions.getToken) != string(sessionTokenHash([]byte{1, 2})) {
 		t.Fatalf("AuthenticateSession() = %#v, %v; token=%x", user, err, sessions.getToken)
 	}
 	if _, err := AuthenticateSession.Call(context.Background(), app, AuthenticateSessionParams{Token: "invalid"}); !errors.Is(err, ErrInvalidSession) {
 		t.Fatalf("invalid token error = %v", err)
 	}
-	if _, err := Logout.Call(context.Background(), app, LogoutParams{Token: "aabb"}); err != nil || hex.EncodeToString(sessions.deleted) != "aabb" {
+	if _, err := Logout.Call(context.Background(), app, LogoutParams{Token: "aabb"}); err != nil || string(sessions.deleted) != string(sessionTokenHash([]byte{0xaa, 0xbb})) {
 		t.Fatalf("Logout() error = %v; token=%x", err, sessions.deleted)
 	}
 	before := append([]byte(nil), sessions.deleted...)

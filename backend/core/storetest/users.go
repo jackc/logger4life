@@ -129,7 +129,7 @@ func RunSessionStore(t *testing.T, ports Ports) {
 
 	newSession := func(t *testing.T, userID string, token []byte, expires time.Time) {
 		t.Helper()
-		if err := ports.CreateSession(ctx, core.Session{UserID: userID, Token: token, ExpiresAt: expires}); err != nil {
+		if err := ports.CreateSession(ctx, core.Session{UserID: userID, TokenHash: token, ExpiresAt: expires}); err != nil {
 			t.Fatalf("creating session: %v", err)
 		}
 	}

@@ -45,7 +45,7 @@ func handlePasskeyRegisterBegin(app *core.Core) http.HandlerFunc {
 func handlePasskeyRegisterFinish(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.FinishPasskeyRegistrationParams
-		if err := decodeJSONObject(r.Body, &params); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &params, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -74,7 +74,7 @@ func handlePasskeyLoginBegin(app *core.Core) http.HandlerFunc {
 func handlePasskeyLoginFinish(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.FinishPasskeyLoginParams
-		if err := decodeJSONObject(r.Body, &params); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &params, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -108,7 +108,7 @@ func handleUpdatePasskey(app *core.Core) http.HandlerFunc {
 		var body struct {
 			Description string `json:"description"`
 		}
-		if err := decodeJSONObject(r.Body, &body); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &body, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}

@@ -27,7 +27,7 @@ func actionContext(r *http.Request) context.Context {
 }
 
 func decodeAction(w http.ResponseWriter, r *http.Request, v any) bool {
-	if decodeJSONObject(r.Body, v) != nil {
+	if httpregistry.DecodeJSONBody(w, r, v, 0) != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return false
 	}

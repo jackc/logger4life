@@ -72,7 +72,7 @@ func handleCreateLog(app *core.Core) http.HandlerFunc {
 		user := userFromContext(r.Context())
 
 		var req createLogRequest
-		if err := decodeJSONObject(r.Body, &req); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &req, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -102,7 +102,7 @@ func handleUpdateLog(app *core.Core) http.HandlerFunc {
 		logID := httpregistry.PathParam(r, "logID")
 
 		var req createLogRequest
-		if err := decodeJSONObject(r.Body, &req); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &req, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}

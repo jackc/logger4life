@@ -11,7 +11,7 @@ import (
 func handleExecuteSQL(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.ExecuteUserSQLParams
-		if err := decodeJSONObject(r.Body, &params); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &params, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -93,7 +93,7 @@ func handleCreateSavedQuery(app *core.Core) http.HandlerFunc {
 		user := userFromContext(r.Context())
 
 		var req savedQueryRequest
-		if err := decodeJSONObject(r.Body, &req); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &req, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -113,7 +113,7 @@ func handleUpdateSavedQuery(app *core.Core) http.HandlerFunc {
 		queryID := httpregistry.PathParam(r, "id")
 
 		var req savedQueryRequest
-		if err := decodeJSONObject(r.Body, &req); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &req, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
 	"github.com/jackc/logger4life/backend/domain"
+	"github.com/jackc/manifest/httpregistry"
 )
 
 // HTTP adapter for the hand-rolled OAuth 2.1 authorization server, scoped to
@@ -95,10 +96,9 @@ func (p *oauthProvider) handleDynamicClientRegistration() http.HandlerFunc {
 			writeRateLimit(w, retry)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 		var params core.RegisterOAuthClientParams
 		// OAuth client metadata permits extensions beyond the supported fields.
-		err := decodeJSONObject(r.Body, &params, json.RejectUnknownMembers(false))
+		err := httpregistry.DecodeJSONBody(w, r, &params, 32<<10, json.RejectUnknownMembers(false))
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {

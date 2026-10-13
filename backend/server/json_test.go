@@ -3,13 +3,13 @@ package server
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/manifest/httpregistry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,21 +31,25 @@ func TestApplicationHandlersRejectInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestDecodeJSONObjectPreservesProtocolExtensions(t *testing.T) {
+// Handlers decode with httpregistry.DecodeJSONBody; these are the
+// application's own reliances on it.
+func TestDecodeJSONBodyPreservesProtocolExtensions(t *testing.T) {
+	decode := func(body string, dest any, maxBytes int64, options ...json.Options) error {
+		return httpregistry.DecodeJSONBody(httptest.NewRecorder(), httptest.NewRequest("POST", "/", strings.NewReader(body)), dest, maxBytes, options...)
+	}
 	var params core.FinishPasskeyLoginParams
 	input := `{"challenge_id":"challenge","credential":{"id":"credential","clientExtensionResults":{"future":true}}}`
-	require.NoError(t, decodeJSONObject(strings.NewReader(input), &params))
+	require.NoError(t, decode(input, &params, 0))
 	require.JSONEq(t, `{"id":"credential","clientExtensionResults":{"future":true}}`, string(params.Credential))
 	// Opaque credentials still undergo JSON syntax and duplicate-name checks.
-	require.Error(t, decodeJSONObject(strings.NewReader(`{"credential":{"id":"a","id":"b"}}`), &params))
+	require.Error(t, decode(`{"credential":{"id":"a","id":"b"}}`, &params, 0))
 
 	var metadata core.RegisterOAuthClientParams
-	require.NoError(t, decodeJSONObject(strings.NewReader(`{"client_name":"client","future_metadata":true}`), &metadata, json.RejectUnknownMembers(false)))
+	require.NoError(t, decode(`{"client_name":"client","future_metadata":true}`, &metadata, 0, json.RejectUnknownMembers(false)))
 	require.Equal(t, "client", metadata.ClientName)
-	require.Error(t, decodeJSONObject(strings.NewReader(`{"client_name":"a","client_name":"b"}`), &metadata, json.RejectUnknownMembers(false)))
+	require.Error(t, decode(`{"client_name":"a","client_name":"b"}`, &metadata, 0, json.RejectUnknownMembers(false)))
 
-	reader := http.MaxBytesReader(httptest.NewRecorder(), io.NopCloser(strings.NewReader("{}"+strings.Repeat(" ", 32))), 16)
-	err := decodeJSONObject(reader, &metadata)
+	err := decode("{}"+strings.Repeat(" ", 32), &metadata, 16)
 	var tooLarge *http.MaxBytesError
 	require.ErrorAs(t, err, &tooLarge)
 }

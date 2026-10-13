@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/manifest/httpregistry"
 )
 
 const sessionCookieName = "session_token"
@@ -38,7 +39,7 @@ func handleRegister(app *core.Core, allowRegistration bool) http.HandlerFunc {
 			return
 		}
 		var params core.RegisterUserParams
-		if err := decodeJSONObject(r.Body, &params); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &params, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -55,7 +56,7 @@ func handleRegister(app *core.Core, allowRegistration bool) http.HandlerFunc {
 func handleLogin(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.LoginWithPasswordParams
-		if err := decodeJSONObject(r.Body, &params); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &params, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -123,7 +124,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 func handleChangeEmail(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.ChangeEmailParams
-		if err := decodeJSONObject(r.Body, &params); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &params, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
@@ -139,7 +140,7 @@ func handleChangeEmail(app *core.Core) http.HandlerFunc {
 func handleChangePassword(app *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var params core.ChangePasswordParams
-		if err := decodeJSONObject(r.Body, &params); err != nil {
+		if err := httpregistry.DecodeJSONBody(w, r, &params, 0); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}

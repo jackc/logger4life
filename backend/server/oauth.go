@@ -301,18 +301,19 @@ func (provider *oauthProvider) redirectAuthorizeError(w http.ResponseWriter, r *
 
 func (p *oauthProvider) handleToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 		if err := r.ParseForm(); err != nil {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "could not parse form body")
 			return
 		}
-		switch r.Form.Get("grant_type") {
+		switch r.PostForm.Get("grant_type") {
 		case "authorization_code":
 			tokens, err := core.ExchangeOAuthCode.Call(r.Context(), p.app, core.ExchangeOAuthCodeParams{
-				ClientID:     r.Form.Get("client_id"),
-				Code:         r.Form.Get("code"),
-				RedirectURI:  r.Form.Get("redirect_uri"),
-				CodeVerifier: r.Form.Get("code_verifier"),
-				Resource:     r.Form.Get("resource"),
+				ClientID:     r.PostForm.Get("client_id"),
+				Code:         r.PostForm.Get("code"),
+				RedirectURI:  r.PostForm.Get("redirect_uri"),
+				CodeVerifier: r.PostForm.Get("code_verifier"),
+				Resource:     r.PostForm.Get("resource"),
 			})
 			if err != nil {
 				writeOAuthActionError(w, r, err)
@@ -321,9 +322,9 @@ func (p *oauthProvider) handleToken() http.HandlerFunc {
 			writeTokenResponse(w, tokens)
 		case "refresh_token":
 			tokens, err := core.RefreshOAuthToken.Call(r.Context(), p.app, core.RefreshOAuthTokenParams{
-				ClientID:     r.Form.Get("client_id"),
-				RefreshToken: r.Form.Get("refresh_token"),
-				Resource:     r.Form.Get("resource"),
+				ClientID:     r.PostForm.Get("client_id"),
+				RefreshToken: r.PostForm.Get("refresh_token"),
+				Resource:     r.PostForm.Get("resource"),
 			})
 			if err != nil {
 				writeOAuthActionError(w, r, err)
@@ -355,6 +356,7 @@ func writeTokenResponse(w http.ResponseWriter, t core.OAuthTokens) {
 
 func (p *oauthProvider) handleRevoke() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 		if err := r.ParseForm(); err != nil {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "could not parse form body")
 			return
@@ -362,8 +364,8 @@ func (p *oauthProvider) handleRevoke() http.HandlerFunc {
 		// Per RFC 7009 §2.2 the response is 200 even for an unknown token, so
 		// a storage failure is logged rather than reported to the client.
 		if _, err := core.RevokeOAuthToken.Call(r.Context(), p.app, core.RevokeOAuthTokenParams{
-			Token:         r.Form.Get("token"),
-			TokenTypeHint: r.Form.Get("token_type_hint"),
+			Token:         r.PostForm.Get("token"),
+			TokenTypeHint: r.PostForm.Get("token_type_hint"),
 		}); err != nil {
 			httplog.SetError(r.Context(), err)
 		}

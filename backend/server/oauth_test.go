@@ -521,6 +521,30 @@ func TestRefreshTokenReuseRevokesFamily(t *testing.T) {
 }
 
 // Invalid scope and audience requests are rejected before consent or code issuance.
+// Token and revocation parameters come only from the form body (RFC 6749
+// §3.2), never from a query string that proxies and logs may record.
+func TestTokenEndpointReadsOnlyTheBody(t *testing.T) {
+	t.Parallel()
+	srv, _ := setupOAuthTestServer(t)
+	query := url.Values{"grant_type": {"refresh_token"}, "client_id": {"c"}, "refresh_token": {"r"}}
+	resp, err := http.PostForm(srv.URL+"/oauth/token?"+query.Encode(), url.Values{})
+	require.NoError(t, err)
+	var body map[string]string
+	require.NoError(t, json.UnmarshalRead(resp.Body, &body))
+	resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "unsupported_grant_type", body["error"])
+
+	for _, path := range []string{"/oauth/token", "/oauth/revoke"} {
+		resp, err = http.PostForm(srv.URL+path, url.Values{"token": {strings.Repeat("x", 32<<10)}})
+		require.NoError(t, err)
+		require.NoError(t, json.UnmarshalRead(resp.Body, &body))
+		resp.Body.Close()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, path)
+		assert.Equal(t, "invalid_request", body["error"], path)
+	}
+}
+
 func TestAuthorizeRejectsInvalidScopeOrAudience(t *testing.T) {
 	t.Parallel()
 	srv, _ := setupOAuthTestServer(t)

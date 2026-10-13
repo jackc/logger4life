@@ -57,14 +57,14 @@ func newMCPRegistry(app *core.Core) *mcpregistry.Registry[MCPMetadata] {
 	r.Register(spec(mcp.Tool{
 		Name:        "list_logs",
 		Title:       "List logs",
-		Annotations: readOnlyMCPAnnotations(),
+		Annotations: mcpregistry.ReadOnlyAnnotations(),
 		Description: "List an alphabetical page of logs the authenticated user owns or has been shared on. Defaults to 50 records, maximum 100; pass next_cursor as cursor to continue. Pages may be shortened to fit the response size limit.",
 	}), mcpregistry.Bind(core.ListLogsPage, app, binding))
 
 	r.Register(spec(mcp.Tool{
 		Name:        "get_sql_schema",
 		Title:       "Get SQL schema",
-		Annotations: readOnlyMCPAnnotations(),
+		Annotations: mcpregistry.ReadOnlyAnnotations(),
 		Description: "Describe the read-only views available for SQL queries (sql_query.logs and sql_query.log_entries) including columns, types, and per-column comments. Call this before writing a query to know what to select.",
 	}), mcpregistry.Typed(func(ctx context.Context, _ *mcp.CallToolRequest, _ getSQLSchemaInput) (*mcp.CallToolResult, getSQLSchemaOutput, error) {
 		result, err := core.GetSQLSchema.Call(ctx, app, core.GetSQLSchemaParams{})
@@ -77,7 +77,7 @@ func newMCPRegistry(app *core.Core) *mcpregistry.Registry[MCPMetadata] {
 	r.Register(spec(mcp.Tool{
 		Name:        "run_sql",
 		Title:       "Run SQL query",
-		Annotations: readOnlyMCPAnnotations(),
+		Annotations: mcpregistry.ReadOnlyAnnotations(),
 		Description: "Run a read-only SELECT against the sql_query schema views as the authenticated user. Only SELECT statements on the logs and log_entries views are allowed; results are capped at 1000 rows.",
 	}), mcpregistry.Typed(func(ctx context.Context, _ *mcp.CallToolRequest, in runSQLInput) (*mcp.CallToolResult, runSQLOutput, error) {
 		result, err := core.ExecuteUserSQL.Call(ctx, app, core.ExecuteUserSQLParams{Query: in.Query})
@@ -90,14 +90,14 @@ func newMCPRegistry(app *core.Core) *mcpregistry.Registry[MCPMetadata] {
 	r.Register(spec(mcp.Tool{
 		Name:        "list_saved_queries",
 		Title:       "List saved queries",
-		Annotations: readOnlyMCPAnnotations(),
+		Annotations: mcpregistry.ReadOnlyAnnotations(),
 		Description: "List an alphabetical page of the authenticated user's saved SQL queries, including query text. Defaults to 50 records, maximum 100; pass next_cursor as cursor to continue. Pages may be shortened to fit the response size limit.",
 	}), mcpregistry.Bind(core.ListSavedQueriesPage, app, binding))
 
 	r.Register(spec(mcp.Tool{
 		Name:        "run_saved_query",
 		Title:       "Run saved query",
-		Annotations: readOnlyMCPAnnotations(),
+		Annotations: mcpregistry.ReadOnlyAnnotations(),
 		Description: "Look up a saved query by name and execute it. Equivalent to calling list_saved_queries then run_sql with the matching query_text.",
 	}), mcpregistry.Typed(func(ctx context.Context, _ *mcp.CallToolRequest, in runSavedQueryInput) (*mcp.CallToolResult, runSQLOutput, error) {
 		name := strings.TrimSpace(in.Name)

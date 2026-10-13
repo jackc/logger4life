@@ -3,12 +3,12 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/logger4life/backend/core"
+	"github.com/jackc/manifest/mcphttp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -65,36 +65,14 @@ func requireMCPUser(ctx context.Context) (*AuthUser, error) {
 	return user, nil
 }
 
-func readOnlyMCPAnnotations() *mcp.ToolAnnotations {
-	return &mcp.ToolAnnotations{
-		ReadOnlyHint:    true,
-		DestructiveHint: new(bool),
-		IdempotentHint:  true,
-		OpenWorldHint:   new(bool),
-	}
-}
-
 func newMCPServer(app *core.Core, oauth *oauthProvider) *mcpServer {
 	srv := newMCPRegistry(app).Server()
 
+	// mcphttp's options rely on requireBearerToken's Origin check and on
+	// the trusted reverse proxy (Caddy) routing by host.
 	handler := mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return srv },
-		&mcp.StreamableHTTPOptions{
-			// Required for protocol 2026-07-28. The SDK still handles legacy
-			// initialize requests, without retaining HTTP session state.
-			Stateless: true,
-			// These tools return one result and emit no progress notifications.
-			JSONResponse: true,
-			// Stop database work when a modern client's request disconnects.
-			PropagateRequestCancellation: true,
-			// We're behind a trusted reverse proxy (Caddy) that may forward
-			// the original public Host header while connecting to us over
-			// loopback. The SDK's default DNS-rebinding protection treats
-			// that combination as a rejection, but the rebinding attack it
-			// guards against is handled by the proxy's host routing and the
-			// explicit Origin check in requireBearerToken.
-			DisableLocalhostProtection: true,
-		},
+		mcphttp.StreamableHTTPOptions(),
 	)
 	return &mcpServer{server: srv, handler: handler, oauth: oauth, requests: newKeyedRateLimiter(60, 10)}
 }
@@ -104,66 +82,22 @@ func newMCPServer(app *core.Core, oauth *oauthProvider) *mcpServer {
 // the same key as cookie-based loadSession, so userFromContext works inside
 // tool handlers.
 func (m *mcpServer) requireBearerToken() func(http.Handler) http.Handler {
-	resourceMetadataURL := m.oauth.canonicalURL + "/.well-known/oauth-protected-resource"
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check every method against the configured public origin, even
-			// behind a proxy. Non-browser clients may omit Origin entirely.
-			if origins := r.Header.Values("Origin"); len(origins) != 0 &&
-				(len(origins) != 1 || origins[0] != m.oauth.canonicalURL) {
-				http.Error(w, "invalid origin", http.StatusForbidden)
-				return
+	return mcphttp.RequireBearer(mcphttp.Bearer{
+		Origin:              m.oauth.canonicalURL,
+		ResourceMetadataURL: m.oauth.canonicalURL + "/.well-known/oauth-protected-resource",
+		Scope:               core.OAuthScopeMCP,
+		Verify: func(ctx context.Context, token string) (context.Context, error) {
+			user, err := m.oauth.verifyAccessToken(ctx, token)
+			switch {
+			case errors.Is(err, core.ErrOAuthInsufficientScope):
+				return nil, mcphttp.InsufficientScope(err)
+			case err != nil:
+				return nil, err
 			}
-			authz := r.Header.Get("Authorization")
-			scheme, token, ok := strings.Cut(authz, " ")
-			if !ok || !strings.EqualFold(scheme, "Bearer") {
-				writeBearerChallenge(w, resourceMetadataURL, nil)
-				return
-			}
-			token = strings.TrimSpace(token)
-			if token == "" {
-				writeBearerChallenge(w, resourceMetadataURL, errors.New("missing bearer token"))
-				return
-			}
-			user, err := m.oauth.verifyAccessToken(r.Context(), token)
-			if err != nil {
-				writeBearerChallenge(w, resourceMetadataURL, err)
-				return
-			}
-			ctx := context.WithValue(r.Context(), userContextKey, user)
-			// Count every authenticated POST, including legacy calls whose
-			// method is only in the body. No header or token rotation can
-			// bypass the user's allowance; discovery GETs remain available.
-			if r.Method == http.MethodPost {
-				if retry := m.requests.allow(user.ID); retry > 0 {
-					writeRateLimit(w, retry)
-					return
-				}
-			}
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-// writeBearerChallenge points clients at our protected-resource metadata.
-// Invalid credentials receive 401; valid tokens lacking MCP permission receive
-// 403 with insufficient_scope and the required scope (RFC 6750 §3.1).
-func writeBearerChallenge(w http.ResponseWriter, resourceMetadataURL string, err error) {
-	challenge := fmt.Sprintf(`Bearer resource_metadata=%q, scope=%q`, resourceMetadataURL, core.OAuthScopeMCP)
-	status := http.StatusUnauthorized
-	body := map[string]string{"error": "unauthorized"}
-	// RFC 6750 §3.1: an initial challenge without credentials should not
-	// claim that the client presented an invalid token.
-	if err != nil {
-		code := "invalid_token"
-		if errors.Is(err, core.ErrOAuthInsufficientScope) {
-			status = http.StatusForbidden
-			code = "insufficient_scope"
-			body["error"] = code
-		}
-		challenge += fmt.Sprintf(`, error=%q, error_description=%q`, code, err.Error())
-		body["error_description"] = err.Error()
-	}
-	w.Header().Set("WWW-Authenticate", challenge)
-	writeJSON(w, status, body)
+			return context.WithValue(ctx, userContextKey, user), nil
+		},
+		LimitPost: func(ctx context.Context) time.Duration {
+			return m.requests.allow(userFromContext(ctx).ID)
+		},
+	})
 }

@@ -29,23 +29,19 @@ type ActionMetadata struct {
 // catalog's dependency and metadata type parameters.
 type ActionDef[P, R any] = action.Definition[*Core, ActionMetadata, P, R]
 
-type Action[P, R any] struct {
-	*action.Action[*Core, ActionMetadata, P, R]
-}
+// Action is a catalog action. Call and InvokeJSON run it through the
+// dispatcher of the *Core they are given.
+type Action[P, R any] = action.CatalogAction[*Core, ActionMetadata, P, R]
 
-var registry action.Registry[*Core, ActionMetadata]
+var catalog = action.NewCatalog(action.CatalogOptions[*Core, ActionMetadata]{
+	Dispatcher: func(c *Core) *action.Dispatcher[*Core, ActionMetadata] { return c.actions },
+})
 
-func Define[P, R any](def ActionDef[P, R]) *Action[P, R] {
-	return &Action[P, R]{registry.Define(def)}
-}
+func Define[P, R any](def ActionDef[P, R]) *Action[P, R] { return catalog.Define(def) }
 
-func Lookup(name string) (AnyAction, bool) { return registry.Lookup(name) }
-func Catalog() []AnyAction                 { return registry.Catalog() }
-
-func (a *Action[P, R]) Call(ctx context.Context, c *Core, p P) (R, error) {
-	return a.Action.Call(ctx, c.actions, c, p)
-}
+func Lookup(name string) (AnyAction, bool) { return catalog.Lookup(name) }
+func Catalog() []AnyAction                 { return catalog.Actions() }
 
 func (c *Core) InvokeJSON(ctx context.Context, name string, data []byte) (any, error) {
-	return c.actions.InvokeJSON(ctx, c, name, data)
+	return catalog.InvokeJSON(ctx, c, name, data)
 }

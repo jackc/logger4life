@@ -30,8 +30,8 @@ github.com/jackc/jed/impl/go v0.2.1-0.20261013182508-36d7ce208e5d h1:/OLS8aW/TI1
 github.com/jackc/jed/impl/go v0.2.1-0.20261013182508-36d7ce208e5d/go.mod h1:ZXRNn6K210saIjbOWbJaKyJfbuD1xywUIcCuoT1OCXE=
 github.com/jackc/jed/migrate/go v0.0.0-20261013182508-36d7ce208e5d h1:p25WaZyg3L9ZglHxGcw5XRSFUTJ7ZmsDB2d9cZQzkpM=
 github.com/jackc/jed/migrate/go v0.0.0-20261013182508-36d7ce208e5d/go.mod h1:7Yt2VEdPaP0mSw5d+zlcGUKNjInOfDxwI42sZPkJpTM=
-github.com/jackc/manifest v0.0.0-20261012191353-c107fe1cbfb4 h1:baUq/xmG1vBliZypyZNm6rErm8Bco+phdyyya+xbAUo=
-github.com/jackc/manifest v0.0.0-20261012191353-c107fe1cbfb4/go.mod h1:rDAD7GBD8z/IhBWD9nueBRiBywXNZM/2EuEtznxKgmQ=
+github.com/jackc/manifest v0.0.0-20261013213134-34451f53d5b6 h1:hcooEiTexy7vEQjhZX5zKoskxcnzNceyNxnlB+y3vwo=
+github.com/jackc/manifest v0.0.0-20261013213134-34451f53d5b6/go.mod h1:rDAD7GBD8z/IhBWD9nueBRiBywXNZM/2EuEtznxKgmQ=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
 github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
 github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=

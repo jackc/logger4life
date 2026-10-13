@@ -77,6 +77,11 @@ var (
 	// invalid_grant so the detection is not leaked to the client.
 	ErrOAuthRefreshReuse = errors.New("refresh token reuse detected")
 
+	// ErrOAuthClientMetadataGone is what an OAuthClientMetadataResolver
+	// returns when the client's host definitively withdraws its document:
+	// it answers 404 or 410, or serves a document for another client ID.
+	ErrOAuthClientMetadataGone = errors.New("client metadata document no longer exists")
+
 	ErrOAuthInvalidToken          = errors.New("invalid or expired access token")
 	ErrOAuthTokenAudienceMismatch = errors.New("access token audience does not match this MCP server")
 	ErrOAuthInsufficientScope     = errors.New("access token requires the mcp scope")
@@ -92,7 +97,9 @@ type OAuthClient struct {
 }
 
 // OAuthClientMetadataResolver is the driven port for validated, HTTP-cached
-// CIMD metadata. It must never return stale metadata after a fetch failure.
+// CIMD metadata. It must never return stale metadata after a fetch failure,
+// and must distinguish a withdrawn document (ErrOAuthClientMetadataGone)
+// from every other failure.
 type OAuthClientMetadataResolver interface {
 	ResolveOAuthClient(context.Context, string) (OAuthClient, error)
 }
@@ -309,6 +316,26 @@ func (c *Core) resolveOAuthClient(ctx context.Context, id string) (OAuthClient, 
 	return client, nil
 }
 
+// grantedOAuthClient re-checks a CIMD client that already holds an approved
+// grant, at code exchange and refresh. Only a definitive answer from the
+// client's host refuses the request: the document is gone or now names
+// another client. Any other failure leaves the grant usable, so a metadata
+// outage cannot sign connected clients out. current reports whether fresh
+// metadata was obtained. DCR clients have no document to re-check.
+func (c *Core) grantedOAuthClient(ctx context.Context, id string) (client OAuthClient, current bool, err error) {
+	if c.oauthMetadata == nil || !domain.ValidClientMetadataURL(id) {
+		return OAuthClient{}, false, nil
+	}
+	client, err = c.oauthMetadata.ResolveOAuthClient(ctx, id)
+	if errors.Is(err, ErrOAuthClientMetadataGone) {
+		return OAuthClient{}, false, &OAuthError{Code: "invalid_client", Description: "client metadata document no longer exists", cause: err}
+	}
+	if err != nil || client.ID != id {
+		return OAuthClient{}, false, nil
+	}
+	return client, true, nil
+}
+
 var PrepareOAuthAuthorization = Define(ActionDef[OAuthAuthorizationParams, OAuthAuthorizationRequest]{
 	Name: "prepare_oauth_authorization", Description: "Validate an OAuth authorization request and describe the client seeking consent.", Metadata: ActionMetadata{Public: true},
 	Handler: func(ctx context.Context, c *Core, p OAuthAuthorizationParams) (OAuthAuthorizationRequest, error) {
@@ -414,6 +441,12 @@ var ExchangeOAuthCode = Define(ActionDef[ExchangeOAuthCodeParams, OAuthTokens]{
 		if p.ClientID == "" || p.Code == "" || p.CodeVerifier == "" {
 			return OAuthTokens{}, inlineOAuthError("invalid_request", "client_id, code, and code_verifier are required")
 		}
+		// Re-check before consuming, so a refused exchange leaves the code
+		// as it was.
+		client, current, err := c.grantedOAuthClient(ctx, p.ClientID)
+		if err != nil {
+			return OAuthTokens{}, err
+		}
 		// Consuming is atomic: a replay of the same code finds nothing.
 		stored, err := c.oauth.ConsumeAuthorizationCode(ctx, domain.HashToken(p.Code))
 		if err != nil {
@@ -435,6 +468,9 @@ var ExchangeOAuthCode = Define(ActionDef[ExchangeOAuthCodeParams, OAuthTokens]{
 		}
 		if p.Resource != "" && !domain.SameCanonicalURL(p.Resource, stored.Audience) {
 			return OAuthTokens{}, inlineOAuthError("invalid_target", "resource parameter does not match the original request")
+		}
+		if current && !domain.RedirectURIRegistered(client.RedirectURIs, p.RedirectURI) {
+			return OAuthTokens{}, inlineOAuthError("invalid_grant", "redirect_uri is no longer allowed by client metadata")
 		}
 		familyID := uuid.NewV7()
 		return c.issueTokenPair(ctx, OAuthGrant{
@@ -458,6 +494,11 @@ var RefreshOAuthToken = Define(ActionDef[RefreshOAuthTokenParams, OAuthTokens]{
 	Handler: func(ctx context.Context, c *Core, p RefreshOAuthTokenParams) (OAuthTokens, error) {
 		if p.ClientID == "" || p.RefreshToken == "" {
 			return OAuthTokens{}, inlineOAuthError("invalid_request", "client_id and refresh_token are required")
+		}
+		// Re-check before consuming, so a refused refresh leaves the token
+		// usable if the client's document returns.
+		if _, _, err := c.grantedOAuthClient(ctx, p.ClientID); err != nil {
+			return OAuthTokens{}, err
 		}
 		grant, err := c.oauth.ConsumeRefreshToken(ctx, domain.HashToken(p.RefreshToken))
 		if err != nil {

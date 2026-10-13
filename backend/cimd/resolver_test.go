@@ -2,6 +2,7 @@ package cimd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/logger4life/backend/core"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
 )
@@ -231,4 +233,32 @@ func TestCacheExpiry(t *testing.T) {
 		})
 	}
 	require.Equal(t, now.Add(time.Minute-time.Second), cacheExpiry(http.Header{"Cache-Control": {"max-age=60"}}, now.Add(-time.Second), now))
+}
+
+// Only a withdrawn document reports ErrOAuthClientMetadataGone; core ends
+// existing grants for it and treats every other failure as transient.
+func TestResolverDistinguishesWithdrawnDocuments(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		resp func() (*http.Response, error)
+		gone bool
+	}{
+		{"not found", func() (*http.Response, error) { return &http.Response{StatusCode: 404, Body: http.NoBody}, nil }, true},
+		{"gone", func() (*http.Response, error) { return &http.Response{StatusCode: 410, Body: http.NoBody}, nil }, true},
+		{"another client", func() (*http.Response, error) {
+			doc := metadataDocument()
+			doc["client_id"] = "https://example.com/another-client"
+			return response(documentJSON(t, doc), nil), nil
+		}, true},
+		{"server error", func() (*http.Response, error) { return &http.Response{StatusCode: 503, Body: http.NoBody}, nil }, false},
+		{"network error", func() (*http.Response, error) { return nil, fmt.Errorf("connection reset") }, false},
+		{"invalid document", func() (*http.Response, error) { return response([]byte(`{"client_id":`), nil), nil }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := testResolver(t, func(*http.Request) (*http.Response, error) { return tc.resp() })
+			_, err := r.ResolveOAuthClient(context.Background(), testID)
+			require.Error(t, err)
+			require.Equal(t, tc.gone, errors.Is(err, core.ErrOAuthClientMetadataGone), err)
+		})
+	}
 }

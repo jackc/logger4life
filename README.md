@@ -242,6 +242,9 @@ Apply PostgreSQL migration **016** before running this version; jed applies
 migration **004** automatically. Existing DCR codes and tokens keep their
 behavior. Metadata changes affect new authorizations; issued codes and token
 families keep their original URL identity, callback, scope, and grant policy.
+Code exchange and refresh re-check the document: if its host answers 404 or
+410, or the URL now names another client, the client is refused until the
+document returns. Fetch failures and outages leave existing grants working.
 
 The tools are `list_logs`, `get_sql_schema`, `run_sql`,
 `list_saved_queries`, and `run_saved_query`. SQL queries are restricted to

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -697,13 +698,14 @@ func TestOAuthMetadataLifecycle(t *testing.T) {
 	}
 	calls := metadata.calls
 	// Existing codes remain bound to the original URL, callback, PKCE and
-	// grant types. Metadata outages/changes do not rewrite an approved grant.
+	// grant types. Exchange re-checks the metadata, but an outage is not a
+	// withdrawal, so the approved grant still issues tokens.
 	tokens, err := ExchangeOAuthCode.Call(context.Background(), app, ExchangeOAuthCodeParams{ClientID: id, Code: result.Code, RedirectURI: p.RedirectURI, CodeVerifier: testVerifier})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tokens.AccessToken == "" || tokens.RefreshToken != "" || store.pair.RefreshTokenHash != nil || metadata.calls != calls {
-		t.Fatal("code-only grants must issue access without a refresh token or metadata refetch")
+	if tokens.AccessToken == "" || tokens.RefreshToken != "" || store.pair.RefreshTokenHash != nil || metadata.calls != calls+1 {
+		t.Fatal("code-only grants must issue access without a refresh token, despite a metadata outage")
 	}
 	store.consumedCode.AuthorizationCodeOnly = false
 	tokens, err = ExchangeOAuthCode.Call(context.Background(), app, ExchangeOAuthCodeParams{ClientID: id, Code: result.Code, RedirectURI: p.RedirectURI, CodeVerifier: testVerifier})
@@ -714,12 +716,48 @@ func TestOAuthMetadataLifecycle(t *testing.T) {
 		t.Fatal("refresh-enabled grants must issue refresh tokens")
 	}
 	store.grant = store.pair.Grant
+	calls = metadata.calls
 	_, err = RefreshOAuthToken.Call(context.Background(), app, RefreshOAuthTokenParams{ClientID: id, RefreshToken: tokens.RefreshToken})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if metadata.calls != calls {
-		t.Fatal("refresh must use its bound grant, not newly published metadata")
+	if metadata.calls != calls+1 {
+		t.Fatal("refresh must re-check metadata, and an outage must not end the grant")
+	}
+}
+
+// A client whose document is withdrawn loses its approved grant at the next
+// code exchange or refresh. Neither the code nor the refresh token is
+// consumed, so the grant works again if the document returns.
+func TestOAuthWithdrawnMetadataEndsExistingGrants(t *testing.T) {
+	const id = "https://example.com/client.json"
+	verifier, _ := pkcePair()
+	code := storedCode()
+	code.ClientID = id
+	metadata := &fakeMetadataResolver{err: fmt.Errorf("fetch: %w", ErrOAuthClientMetadataGone)}
+	store := &fakeOAuthStore{consumedCode: code, grant: OAuthGrant{ClientID: id, UserID: "user", Scope: OAuthScopeMCP, Audience: testIssuer, FamilyID: "family"}}
+	app := New(Config{OAuth: store, OAuthIssuer: testIssuer, OAuthMetadata: metadata})
+
+	exchange := ExchangeOAuthCodeParams{ClientID: id, Code: "code", RedirectURI: code.RedirectURI, CodeVerifier: verifier}
+	_, err := ExchangeOAuthCode.Call(context.Background(), app, exchange)
+	if oauthErrorFrom(t, err).Code != "invalid_client" || store.consumedCodeHash != nil {
+		t.Fatalf("exchange after withdrawal = %v; consumed %x", err, store.consumedCodeHash)
+	}
+	refresh := RefreshOAuthTokenParams{ClientID: id, RefreshToken: "refresh"}
+	_, err = RefreshOAuthToken.Call(context.Background(), app, refresh)
+	if oauthErrorFrom(t, err).Code != "invalid_client" || store.refreshHash != nil {
+		t.Fatalf("refresh after withdrawal = %v; consumed %x", err, store.refreshHash)
+	}
+
+	// The document returns but no longer lists the code's callback.
+	metadata.err = nil
+	metadata.client = OAuthClient{ID: id, ClientName: "CIMD Client", RedirectURIs: []string{"https://client.example/other"}}
+	_, err = ExchangeOAuthCode.Call(context.Background(), app, exchange)
+	if e := oauthErrorFrom(t, err); e.Code != "invalid_grant" || !strings.Contains(e.Description, "no longer allowed") {
+		t.Fatalf("exchange with a withdrawn callback = %v", err)
+	}
+	if _, err := RefreshOAuthToken.Call(context.Background(), app, refresh); err != nil {
+		t.Fatalf("refresh with a restored document = %v", err)
 	}
 }
 

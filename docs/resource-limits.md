@@ -118,8 +118,10 @@ resolves HTTP-fresh metadata, even when that URL already has stored grants.
 
 Codes snapshot the approved callback, scope, audience, and whether refresh
 was requested in `grant_types`. Document changes or outages do not rewrite
-issued grants; token exchange and refresh rely on those grants and require
-no metadata fetch. A changed `client_id` URL is a different client, even if
+issued grants. Token exchange and refresh re-check the document (through the
+same cache) only to detect withdrawal: a 404 or 410, or a document naming
+another client, refuses them until the document returns; any other fetch
+failure leaves the grant working. A changed `client_id` URL is a different client, even if
 only its case or explicit default port differs. Existing grant history keeps
 URL identities protected from registration cleanup.
 

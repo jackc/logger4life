@@ -125,7 +125,13 @@ stored as permanent registration metadata. URL clients always resolve fresh
 or HTTP-cached metadata for new authorization, including after restart.
 Existing codes and token families remain bound to their approved identity,
 callback, scope, audience, and grant policy. Metadata changes apply to new
-authorizations and cannot expand an existing grant. Documents that omit
+authorizations and cannot expand an existing grant. Code exchange and refresh
+re-check the document, and only a withdrawal ends an existing grant: a 404 or
+410, or a document naming another client, refuses the request with
+`invalid_client` without consuming the code or refresh token. A successfully
+fetched document that no longer lists a code's callback refuses that code.
+Timeouts, server errors, and invalid documents leave existing grants
+working, so a metadata outage cannot sign connected clients out. Documents that omit
 `refresh_token` from `grant_types` receive access tokens without refresh tokens.
 
 PostgreSQL migration **016** must run before deploying this version; jed

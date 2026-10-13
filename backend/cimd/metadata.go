@@ -22,6 +22,10 @@ func parseMetadata(id string, body []byte) (core.OAuthClient, error) {
 	}
 	var documentID, name, authMethod string
 	var redirects []string
+	if json.Unmarshal(fields["client_id"], &documentID) == nil && documentID != "" && documentID != id {
+		// The URL now describes a different client: this one is withdrawn.
+		return core.OAuthClient{}, core.ErrOAuthClientMetadataGone
+	}
 	if json.Unmarshal(fields["client_id"], &documentID) != nil || documentID != id ||
 		json.Unmarshal(fields["client_name"], &name) != nil || strings.TrimSpace(name) == "" || len(name) > core.OAuthMaxClientNameBytes ||
 		json.Unmarshal(fields["redirect_uris"], &redirects) != nil || len(redirects) == 0 || len(redirects) > core.OAuthMaxRedirectURIs ||

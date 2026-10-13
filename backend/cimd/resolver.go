@@ -127,6 +127,11 @@ func (r *Resolver) fetch(ctx context.Context, id string) (core.OAuthClient, time
 		return core.OAuthClient{}, time.Time{}, err
 	}
 	defer resp.Body.Close()
+	// Only these statuses say the document was withdrawn. Every other
+	// failure might be transient and must not end existing grants.
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return core.OAuthClient{}, time.Time{}, core.ErrOAuthClientMetadataGone
+	}
 	contentType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if resp.StatusCode != http.StatusOK || err != nil || contentType != "application/json" ||
 		resp.Header.Get("Content-Encoding") != "" || resp.ContentLength > maxDocumentBytes {

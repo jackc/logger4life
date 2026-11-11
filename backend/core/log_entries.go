@@ -13,6 +13,7 @@ import (
 var ErrLogEntryNotFound = errors.New("entry not found")
 
 type LogEntryStore interface {
+	GetLogEntry(context.Context, string, string, string, bool) (domain.LogEntry, error)
 	LogFieldDefinitions(context.Context, string, string) ([]domain.FieldDefinition, error)
 	CreateLogEntry(context.Context, string, string, string, map[string]any, time.Time, string) (domain.LogEntry, error)
 	ListLogEntries(context.Context, string, string) ([]domain.LogEntry, error)
@@ -21,12 +22,16 @@ type LogEntryStore interface {
 }
 
 type CreateLogEntryParams struct {
-	Note   string         `json:"note"`
-	LogID  string         `json:"log_id"`
-	Fields map[string]any `json:"fields"`
+	OccurredAt *time.Time     `json:"occurred_at,omitempty" jsonschema:"optional RFC3339 event timestamp with timezone; defaults to now"`
+	Note       string         `json:"note,omitempty"`
+	LogID      string         `json:"log_id"`
+	Fields     map[string]any `json:"fields,omitempty"`
 }
 
 func (p *CreateLogEntryParams) Validate() error {
+	if p.OccurredAt != nil && p.OccurredAt.IsZero() {
+		return fmt.Errorf("occurred_at must be a nonzero timestamp")
+	}
 	if utf8.RuneCountInString(p.Note) > 20000 {
 		return fmt.Errorf("note must be at most 20000 characters")
 	}
@@ -56,6 +61,9 @@ var CreateLogEntry = Define(ActionDef[CreateLogEntryParams, domain.LogEntry]{Nam
 		return domain.LogEntry{}, e
 	}
 	occurredAt := time.Now().UTC().Truncate(time.Microsecond)
+	if p.OccurredAt != nil {
+		occurredAt = p.OccurredAt.UTC().Truncate(time.Microsecond)
+	}
 	return c.entries.CreateLogEntry(ctx, entryID, u, p.LogID, p.Fields, occurredAt, p.Note)
 }})
 

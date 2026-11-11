@@ -118,5 +118,6 @@ func newMCPRegistry(app *core.Core) *mcpregistry.Registry[MCPMetadata] {
 		return nil, result, nil
 	}))
 
+	registerMCPActions(r, app)
 	return r
 }

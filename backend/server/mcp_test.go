@@ -219,7 +219,7 @@ func TestMCPHTTPProtocolCompatibility(t *testing.T) {
 				assert.Equal(t, float64(0), result["ttlMs"])
 			}
 			tools := result["tools"].([]any)
-			require.Len(t, tools, 5)
+			require.Len(t, tools, 28)
 			names := make([]string, 0, len(tools))
 			for _, item := range tools {
 				tool := item.(map[string]any)
@@ -228,9 +228,12 @@ func TestMCPHTTPProtocolCompatibility(t *testing.T) {
 				assert.NotNil(t, tool["inputSchema"])
 				assert.NotNil(t, tool["outputSchema"])
 				annotations := tool["annotations"].(map[string]any)
-				assert.Equal(t, true, annotations["readOnlyHint"])
-				assert.Equal(t, false, annotations["destructiveHint"])
-				assert.Equal(t, true, annotations["idempotentHint"])
+				if annotations["readOnlyHint"] == true {
+					assert.Equal(t, false, annotations["destructiveHint"])
+					assert.Equal(t, true, annotations["idempotentHint"])
+				} else {
+					assert.Equal(t, false, annotations["idempotentHint"])
+				}
 				assert.Equal(t, false, annotations["openWorldHint"])
 			}
 			assert.True(t, slices.IsSorted(names), "tool order: %v", names)

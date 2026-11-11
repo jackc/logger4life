@@ -184,7 +184,7 @@ VERNA_APP = "logger4life"
 
 ## MCP (Model Context Protocol)
 
-Logger4Life exposes five read-only tools to AI assistants over the
+Logger4Life exposes 28 tools to AI assistants over the
 [Model Context Protocol](https://modelcontextprotocol.io). Set
 `MCP_CANONICAL_URL` to enable the OAuth 2.1 authorization server
 (`/oauth/...`) and the MCP endpoint (`/mcp`):
@@ -246,9 +246,58 @@ Code exchange and refresh re-check the document: if its host answers 404 or
 410, or the URL now names another client, the client is refused until the
 document returns. Fetch failures and outages leave existing grants working.
 
-The tools are `list_logs`, `get_sql_schema`, `run_sql`,
-`list_saved_queries`, and `run_saved_query`. SQL queries are restricted to
-the caller's data and capped at 1000 rows and 1 MiB of result values.
+The read tools are `list_logs`, `get_log`, `get_log_entry`, `list_folders`,
+`get_folder`, `list_shared_users`, `get_share_info`, `get_sql_schema`, `run_sql`,
+`list_saved_queries`, and `run_saved_query`. Log detail includes the caller's
+folder placement, position, and home pin state. SQL remains read-only,
+restricted to the caller's data, and capped at 1000 rows and 1 MiB of values.
+
+The write tools are:
+
+* Entries: `create_log_entry`, `update_log_entry`, `delete_log_entry`.
+* Logs: `create_log`, `update_log`, `delete_log`.
+* Folders: `create_folder`, `rename_folder`, `move_folder`, `delete_folder`.
+* Organization: `update_log_placement`, `pin_log`, `update_log_home_position`.
+* Sharing: `create_share_token`, `delete_share_token`, `join_shared_log`,
+  `remove_shared_user`.
+
+Saved-query writes are not exposed. All tools use the existing `mcp` OAuth
+scope and existing ownership/membership rules; existing MCP tokens can call
+write tools. Shared members can create, update, and delete entries, but only
+owners can change log definitions, delete logs, or manage invitations and
+memberships. Folder and home organization are personal to the caller.
+
+`create_log_entry` accepts an optional RFC3339 `occurred_at` with a timezone,
+defaulting to now. This timestamp is also supported by the HTTP create-entry
+endpoint. MCP `update_log_entry` patches only supplied values: omitted field
+names, timestamps, and notes are preserved; a field value of `null` removes
+an optional field; `note: ""` clears the note. Number field values must be
+strings, such as `"25"`. The HTTP PUT endpoint retains its replacement-field
+and required-timestamp contract. `update_log` also requires the complete name
+and field definition list; it does not migrate historical entries.
+
+Every MCP write accepts an optional `idempotency_key` of at most 128 bytes.
+Use a fresh key for each intended operation and reuse it on retries. Keys
+are scoped to the authenticated user and tool name. Identical decoded
+arguments return the original successful response, including its original
+timestamps, without repeating the mutation; changed arguments with the same
+key fail. Concurrent retries serialize in the database. Failed operations
+roll back both the mutation and receipt, so their keys can be retried.
+Receipts persist across restarts and do not expire; they retain the original
+response even if the affected record is later edited or deleted. Without a
+key, repeating creation creates another record where uniqueness permits.
+
+Writes return the resulting record, including placement after organization
+changes. Entry, log, folder, and membership deletion return a receipt with
+`id`, `deleted`, and, where applicable, `log_id`. Invitation revocation returns
+the resulting log; it does not remove existing members. The `id` in
+`list_shared_users` is a membership ID for `remove_shared_user.share_id`.
+New direct reads and writes have a five-second deadline and a 256 KiB result
+budget; oversized write results roll back the operation.
+
+Apply PostgreSQL migration **019** before using MCP writes. Embedded jed
+migration **007** applies automatically. Both add persistent retry receipts;
+the receipts are private implementation data, unavailable through `run_sql`.
 
 The endpoint supports protocol `2026-07-28` using stateless Streamable HTTP
 with JSON responses, and retains compatibility with earlier clients using

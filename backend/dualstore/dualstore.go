@@ -29,6 +29,7 @@ type Backend interface {
 	core.UserSQLExecutor
 	core.SharingStore
 	core.OAuthStore
+	core.WriteStore
 	core.Transactor
 }
 

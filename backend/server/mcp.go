@@ -48,6 +48,11 @@ func mcpToolError(ctx context.Context, err error) error {
 	if errors.As(err, &queryFailure) {
 		return errors.New(queryFailure.Error())
 	}
+	for _, safe := range []error{core.ErrLogNotFound, core.ErrLogEntryNotFound, core.ErrLogNameTaken, core.ErrFolderNotFound, core.ErrParentFolderNotFound, core.ErrFolderCycle, core.ErrFolderOwnParent, core.ErrFolderNotEmpty, core.ErrLogNotPinned, core.ErrShareNotFound, core.ErrInvalidShareLink, core.ErrAlreadyOwnLog, core.ErrIdempotencyConflict} {
+		if errors.Is(err, safe) {
+			return safe
+		}
+	}
 	httplog.SetError(ctx, err)
 	return errors.New("internal error")
 }

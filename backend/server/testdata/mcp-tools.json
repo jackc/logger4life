@@ -2,52 +2,962 @@
   {
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Create a folder under parent_folder_id, or at root when null.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parent_folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "name",
+        "parent_folder_id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "create_folder",
+    "outputSchema": {
+      "properties": {
+        "updated_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent_folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "parent_folder_id",
+        "position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "title": "Create folder"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Create a log with text, number, or boolean field definitions and its initial home placement.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "name",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "name": "create_log",
+    "outputSchema": {
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ]
+          }
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "pinned_to_home": {
+          "type": "boolean"
+        }
+      }
+    },
+    "title": "Create log"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Create an entry with optional Markdown note and RFC3339 occurred_at (defaults to now). Number field values must be strings.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "occurred_at": {
+          "type": [
+            "null",
+            "string"
+          ],
+          "description": "optional RFC3339 event timestamp with timezone; defaults to now"
+        },
+        "note": {
+          "type": "string"
+        },
+        "log_id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id"
+      ]
+    },
+    "name": "create_log_entry",
+    "outputSchema": {
+      "properties": {
+        "occurred_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "log_id": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "note",
+        "id",
+        "log_id",
+        "user_id",
+        "username",
+        "fields",
+        "occurred_at",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "title": "Create log entry"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Create or rotate the invitation token of an owned log. Returns the log including share_token. Rotation replaces the previous invitation token.",
+    "inputSchema": {
+      "required": [
+        "log_id"
+      ],
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      }
+    },
+    "name": "create_share_token",
+    "outputSchema": {
+      "properties": {
+        "position": {
+          "type": "integer"
+        },
+        "pinned_to_home": {
+          "type": "boolean"
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "title": "Create share token"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Delete an empty folder. Nonempty folders are rejected. Returns a deletion receipt.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        },
+        "folder_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder_id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "delete_folder",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "log_id": {
+          "type": "string"
+        },
+        "deleted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "deleted"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Delete folder"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Delete an owned log and all its entries and sharing. Returns a deletion receipt.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "delete_log",
+    "outputSchema": {
+      "required": [
+        "id",
+        "deleted"
+      ],
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "deleted": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        }
+      }
+    },
+    "title": "Delete log"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Delete an entry in an owned or shared log. Returns a deletion receipt.",
+    "inputSchema": {
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "entry_id": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id",
+        "entry_id"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "delete_log_entry",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "deleted": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "log_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "deleted"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Delete log entry"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Revoke the invitation token of an owned log. Existing members keep access. Returns the resulting log.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "delete_share_token",
+    "outputSchema": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "pinned_to_home": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "title": "Delete share token"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read a folder by folder_id.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "folder_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder_id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "get_folder",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent_folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "parent_folder_id",
+        "position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Get folder"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read a visible log including fields, caller folder placement, pin state, and owner-only invitation token.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "log_id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "get_log",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "pinned_to_home": {
+          "type": "boolean"
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "is_owner": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Get log"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read one entry by log_id and entry_id, including field values, timestamps, and Markdown note.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "entry_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "log_id",
+        "entry_id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "get_log_entry",
+    "outputSchema": {
+      "required": [
+        "note",
+        "id",
+        "log_id",
+        "user_id",
+        "username",
+        "fields",
+        "occurred_at",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "string"
+        },
+        "log_id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "occurred_at": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      }
+    },
+    "title": "Get log entry"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Preview an invitation token before joining a shared log.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "name": "get_share_info",
+    "outputSchema": {
+      "properties": {
+        "log_name": {
+          "type": "string"
+        },
+        "owner_username": {
+          "type": "string"
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "already_member": {
+          "type": "boolean"
+        },
+        "log_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "log_id",
+        "log_name",
+        "owner_username",
+        "is_owner",
+        "already_member"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "title": "Get share info"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": true
     },
     "description": "Describe the read-only views available for SQL queries (sql_query.logs and sql_query.log_entries) including columns, types, and per-column comments. Call this before writing a query to know what to select.",
     "inputSchema": {
-      "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "additionalProperties": false
     },
     "name": "get_sql_schema",
     "outputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "views": {
-          "description": "views the user can query in the sql_query schema, with their columns and comments",
+          "type": [
+            "null",
+            "array"
+          ],
           "items": {
             "additionalProperties": false,
+            "type": [
+              "null",
+              "object"
+            ],
             "properties": {
-              "columns": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "comment": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
-                    },
-                    "data_type": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "data_type",
-                    "comment"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
+              "name": {
+                "type": "string"
               },
               "comment": {
                 "type": [
@@ -55,32 +965,223 @@
                   "string"
                 ]
               },
-              "name": {
-                "type": "string"
+              "columns": {
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "data_type": {
+                      "type": "string"
+                    },
+                    "comment": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data_type",
+                    "comment"
+                  ],
+                  "additionalProperties": false
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               }
             },
             "required": [
               "name",
               "comment",
               "columns"
-            ],
-            "type": [
-              "null",
-              "object"
             ]
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "description": "views the user can query in the sql_query schema, with their columns and comments"
         }
       },
       "required": [
         "views"
       ],
-      "type": "object"
+      "additionalProperties": false
     },
     "title": "Get SQL schema"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Join a log using its invitation token. Returns the joined log with the caller placement.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "name": "join_shared_log",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "pinned_to_home": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Join shared log"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List the caller folders including parent IDs and positions.",
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "name": "list_folders",
+    "outputSchema": {
+      "required": [
+        "folders"
+      ],
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "folders": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent_folder_id": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "parent_folder_id",
+              "position",
+              "created_at",
+              "updated_at"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    "title": "List folders"
   },
   {
     "annotations": {
@@ -91,42 +1192,53 @@
     },
     "description": "List an alphabetical page of logs the authenticated user owns or has been shared on. Defaults to 50 records, maximum 100; pass next_cursor as cursor to continue. Pages may be shortened to fit the response size limit.",
     "inputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
-        "cursor": {
-          "description": "opaque next_cursor from the previous page of this tool",
-          "type": "string"
-        },
         "limit": {
-          "description": "maximum records to return; defaults to 50, maximum 100; byte limits may shorten a page",
-          "type": "integer"
+          "type": "integer",
+          "description": "maximum records to return; defaults to 50, maximum 100; byte limits may shorten a page"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "opaque next_cursor from the previous page of this tool"
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "name": "list_logs",
     "outputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "logs": {
+          "type": [
+            "null",
+            "array"
+          ],
           "items": {
-            "additionalProperties": false,
+            "type": "object",
             "properties": {
-              "created_at": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
                 "type": "string"
               },
               "fields": {
+                "type": [
+                  "null",
+                  "array"
+                ],
                 "items": {
-                  "additionalProperties": false,
+                  "type": "object",
                   "properties": {
                     "name": {
                       "type": "string"
                     },
-                    "required": {
-                      "type": "boolean"
-                    },
                     "type": {
                       "type": "string"
+                    },
+                    "required": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -134,20 +1246,13 @@
                     "type",
                     "required"
                   ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
-              "id": {
-                "type": "string"
+                  "additionalProperties": false
+                }
               },
               "is_owner": {
                 "type": "boolean"
               },
-              "name": {
+              "created_at": {
                 "type": "string"
               },
               "updated_at": {
@@ -162,12 +1267,8 @@
               "created_at",
               "updated_at"
             ],
-            "type": "object"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
+            "additionalProperties": false
+          }
         },
         "next_cursor": {
           "type": "string"
@@ -176,7 +1277,7 @@
       "required": [
         "logs"
       ],
-      "type": "object"
+      "additionalProperties": false
     },
     "title": "List logs"
   },
@@ -189,31 +1290,37 @@
     },
     "description": "List an alphabetical page of the authenticated user's saved SQL queries, including query text. Defaults to 50 records, maximum 100; pass next_cursor as cursor to continue. Pages may be shortened to fit the response size limit.",
     "inputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
-        "cursor": {
-          "description": "opaque next_cursor from the previous page of this tool",
-          "type": "string"
-        },
         "limit": {
-          "description": "maximum records to return; defaults to 50, maximum 100; byte limits may shorten a page",
-          "type": "integer"
+          "type": "integer",
+          "description": "maximum records to return; defaults to 50, maximum 100; byte limits may shorten a page"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "opaque next_cursor from the previous page of this tool"
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "name": "list_saved_queries",
     "outputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "next_cursor": {
           "type": "string"
         },
         "queries": {
+          "type": [
+            "null",
+            "array"
+          ],
           "items": {
-            "additionalProperties": false,
             "properties": {
               "created_at": {
+                "type": "string"
+              },
+              "updated_at": {
                 "type": "string"
               },
               "id": {
@@ -224,9 +1331,6 @@
               },
               "query_text": {
                 "type": "string"
-              },
-              "updated_at": {
-                "type": "string"
               }
             },
             "required": [
@@ -236,18 +1340,15 @@
               "created_at",
               "updated_at"
             ],
+            "additionalProperties": false,
             "type": "object"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
+          }
         }
       },
       "required": [
         "queries"
       ],
-      "type": "object"
+      "additionalProperties": false
     },
     "title": "List saved queries"
   },
@@ -258,30 +1359,181 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Look up a saved query by name and execute it. Equivalent to calling list_saved_queries then run_sql with the matching query_text.",
+    "description": "List memberships of an owned log. Each id is a share_id usable by remove_shared_user.",
     "inputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
-        "name": {
-          "description": "name of the saved query to run (case-sensitive, as returned by list_saved_queries)",
+        "log_id": {
           "type": "string"
         }
       },
       "required": [
-        "name"
+        "log_id"
       ],
+      "additionalProperties": false
+    },
+    "name": "list_shared_users",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "users": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "shared_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "shared_at"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "users"
+      ],
+      "additionalProperties": false
+    },
+    "title": "List shared users"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Move a folder under a parent (null for root) and set its position. Returns the resulting folder.",
+    "inputSchema": {
+      "properties": {
+        "folder_id": {
+          "type": "string"
+        },
+        "parent_folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "idempotency_key": {
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write",
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder_id",
+        "parent_folder_id",
+        "position"
+      ],
+      "additionalProperties": false,
       "type": "object"
     },
-    "name": "run_saved_query",
+    "name": "move_folder",
     "outputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
-        "columns": {
+        "updated_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent_folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "parent_folder_id",
+        "position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Move folder"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Pin or unpin a visible log on the caller home screen. Returns the resulting log with placement.",
+    "inputSchema": {
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id",
+        "pinned"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "pin_log",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
           "items": {
-            "additionalProperties": false,
+            "type": "object",
             "properties": {
-              "data_type": {
+              "type": {
                 "type": "string"
+              },
+              "required": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -289,43 +1541,198 @@
             },
             "required": [
               "name",
-              "data_type"
+              "type",
+              "required"
             ],
-            "type": "object"
-          },
+            "additionalProperties": false
+          }
+        },
+        "share_token": {
           "type": [
             "null",
-            "array"
+            "string"
           ]
         },
-        "elapsed_ms": {
-          "type": "integer"
-        },
-        "row_count": {
-          "type": "integer"
-        },
-        "rows": {
-          "items": {
-            "items": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "type": [
-              "null",
-              "array"
-            ]
-          },
+        "folder_id": {
           "type": [
             "null",
-            "array"
+            "string"
           ]
         },
-        "truncated": {
+        "pinned_to_home": {
+          "type": "boolean"
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Pin log"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Remove a membership from an owned log. share_id is the membership id returned by list_shared_users, not the user account ID.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "share_id": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id",
+        "share_id"
+      ]
+    },
+    "name": "remove_shared_user",
+    "outputSchema": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "log_id": {
+          "type": "string"
+        },
+        "deleted": {
           "type": "boolean"
         }
       },
+      "required": [
+        "id",
+        "deleted"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "title": "Remove shared user"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Rename a folder owned by the caller.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "idempotency_key": {
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write",
+          "type": "string"
+        },
+        "folder_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder_id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "name": "rename_folder",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent_folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "parent_folder_id",
+        "position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Rename folder"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Look up a saved query by name and execute it. Equivalent to calling list_saved_queries then run_sql with the matching query_text.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "name of the saved query to run (case-sensitive, as returned by list_saved_queries)"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "run_saved_query",
+    "outputSchema": {
       "required": [
         "columns",
         "rows",
@@ -333,7 +1740,59 @@
         "truncated",
         "elapsed_ms"
       ],
-      "type": "object"
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "truncated": {
+          "type": "boolean"
+        },
+        "elapsed_ms": {
+          "type": "integer"
+        },
+        "columns": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "data_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "data_type"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "rows": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          }
+        },
+        "row_count": {
+          "type": "integer"
+        }
+      }
     },
     "title": "Run saved query"
   },
@@ -346,30 +1805,37 @@
     },
     "description": "Run a read-only SELECT against the sql_query schema views as the authenticated user. Only SELECT statements on the logs and log_entries views are allowed; results are capped at 1000 rows.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "query": {
-          "description": "a read-only SELECT against the sql_query schema views (logs, log_entries)",
-          "type": "string"
+          "type": "string",
+          "description": "a read-only SELECT against the sql_query schema views (logs, log_entries)"
         }
       },
       "required": [
         "query"
       ],
+      "additionalProperties": false,
       "type": "object"
     },
     "name": "run_sql",
     "outputSchema": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
+        "elapsed_ms": {
+          "type": "integer"
+        },
         "columns": {
+          "type": [
+            "null",
+            "array"
+          ],
           "items": {
-            "additionalProperties": false,
+            "type": "object",
             "properties": {
-              "data_type": {
+              "name": {
                 "type": "string"
               },
-              "name": {
+              "data_type": {
                 "type": "string"
               }
             },
@@ -377,36 +1843,29 @@
               "name",
               "data_type"
             ],
-            "type": "object"
-          },
+            "additionalProperties": false
+          }
+        },
+        "rows": {
           "type": [
             "null",
             "array"
-          ]
-        },
-        "elapsed_ms": {
-          "type": "integer"
-        },
-        "row_count": {
-          "type": "integer"
-        },
-        "rows": {
+          ],
           "items": {
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": [
                 "null",
                 "string"
               ]
-            },
-            "type": [
-              "null",
-              "array"
-            ]
-          },
-          "type": [
-            "null",
-            "array"
-          ]
+            }
+          }
+        },
+        "row_count": {
+          "type": "integer"
         },
         "truncated": {
           "type": "boolean"
@@ -419,8 +1878,470 @@
         "truncated",
         "elapsed_ms"
       ],
-      "type": "object"
+      "additionalProperties": false
     },
     "title": "Run SQL query"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Replace an owned log name and field definitions. Supply the complete field definition list. Historical entries are not migrated.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "required": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id",
+        "name",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "name": "update_log",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "pinned_to_home": {
+          "type": "boolean"
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Update log"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Patch an entry: omitted fields, timestamp, and note are preserved. Fields are merged; null removes an optional field. Empty note clears it. Number values must be strings.",
+    "inputSchema": {
+      "properties": {
+        "entry_id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "description": "field changes only; omitted fields are preserved; null removes an optional field; number values must be strings",
+          "additionalProperties": true
+        },
+        "occurred_at": {
+          "type": [
+            "null",
+            "string"
+          ],
+          "description": "RFC3339 timestamp with timezone; omitted preserves current timestamp"
+        },
+        "note": {
+          "type": [
+            "null",
+            "string"
+          ],
+          "description": "replacement Markdown note; omitted preserves current note; empty string clears it"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        },
+        "log_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "log_id",
+        "entry_id"
+      ],
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "update_log_entry",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "string"
+        },
+        "log_id": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "occurred_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "note",
+        "id",
+        "log_id",
+        "user_id",
+        "username",
+        "fields",
+        "occurred_at",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Update log entry"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Reorder a pinned log on the caller home screen. Returns the resulting log with placement.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id",
+        "home_position"
+      ],
+      "additionalProperties": false
+    },
+    "name": "update_log_home_position",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "pinned_to_home": {
+          "type": "boolean"
+        },
+        "home_position": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Update log home position"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Move a visible log into a folder (null for root) and set its position for the caller. Returns the resulting log with placement.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "log_id": {
+          "type": "string"
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "description": "optional retry key, at most 128 bytes; reuse with identical arguments to receive the original result without repeating the write"
+        }
+      },
+      "required": [
+        "log_id",
+        "folder_id",
+        "position"
+      ]
+    },
+    "name": "update_log_placement",
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "is_owner": {
+          "type": "boolean"
+        },
+        "share_token": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "position": {
+          "type": "integer"
+        },
+        "pinned_to_home": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "fields": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "folder_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "home_position": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields",
+        "is_owner",
+        "folder_id",
+        "position",
+        "pinned_to_home",
+        "home_position",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    },
+    "title": "Update log placement"
   }
 ]

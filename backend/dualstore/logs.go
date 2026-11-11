@@ -75,3 +75,7 @@ func (s *Store) DeleteLogEntry(ctx context.Context, userID, logID, entryID strin
 		func() error { return s.primary.DeleteLogEntry(ctx, userID, logID, entryID) },
 		func() error { return s.secondary.DeleteLogEntry(ctx, userID, logID, entryID) })
 }
+
+func (s *Store) GetLogEntry(ctx context.Context, userID, logID, entryID string, lock bool) (domain.LogEntry, error) {
+	return compareCall("GetLogEntry", func() (domain.LogEntry, error) { return s.primary.GetLogEntry(ctx, userID, logID, entryID, lock) }, func() (domain.LogEntry, error) { return s.secondary.GetLogEntry(ctx, userID, logID, entryID, lock) })
+}

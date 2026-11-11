@@ -14,7 +14,7 @@ import (
 func TestMCPInventoryMatchesServedCatalogAndPreviousContract(t *testing.T) {
 	inventory := MCPInventory() // Does not require an application or OAuth provider.
 	require.Equal(t, 1, inventory.SchemaVersion)
-	require.Len(t, inventory.Tools, 5)
+	require.Len(t, inventory.Tools, 28)
 	tools := make([]mcp.Tool, 0, len(inventory.Tools))
 	bindings := map[string]string{}
 	for _, entry := range inventory.Tools {

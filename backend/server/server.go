@@ -68,6 +68,7 @@ type persistence interface {
 	core.UserSQLExecutor
 	core.SharingStore
 	core.OAuthStore
+	core.WriteStore
 	core.Transactor
 }
 
@@ -101,7 +102,7 @@ func buildBackend(ctx context.Context, cfg Config, logger *slog.Logger, metadata
 
 	buildCore := func(store persistence) *core.Core {
 		return core.New(core.Config{
-			Collections: store, Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, SQLConcurrencyPerUser: cfg.SQLConcurrencyPerUser, SQLConcurrencyGlobal: cfg.SQLConcurrencyGlobal, Sharing: store, OAuth: store, OAuthMetadata: metadata, OAuthIssuer: cfg.MCPCanonicalURL, OAuthMaxClients: cfg.OAuthMaxClients,
+			Writes: store, Collections: store, Users: store, Sessions: store, Passkeys: store, Challenges: store, WebAuthn: wan, Tx: store, Logs: store, Entries: store, Placements: store, Folders: store, SavedQueries: store, SQLSchema: store, UserSQL: store, SQLConcurrencyPerUser: cfg.SQLConcurrencyPerUser, SQLConcurrencyGlobal: cfg.SQLConcurrencyGlobal, Sharing: store, OAuth: store, OAuthMetadata: metadata, OAuthIssuer: cfg.MCPCanonicalURL, OAuthMaxClients: cfg.OAuthMaxClients,
 			// RequireUser is outermost so an anonymous caller is turned away
 			// before the audit trail records an attempt it never let through.
 			Middleware: []core.Middleware{core.RequireUser(), auditMiddleware(logger)},

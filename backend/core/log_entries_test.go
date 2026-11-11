@@ -252,3 +252,7 @@ func TestEntryNoteLimit(t *testing.T) {
 		}
 	}
 }
+
+func (s *fakeLogEntryStore) GetLogEntry(ctx context.Context, user, log, entry string, lock bool) (domain.LogEntry, error) {
+	return s.entry, s.err
+}

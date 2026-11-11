@@ -70,3 +70,18 @@ func (s *Store) DeleteLogEntry(ctx context.Context, userID, logID, entryID strin
 	}
 	return e
 }
+
+func (s *Store) GetLogEntry(ctx context.Context, userID, logID, entryID string, lock bool) (domain.LogEntry, error) {
+	if _, err := s.LogFieldDefinitions(ctx, userID, logID); err != nil {
+		return domain.LogEntry{}, err
+	}
+	query := `SELECT le.id,le.log_id,le.user_id,u.username,le.fields,le.occurred_at,le.created_at,le.updated_at,le.note FROM log_entries le JOIN users u ON u.id=le.user_id WHERE le.log_id=$1 AND le.id=$2`
+	if lock {
+		query += " FOR UPDATE OF le"
+	}
+	entry, err := scanLogEntry(s.conn(ctx).QueryRow(ctx, query, logID, entryID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = core.ErrLogEntryNotFound
+	}
+	return entry, err
+}

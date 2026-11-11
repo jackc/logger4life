@@ -153,7 +153,7 @@ func newHTTPRegistry(app *core.Core, health HealthCheck, cfg Config, logger *slo
 	handle("DELETE", "/api/folders/{folderID}", session, nil, handleDeleteFolder(app))
 	r.Handle(httpregistry.Spec[HTTPMetadata]{Method: "POST", Path: "/api/logs/{logID}/entries", Metadata: session}, bindHTTPAction(core.CreateLogEntry, app, httpregistry.Binding{
 		JSON: httpregistry.StrictJSON, Status: http.StatusCreated,
-		Inputs: []httpregistry.Input{{Source: "path", Name: "logID", Field: "LogID"}, {Source: "body", Name: "note", Field: "Note"}, {Source: "body", Name: "fields", Field: "Fields"}},
+		Inputs: []httpregistry.Input{{Source: "path", Name: "logID", Field: "LogID"}, {Source: "body", Name: "note", Field: "Note"}, {Source: "body", Name: "fields", Field: "Fields"}, {Source: "body", Name: "occurred_at", Field: "OccurredAt"}},
 		Errors: httpregistry.ErrorWriter{Name: "log-operation-error", Write: writeLogOperationError},
 	}))
 	handle("GET", "/api/logs/{logID}/entries", session, nil, handleListLogEntries(app))

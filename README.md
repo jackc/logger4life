@@ -247,10 +247,22 @@ Code exchange and refresh re-check the document: if its host answers 404 or
 document returns. Fetch failures and outages leave existing grants working.
 
 The read tools are `list_logs`, `get_log`, `get_log_entry`, `list_folders`,
-`get_folder`, `list_shared_users`, `get_share_info`, `get_sql_schema`, `run_sql`,
+`get_folder`, `list_shared_users`, `get_share_info`, `list_log_entries`, `get_sql_schema`, `run_sql`,
 `list_saved_queries`, and `run_saved_query`. Log detail includes the caller's
 folder placement, position, and home pin state. SQL remains read-only,
 restricted to the caller's data, and capped at 1000 rows and 1 MiB of values.
+
+`list_log_entries` returns full entry objects (including fields and Markdown
+notes) in `entries`, plus `next_cursor` when more remain. Supply `log_id` and
+optional RFC3339 `start_at` (inclusive) and `end_at` (exclusive) bounds on
+`occurred_at`. Resolve calendar days in the user's timezone before supplying
+bounds, including daylight-saving offsets. `order` defaults to `desc` (newest
+first); `asc` is also supported. Both sort by `(occurred_at, id)` for stable
+ties. Pages default to 50 entries, maximum 100, and may be shortened to fit
+the 256 KiB result budget. Pass `next_cursor` as `cursor` with the same log,
+time bounds, and order; the limit may change. Each page rechecks access.
+Pagination is a live view: editing an entry's timestamp between requests can
+move it across the cursor. Use `run_sql` for aggregations or field filtering.
 
 The write tools are:
 

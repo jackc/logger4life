@@ -69,6 +69,12 @@ user and collection. Pages sort by the database's lowercase name, then ID,
 so equal names have a stable order. Concurrent renames or inserts can change
 later pages; pagination does not hold a database snapshot between requests.
 
+`list_log_entries` uses the same page limits and returns full entries. Its
+cursor is scoped to the user, log, time bounds, and order. It sorts by
+`(occurred_at, id)`, descending by default, with inclusive `start_at` and
+exclusive `end_at` bounds. Timestamp edits can move entries across the cursor;
+access is checked again on each page.
+
 The database fetches at most 101 records, under a five-second deadline.
 Each structured page stays below 256 KiB, including its cursor. This also
 keeps the MCP result below 1 MiB after JSON text/structured duplication.

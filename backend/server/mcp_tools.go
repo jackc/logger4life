@@ -118,6 +118,13 @@ func newMCPRegistry(app *core.Core) *mcpregistry.Registry[MCPMetadata] {
 		return nil, result, nil
 	}))
 
+	r.Register(spec(mcp.Tool{
+		Name:        "list_log_entries",
+		Title:       "List log entries",
+		Annotations: mcpregistry.ReadOnlyAnnotations(),
+		Description: "List recent entries or entries in a time window for an owned or shared log, including full fields and notes. Filters use occurred_at: start_at inclusive, end_at exclusive, RFC3339 with timezone. Defaults to newest first (desc), 50 entries, maximum 100. Ordered by occurred_at then ID. Pass next_cursor as cursor with the same log, time bounds, and order; pages may be shortened by the response byte limit. Use run_sql for aggregation or field-value filtering.",
+	}), mcpregistry.Bind(core.ListLogEntriesPage, app, binding))
+
 	registerMCPActions(r, app)
 	return r
 }

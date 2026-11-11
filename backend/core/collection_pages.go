@@ -17,6 +17,7 @@ const MaxCollectionPageBytes = 256 << 10
 // ID) key, in byte order, scoped to the supplied user. SortName must come
 // from the database's lower(name), matching the query's ordering exactly.
 type CollectionStore interface {
+	ListLogEntriesPage(context.Context, string, EntryPageQuery) ([]domain.LogEntry, error)
 	ListLogsPage(context.Context, string, string, string, int) ([]LogSummary, error)
 	ListSavedQueriesPage(context.Context, string, string, string, int) ([]SavedQuerySummary, error)
 }

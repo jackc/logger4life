@@ -219,7 +219,7 @@ func TestMCPHTTPProtocolCompatibility(t *testing.T) {
 				assert.Equal(t, float64(0), result["ttlMs"])
 			}
 			tools := result["tools"].([]any)
-			require.Len(t, tools, 28)
+			require.Len(t, tools, 29)
 			names := make([]string, 0, len(tools))
 			for _, item := range tools {
 				tool := item.(map[string]any)

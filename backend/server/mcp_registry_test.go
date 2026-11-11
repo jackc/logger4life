@@ -14,7 +14,7 @@ import (
 func TestMCPInventoryMatchesServedCatalogAndPreviousContract(t *testing.T) {
 	inventory := MCPInventory() // Does not require an application or OAuth provider.
 	require.Equal(t, 1, inventory.SchemaVersion)
-	require.Len(t, inventory.Tools, 28)
+	require.Len(t, inventory.Tools, 29)
 	tools := make([]mcp.Tool, 0, len(inventory.Tools))
 	bindings := map[string]string{}
 	for _, entry := range inventory.Tools {
@@ -30,7 +30,7 @@ func TestMCPInventoryMatchesServedCatalogAndPreviousContract(t *testing.T) {
 			require.Equal(t, "custom-typed", entry.Kind)
 		}
 	}
-	require.Equal(t, map[string]string{"list_logs": "list_logs_page", "list_saved_queries": "list_saved_queries_page"}, bindings)
+	require.Equal(t, map[string]string{"list_logs": "list_logs_page", "list_saved_queries": "list_saved_queries_page", "list_log_entries": "list_log_entries_page"}, bindings)
 	baseline, err := os.ReadFile("testdata/mcp-tools.json")
 	require.NoError(t, err)
 	described, err := json.Marshal(tools)
@@ -55,7 +55,8 @@ func TestMCPRegistryRequiresUserAcrossAllTools(t *testing.T) {
 	defer cs.Close()
 	for name, args := range map[string]any{
 		"list_logs": map[string]any{}, "list_saved_queries": map[string]any{},
-		"get_sql_schema": map[string]any{}, "run_sql": map[string]any{"query": "SELECT 1"},
+		"list_log_entries": map[string]any{"log_id": "00000000-0000-4000-8000-000000000001"},
+		"get_sql_schema":   map[string]any{}, "run_sql": map[string]any{"query": "SELECT 1"},
 		"run_saved_query": map[string]any{"name": "saved"},
 	} {
 		t.Run(name, func(t *testing.T) {

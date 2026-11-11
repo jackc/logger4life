@@ -1190,6 +1190,118 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
+    "description": "List recent entries or entries in a time window for an owned or shared log, including full fields and notes. Filters use occurred_at: start_at inclusive, end_at exclusive, RFC3339 with timezone. Defaults to newest first (desc), 50 entries, maximum 100. Ordered by occurred_at then ID. Pass next_cursor as cursor with the same log, time bounds, and order; pages may be shortened by the response byte limit. Use run_sql for aggregation or field-value filtering.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "description": "opaque next_cursor from the previous page of this tool",
+          "type": "string"
+        },
+        "end_at": {
+          "description": "exclusive occurred_at upper bound, RFC3339 with timezone",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "description": "maximum records to return; defaults to 50, maximum 100; byte limits may shorten a page",
+          "type": "integer"
+        },
+        "log_id": {
+          "type": "string"
+        },
+        "order": {
+          "description": "asc or desc by occurred_at then ID; defaults to desc (newest first)",
+          "type": "string"
+        },
+        "start_at": {
+          "description": "inclusive occurred_at lower bound, RFC3339 with timezone",
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "log_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_log_entries",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "fields": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "log_id": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "occurred_at": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "note",
+              "id",
+              "log_id",
+              "user_id",
+              "username",
+              "fields",
+              "occurred_at",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "type": "object"
+    },
+    "title": "List log entries"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "List an alphabetical page of logs the authenticated user owns or has been shared on. Defaults to 50 records, maximum 100; pass next_cursor as cursor to continue. Pages may be shortened to fit the response size limit.",
     "inputSchema": {
       "type": "object",

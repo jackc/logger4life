@@ -86,6 +86,7 @@ func (m *mcpServer) requireBearerToken() func(http.Handler) http.Handler {
 		Origin:              m.oauth.canonicalURL,
 		ResourceMetadataURL: m.oauth.canonicalURL + "/.well-known/oauth-protected-resource",
 		Scope:               core.OAuthScopeMCP,
+		NoStore:             true,
 		Verify: func(ctx context.Context, token string) (context.Context, error) {
 			user, err := m.oauth.verifyAccessToken(ctx, token)
 			switch {

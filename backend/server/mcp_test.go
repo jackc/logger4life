@@ -387,6 +387,7 @@ func TestMCPHTTPRequiresGrantedScope(t *testing.T) {
 					require.Equal(t, tc.wantStatus, w.Code, w.Body.String())
 					assert.Equal(t, tc.wantError == "", called, "resource handler must run only with granted MCP scope")
 					if tc.wantError == "" {
+						assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 						assert.Empty(t, w.Header().Get("WWW-Authenticate"))
 						return
 					}

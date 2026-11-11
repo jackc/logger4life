@@ -60,7 +60,7 @@ func newHTTPRegistry(app *core.Core, health HealthCheck, cfg Config, logger *slo
 			if spec.Metadata.Public {
 				return nil, fmt.Errorf("bearer endpoints cannot be public")
 			}
-			return []httpregistry.Stage{{Name: "mcp-origin-bearer-and-post-rate-limit", Wrap: func(next http.Handler) http.Handler {
+			return []httpregistry.Stage{{Name: "mcp-origin-bearer-post-rate-limit-and-no-store", Wrap: func(next http.Handler) http.Handler {
 				return protocol().requireBearerToken()(next)
 			}}}, nil
 		default:
